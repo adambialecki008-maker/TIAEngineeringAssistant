@@ -1,5 +1,5 @@
-from app.models import PlcTag
-from app.tag_review import review_tags
+from engine.models import PlcTag
+from functions.tag_review import review_tags
 
 
 def test_valid_tags_return_no_issues() -> None:

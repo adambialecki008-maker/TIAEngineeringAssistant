@@ -35,3 +35,15 @@ class TagReviewSummary(BaseModel):
 class TagReviewResponse(BaseModel):
     summary: TagReviewSummary
     issues: list[TagReviewIssue]
+
+
+class ScaleInput(BaseModel):
+    raw_value: float
+    raw_min: float
+    raw_max: float
+    engineering_min: float
+    engineering_max: float
+
+
+class ScaleOutput(BaseModel):
+    scaled_value: float

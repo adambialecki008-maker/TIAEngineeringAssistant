@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 
-from app.models import (
+from engine.models import (
     TagReviewRequest,
     TagReviewResponse,
 )
-from app.tag_review import review_tags
+from functions.tag_review import review_tags
 
 app = FastAPI(
     title="TIA Engineering Assistant",
