@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class IssueSeverity(StrEnum):
@@ -44,6 +44,19 @@ class ScaleInput(BaseModel):
     engineering_min: float
     engineering_max: float
 
+    @model_validator(mode="after")
+    def validate_raw_scaling_range(self):
+        if self.raw_min == self.raw_max:
+            raise ValueError
+        return self
+
 
 class ScaleOutput(BaseModel):
     scaled_value: float
+
+
+@model_validator(mode="after")
+def validate_raw_scaling_range(self):
+    if self.raw_min == self.raw_max:
+        raise ValueError
+    return self
