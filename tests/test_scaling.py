@@ -21,7 +21,7 @@ def test_scale_negative_engineering_range() -> None:
         raw_value=13824,
         raw_min=0,
         raw_max=27648,
-        engineering_min=-50
+        engineering_min=-50,
         engineering_max=150,
     )
 
