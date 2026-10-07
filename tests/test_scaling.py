@@ -14,3 +14,17 @@ def test_scale_half_range() -> None:
     result = scale(data)
 
     assert result.scaled_value == 50.0
+
+
+def test_scale_negative_engineering_range() -> None:
+    data = ScaleInput(
+        raw_value=13824,
+        raw_min=0,
+        raw_max=27648,
+        engineering_min=-50
+        engineering_max=150,
+    )
+
+    result = scale(data)
+
+    assert result.scaled_value == 150.0
