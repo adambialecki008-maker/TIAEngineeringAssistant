@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>TIA Engineering Assistant</title>
+    <link rel="stylesheet" href="/gui/style.css">
+</head>
+
+<body>
+
+    <h1>TIA Engineering Assistant</h1>
+
+    <section>
+        <h2>Project settings</h2>
+
+        <div class="form-row">
+            <label for="plc-family">PLC family:</label>
+
+            <select id="plc-family">
+                <option value="">Select PLC</option>
+                <option value="S7-1200">S7-1200</option>
+                <option value="S7-1200-G2">S7-1200 G2</option>
+                <option value="S7-1500">S7-1500</option>
+            </select>
+        </div>
+
+        <p class="hint">
+            Available data types depend on the selected PLC family.
+        </p>
+    </section>
+
+
+    <section>
+        <h2>UDT definitions</h2>
+
+        <div class="form-row">
+            <label for="new-udt-name">UDT name:</label>
+
+            <input
+                id="new-udt-name"
+                type="text"
+                placeholder="UDT_CombustionZone"
+            >
+
+            <button
+                id="add-udt-button"
+                type="button"
+            >
+                New UDT
+            </button>
+        </div>
+
+        <div id="udt-container"></div>
+    </section>
+
+
+    <section>
+        <h2>PLC Data Blocks</h2>
+
+        <div class="form-row">
+            <label for="new-db-name">DB name:</label>
+
+            <input
+                id="new-db-name"
+                type="text"
+                placeholder="DB_Process"
+            >
+
+            <button
+                id="add-db-button"
+                type="button"
+            >
+                New DB
+            </button>
+        </div>
+
+        <div id="db-container"></div>
+    </section>
+
+
+    <script
+        type="module"
+        src="/gui/js/app.js"
+    ></script>
+
+</body>
+
+</html>

@@ -1,5 +1,5 @@
 from enum import StrEnum
-
+from datetime import datetime
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -60,3 +60,16 @@ def validate_raw_scaling_range(self):
     if self.raw_min == self.raw_max:
         raise ValueError
     return self
+
+
+class ProcessSampleInput(BaseModel):
+    tag_name: str = Field(min_length=1)
+    value: float
+    unit: str | None = None
+
+
+class ProcessSampleOutput(BaseModel):
+    tag_name: str = Field(min_length=1)
+    value: float
+    unit: str | None = None
+    timestamp: datetime
