@@ -1151,6 +1151,26 @@ function buildPhysicalTags(
                     signal.data_type
                 );
 
+            const availableChannels =
+                Math.max(
+                    0,
+                    moduleChannels.length
+                    -
+                    startIndex
+                );
+
+            if (
+                availableChannels
+                <
+                group.quantity
+            ) {
+                errors.push(
+                    `${group.prefix} / ${signal.key || "signal"}: not enough I/O channels in module "${startChannel.item_name}". Required: ${group.quantity}, available from channel ${startChannel.channel_number}: ${availableChannels}.`
+                );
+
+                continue;
+            }
+
 
             for (
                 let offset = 0;
@@ -1163,14 +1183,6 @@ function buildPhysicalTags(
                         +
                         offset
                     ];
-
-                if (!channel) {
-                    errors.push(
-                        `${group.prefix} / ${signal.key || "signal"}: module "${startChannel.item_name}" does not have ${group.quantity} consecutive compatible channels from channel ${startChannel.channel_number}.`
-                    );
-
-                    break;
-                }
 
 
                 if (
@@ -1199,7 +1211,7 @@ function buildPhysicalTags(
                         expectedAddress
                     ) {
                         errors.push(
-                            `${group.prefix} / ${signal.key || "signal"}: channel sequence in module "${startChannel.item_name}" is not contiguous after ${formatRawChannelAddress(previousChannel)'}.`
+                            `${group.prefix} / ${signal.key || "signal"}: channel sequence in module "${startChannel.item_name}" is not contiguous after ${formatRawChannelAddress(previousChannel)}.`
                         );
 
                         break;
