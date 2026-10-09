@@ -1907,18 +1907,8 @@ export function initDevicesUi() {
                     "RunFb";
 
                 keyInput.addEventListener(
-                    "change",
-                    () => {
-                        signal.key =
-                            keyInput.value
-                                .trim();
-
-                        persist();
-
-                        renderGenerated();
-
-                        renderMappings();
-                    }
+                    "input",
+                    markDirty
                 );
 
                 keyCell.appendChild(
@@ -1965,29 +1955,7 @@ export function initDevicesUi() {
 
                 ioSelect.addEventListener(
                     "change",
-                    () => {
-                        signal.io_type =
-                            ioSelect.value;
-
-                        projectConfig.device_config.mappings =
-                            projectConfig
-                                .device_config
-                                .mappings
-                                .filter(
-                                    (mapping) =>
-                                        mapping.signal_id
-                                        !==
-                                        signal.id
-                                );
-
-                        persist();
-
-                        renderGenerated();
-
-                        renderMappings();
-
-                        renderPlcTags();
-                    }
+                    markDirty
                 );
 
                 ioCell.appendChild(
@@ -2034,29 +2002,7 @@ export function initDevicesUi() {
 
                 typeSelect.addEventListener(
                     "change",
-                    () => {
-                        signal.data_type =
-                            typeSelect.value;
-
-                        projectConfig.device_config.mappings =
-                            projectConfig
-                                .device_config
-                                .mappings
-                                .filter(
-                                    (mapping) =>
-                                        mapping.signal_id
-                                        !==
-                                        signal.id
-                                );
-
-                        persist();
-
-                        renderGenerated();
-
-                        renderMappings();
-
-                        renderPlcTags();
-                    }
+                    markDirty
                 );
 
                 typeCell.appendChild(
@@ -2087,16 +2033,8 @@ export function initDevicesUi() {
                     "{device}_RunFb";
 
                 patternInput.addEventListener(
-                    "change",
-                    () => {
-                        signal.tag_pattern =
-                            patternInput.value
-                                .trim();
-
-                        persist();
-
-                        renderGenerated();
-                    }
+                    "input",
+                    markDirty
                 );
 
                 patternCell.appendChild(
@@ -2123,9 +2061,51 @@ export function initDevicesUi() {
                 saveButton.textContent =
                     "Save";
 
+                saveButton.disabled =
+                    true;
+
+
+                const saveStatus =
+                    document.createElement(
+                        "span"
+                    );
+
+                saveStatus.className =
+                    "signal-save-status saved";
+
+                saveStatus.textContent =
+                    "Saved";
+
+
+                function markDirty() {
+                    saveButton.disabled =
+                        false;
+
+                    saveStatus.textContent =
+                        "Unsaved";
+
+                    saveStatus.classList.remove(
+                        "saved"
+                    );
+
+                    saveStatus.classList.add(
+                        "unsaved"
+                    );
+                }
+
+
                 saveButton.addEventListener(
                     "click",
                     () => {
+                        const mappingChanged =
+                            signal.io_type
+                            !==
+                            ioSelect.value
+                            ||
+                            signal.data_type
+                            !==
+                            typeSelect.value;
+
                         signal.key =
                             keyInput.value
                                 .trim();
@@ -2140,6 +2120,21 @@ export function initDevicesUi() {
                             patternInput.value
                                 .trim();
 
+
+                        if (mappingChanged) {
+                            projectConfig.device_config.mappings =
+                                projectConfig
+                                    .device_config
+                                    .mappings
+                                    .filter(
+                                        (mapping) =>
+                                            mapping.signal_id
+                                            !==
+                                            signal.id
+                                    );
+                        }
+
+
                         persist();
 
                         renderGenerated();
@@ -2147,6 +2142,20 @@ export function initDevicesUi() {
                         renderMappings();
 
                         renderPlcTags();
+
+                        saveButton.disabled =
+                            true;
+
+                        saveStatus.textContent =
+                            "Saved";
+
+                        saveStatus.classList.remove(
+                            "unsaved"
+                        );
+
+                        saveStatus.classList.add(
+                            "saved"
+                        );
 
                         setStatus(
                             configStatus,
@@ -2202,7 +2211,8 @@ export function initDevicesUi() {
 
                 actionsCell.append(
                     saveButton,
-                    removeButton
+                    removeButton,
+                    saveStatus
                 );
 
                 row.append(
