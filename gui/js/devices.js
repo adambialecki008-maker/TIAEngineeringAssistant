@@ -2104,6 +2104,51 @@ export function initDevicesUi() {
                 actionsCell.className =
                     "actions-cell";
 
+                const saveButton =
+                    document.createElement(
+                        "button"
+                    );
+
+                saveButton.type =
+                    "button";
+
+                saveButton.textContent =
+                    "Save";
+
+                saveButton.addEventListener(
+                    "click",
+                    () => {
+                        signal.key =
+                            keyInput.value
+                                .trim();
+
+                        signal.io_type =
+                            ioSelect.value;
+
+                        signal.data_type =
+                            typeSelect.value;
+
+                        signal.tag_pattern =
+                            patternInput.value
+                                .trim();
+
+                        persist();
+
+                        renderGenerated();
+
+                        renderMappings();
+
+                        renderPlcTags();
+
+                        setStatus(
+                            configStatus,
+                            `Signal "${signal.key || "(unnamed)"}" saved.`,
+                            "success"
+                        );
+                    }
+                );
+
+
                 const removeButton =
                     document.createElement(
                         "button"
@@ -2147,7 +2192,8 @@ export function initDevicesUi() {
                     }
                 );
 
-                actionsCell.appendChild(
+                actionsCell.append(
+                    saveButton,
                     removeButton
                 );
 
