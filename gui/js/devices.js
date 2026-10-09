@@ -1835,7 +1835,7 @@ export function initDevicesUi() {
                         <th>Config key</th>
                         <th>I/O</th>
                         <th>Data type</th>
-                        <th>Tag pattern</th>
+                        <th>Tag name template</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -2030,15 +2030,28 @@ export function initDevicesUi() {
                     signal.tag_pattern;
 
                 patternInput.placeholder =
-                    "{device}_RunFb";
+                    "e.g. {device}_RunFb";
+
+                patternInput.title =
+                    "{device} is the generated device name, e.g. M01.";
 
                 patternInput.addEventListener(
                     "input",
                     markDirty
                 );
 
-                patternCell.appendChild(
-                    patternInput
+
+                const patternExample =
+                    document.createElement(
+                        "small"
+                    );
+
+                patternExample.textContent =
+                    "Example: {device}_RunFb → M01_RunFb";
+
+                patternCell.append(
+                    patternInput,
+                    patternExample
                 );
 
 
