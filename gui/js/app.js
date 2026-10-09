@@ -19,6 +19,10 @@ import {
 } from "./db.js";
 
 import {
+    generatePreview,
+} from "./preview.js";
+
+import {
     initTiaUi,
 } from "./tia.js";
 
@@ -61,6 +65,32 @@ const dbContainer =
     );
 
 
+const generatePreviewButton =
+    document.getElementById(
+        "generate-preview-button"
+    );
+
+const sourcePreview =
+    document.getElementById(
+        "source-preview"
+    );
+
+
+loadProjectConfig();
+
+
+if (plcFamilySelect) {
+    plcFamilySelect.value =
+        projectConfig.plc_family;
+}
+
+
+/*
+ * TIA UI is a core feature.
+ *
+ * It must start independently from
+ * optional modules such as Devices.
+ */
 const tiaUi =
     initTiaUi(
         () =>
@@ -69,20 +99,45 @@ const tiaUi =
     );
 
 
-function renderAll() {
-    renderUdts(
-        udtContainer,
-        renderAll
-    );
+let devicesUi = null;
 
-    renderDbs(
-        dbContainer,
-        renderAll
-    );
+
+function renderAll() {
+    if (udtContainer) {
+        renderUdts(
+            udtContainer,
+            renderAll
+        );
+    }
+
+
+    if (dbContainer) {
+        renderDbs(
+            dbContainer,
+            renderAll
+        );
+    }
+
+
+    if (devicesUi) {
+        try {
+            devicesUi.refresh();
+        } catch (error) {
+            console.error(
+                "Devices refresh failed:",
+                error
+            );
+        }
+    }
 }
 
 
 function changePlcFamily() {
+    if (!plcFamilySelect) {
+        return;
+    }
+
+
     const previousFamily =
         projectConfig.plc_family;
 
@@ -142,70 +197,152 @@ function changePlcFamily() {
 }
 
 
-plcFamilySelect.addEventListener(
-    "change",
-    changePlcFamily
-);
+if (plcFamilySelect) {
+    plcFamilySelect.addEventListener(
+        "change",
+        changePlcFamily
+    );
+}
 
 
-addUdtButton.addEventListener(
-    "click",
-    () =>
-        addUdt(
-            newUdtNameInput,
-            renderAll
-        )
-);
-
-
-newUdtNameInput.addEventListener(
-    "keydown",
-    (event) => {
-        if (
-            event.key === "Enter"
-        ) {
+if (
+    addUdtButton
+    &&
+    newUdtNameInput
+) {
+    addUdtButton.addEventListener(
+        "click",
+        () =>
             addUdt(
                 newUdtNameInput,
                 renderAll
-            );
+            )
+    );
+
+
+    newUdtNameInput.addEventListener(
+        "keydown",
+        (event) => {
+            if (
+                event.key === "Enter"
+            ) {
+                addUdt(
+                    newUdtNameInput,
+                    renderAll
+                );
+            }
         }
-    }
-);
+    );
+}
 
 
-addDbButton.addEventListener(
-    "click",
-    () =>
-        addDb(
-            newDbNameInput,
-            renderAll
-        )
-);
-
-
-newDbNameInput.addEventListener(
-    "keydown",
-    (event) => {
-        if (
-            event.key === "Enter"
-        ) {
+if (
+    addDbButton
+    &&
+    newDbNameInput
+) {
+    addDbButton.addEventListener(
+        "click",
+        () =>
             addDb(
                 newDbNameInput,
                 renderAll
-            );
+            )
+    );
+
+
+    newDbNameInput.addEventListener(
+        "keydown",
+        (event) => {
+            if (
+                event.key === "Enter"
+            ) {
+                addDb(
+                    newDbNameInput,
+                    renderAll
+                );
+            }
         }
-    }
-);
+    );
+}
 
 
-loadProjectConfig();
+if (
+    generatePreviewButton
+    &&
+    sourcePreview
+) {
+    generatePreviewButton.addEventListener(
+        "click",
+        () =>
+            generatePreview(
+                sourcePreview
+            )
+    );
+}
 
 
-plcFamilySelect.value =
-    projectConfig.plc_family;
-
-
+/*
+ * Render the original engineering editors.
+ */
 renderAll();
 
 
-tiaUi.refreshProcesses();
+/*
+ * IMPORTANT:
+ *
+ * Start TIA process discovery BEFORE loading
+ * the Devices module.
+ *
+ * devices.js is intentionally NOT imported
+ * at the top of this file.
+ */
+tiaUi
+    .refreshProcesses()
+    .catch(
+        (error) => {
+            console.error(
+                "TIA process refresh failed:",
+                error
+            );
+        }
+    );
+
+
+/*
+ * Devices is an optional module.
+ *
+ * Dynamic import means a syntax/runtime/import
+ * error inside devices.js cannot stop the TIA UI.
+ */
+import("./devices.js")
+    .then(
+        (module) => {
+            devicesUi =
+                module.initDevicesUi();
+
+            devicesUi.refresh();
+        }
+    )
+    .catch(
+        (error) => {
+            console.error(
+                "Devices module failed to load:",
+                error
+            );
+
+            const deviceStatus =
+                document.getElementById(
+                    "device-config-status"
+                );
+
+            if (deviceStatus) {
+                deviceStatus.textContent =
+                    `Devices error: ${error.message}`;
+
+                deviceStatus.classList.add(
+                    "error"
+                );
+            }
+        }
+    );

@@ -1,22 +1,46 @@
-export async function getJson(
-    url
+async function requestJson(
+    url,
+    options = {}
 ) {
     const response =
-        await fetch(url);
+        await fetch(
+            url,
+            options
+        );
 
 
-    const data =
-        await response.json();
+    let data = null;
+
+
+    try {
+        data =
+            await response.json();
+
+    } catch {
+        data = null;
+    }
 
 
     if (!response.ok) {
         throw new Error(
-            getErrorMessage(data)
+            getErrorMessage(
+                data,
+                response.status
+            )
         );
     }
 
 
     return data;
+}
+
+
+export async function getJson(
+    url
+) {
+    return requestJson(
+        url
+    );
 }
 
 
@@ -24,53 +48,94 @@ export async function postJson(
     url,
     payload
 ) {
-    const response =
-        await fetch(
-            url,
-            {
-                method: "POST",
+    return requestJson(
+        url,
+        {
+            method: "POST",
 
-                headers: {
-                    "Content-Type":
-                        "application/json",
-                },
+            headers: {
+                "Content-Type":
+                    "application/json",
+            },
 
-                body:
-                    JSON.stringify(
-                        payload
-                    ),
-            }
-        );
-
-
-    const data =
-        await response.json();
+            body:
+                JSON.stringify(
+                    payload
+                ),
+        }
+    );
+}
 
 
-    if (!response.ok) {
-        throw new Error(
-            getErrorMessage(data)
-        );
-    }
+export async function patchJson(
+    url,
+    payload
+) {
+    return requestJson(
+        url,
+        {
+            method: "PATCH",
+
+            headers: {
+                "Content-Type":
+                    "application/json",
+            },
+
+            body:
+                JSON.stringify(
+                    payload
+                ),
+        }
+    );
+}
 
 
-    return data;
+export async function deleteJson(
+    url,
+    payload
+) {
+    return requestJson(
+        url,
+        {
+            method: "DELETE",
+
+            headers: {
+                "Content-Type":
+                    "application/json",
+            },
+
+            body:
+                JSON.stringify(
+                    payload
+                ),
+        }
+    );
 }
 
 
 function getErrorMessage(
-    data
+    data,
+    status
 ) {
     if (
         data
         &&
-        typeof data.detail === "string"
+        typeof data.detail
+        ===
+        "string"
     ) {
         return data.detail;
     }
 
 
-    return JSON.stringify(
-        data
+    if (data !== null) {
+        return JSON.stringify(
+            data
+        );
+    }
+
+
+    return (
+        `HTTP ${status}`
     );
 }

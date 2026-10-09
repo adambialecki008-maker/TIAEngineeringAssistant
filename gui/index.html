@@ -4,6 +4,11 @@
 <head>
     <meta charset="UTF-8">
 
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
     <title>
         TIA Engineering Assistant
     </title>
@@ -16,239 +21,1033 @@
 
 <body>
 
-    <h1>
-        TIA Engineering Assistant
-    </h1>
+    <header class="app-header">
 
+        <div>
+            <h1>
+                TIA Engineering Assistant
+            </h1>
 
-    <section>
-        <h2>
-            Project settings
-        </h2>
-
-        <div class="form-row">
-
-            <label for="plc-family">
-                PLC family:
-            </label>
-
-            <select id="plc-family">
-
-                <option value="">
-                    Select PLC
-                </option>
-
-                <option value="S7-1200">
-                    S7-1200
-                </option>
-
-                <option value="S7-1200-G2">
-                    S7-1200 G2
-                </option>
-
-                <option value="S7-1500">
-                    S7-1500
-                </option>
-
-            </select>
-
+            <p class="app-subtitle">
+                Siemens TIA Portal V21 engineering generator
+            </p>
         </div>
-
-        <p class="hint">
-            Available data types depend on the selected PLC family.
-        </p>
-    </section>
-
-
-    <section>
-
-        <h2>
-            TIA Portal
-        </h2>
-
-
-        <div class="form-row">
-
-            <button
-                id="tia-refresh-button"
-                type="button"
-            >
-                Refresh TIA
-            </button>
-
-
-            <label for="tia-process">
-                Process:
-            </label>
-
-
-            <select id="tia-process">
-
-                <option value="">
-                    Select TIA process
-                </option>
-
-            </select>
-
-        </div>
-
-
-        <div class="form-row tia-row">
-
-            <button
-                id="tia-load-models-button"
-                type="button"
-            >
-                Load PLC models
-            </button>
-
-
-            <label for="tia-plc-model">
-                PLC model:
-            </label>
-
-
-            <select
-                id="tia-plc-model"
-                disabled
-            >
-                <option value="">
-                    Load models first
-                </option>
-            </select>
-
-        </div>
-
 
         <div
-            id="tia-manual-container"
-            class="form-row tia-row hidden"
+            id="active-plc-summary"
+            class="active-plc-summary"
+        >
+            Active PLC: not selected
+        </div>
+
+    </header>
+
+
+    <nav
+        class="tab-bar"
+        aria-label="Main navigation"
+    >
+
+        <button
+            class="tab-button active"
+            data-tab="project"
+            type="button"
+        >
+            Project
+        </button>
+
+        <button
+            class="tab-button"
+            data-tab="tia"
+            type="button"
+        >
+            TIA Portal
+        </button>
+
+        <button
+            class="tab-button"
+            data-tab="devices"
+            type="button"
+        >
+            Devices
+        </button>
+
+        <button
+            class="tab-button"
+            data-tab="udt"
+            type="button"
+        >
+            UDT
+        </button>
+
+        <button
+            class="tab-button"
+            data-tab="db"
+            type="button"
+        >
+            Data Blocks
+        </button>
+
+        <button
+            class="tab-button"
+            data-tab="preview"
+            type="button"
+        >
+            Source preview
+        </button>
+
+    </nav>
+
+
+    <main class="app-content">
+
+        <section
+            class="tab-panel active"
+            data-tab-panel="project"
         >
 
-            <label for="tia-manual-code">
-                Kod katalogowy:
-            </label>
+            <div class="panel-header">
+                <div>
+                    <h2>
+                        Project settings
+                    </h2>
+
+                    <p class="panel-description">
+                        Global configuration used by the generator.
+                    </p>
+                </div>
+            </div>
 
 
-            <input
-                id="tia-manual-code"
-                type="text"
-                placeholder="6ES7511-1AL03-0AB0"
-            >
+            <div class="card">
 
-            <span class="hint">
-                Możesz podać także pełny
-                OrderNumber:.../V...
-            </span>
+                <div class="form-row">
 
-        </div>
+                    <label for="plc-family">
+                        PLC family:
+                    </label>
+
+                    <select id="plc-family">
+
+                        <option value="">
+                            Select PLC
+                        </option>
+
+                        <option value="S7-1200">
+                            S7-1200
+                        </option>
+
+                        <option value="S7-1200-G2">
+                            S7-1200 G2
+                        </option>
+
+                        <option value="S7-1500">
+                            S7-1500
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <p class="hint">
+                    Available data types depend on the selected PLC family.
+                </p>
+
+            </div>
 
 
-        <div class="form-row tia-row">
+            <div class="card">
 
-            <label for="tia-plc-name">
-                PLC name:
-            </label>
+                <h3>
+                    Active TIA target
+                </h3>
+
+                <p
+                    id="project-active-plc"
+                    class="target-summary"
+                >
+                    No PLC selected.
+                </p>
+
+                <p class="hint">
+                    Select an existing PLC in the TIA Portal tab.
+                    The selected target will later be used for source import.
+                </p>
+
+            </div>
+
+        </section>
 
 
-            <input
-                id="tia-plc-name"
-                type="text"
-                value="PLC_1"
-            >
-
-
-            <button
-                id="tia-create-plc-button"
-                type="button"
-            >
-                Create PLC
-            </button>
-
-        </div>
-
-
-        <p
-            id="tia-status"
-            class="tia-status"
+        <section
+            class="tab-panel"
+            data-tab-panel="tia"
         >
-            Not connected.
-        </p>
 
-    </section>
+            <div class="panel-header">
+                <div>
+                    <h2>
+                        TIA Portal
+                    </h2>
 
-
-    <section>
-
-        <h2>
-            UDT definitions
-        </h2>
-
-
-        <div class="form-row">
-
-            <label for="new-udt-name">
-                UDT name:
-            </label>
+                    <p class="panel-description">
+                        Attach to TIA Portal V21, manage existing PLCs,
+                        or create a new PLC from the local Hardware Catalog.
+                    </p>
+                </div>
+            </div>
 
 
-            <input
-                id="new-udt-name"
-                type="text"
-                placeholder="UDT_CombustionZone"
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Connection
+                        </h3>
+
+                        <p class="hint">
+                            Running TIA Portal V21 processes detected through Openness.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-refresh-button"
+                        type="button"
+                    >
+                        Refresh TIA
+                    </button>
+                </div>
+
+
+                <div class="form-row">
+
+                    <label for="tia-process">
+                        TIA process:
+                    </label>
+
+                    <select id="tia-process">
+
+                        <option value="">
+                            Select TIA process
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+
+                    <div>
+                        <h3>
+                            Existing PLCs
+                        </h3>
+
+                        <p class="hint">
+                            PLCs detected in the currently open TIA project.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-refresh-plcs-button"
+                        type="button"
+                    >
+                        Refresh PLCs
+                    </button>
+
+                </div>
+
+
+                <div class="table-wrapper">
+
+                    <table
+                        id="tia-existing-plcs-table"
+                        class="management-table"
+                    >
+                        <thead>
+                            <tr>
+                                <th>
+                                    Device
+                                </th>
+
+                                <th>
+                                    PLC
+                                </th>
+
+                                <th>
+                                    Type
+                                </th>
+
+                                <th>
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="tia-existing-plcs-body">
+
+                            <tr>
+                                <td
+                                    colspan="4"
+                                    class="empty-table-cell"
+                                >
+                                    Select a TIA process and refresh PLCs.
+                                </td>
+                            </tr>
+
+                        </tbody>
+                    </table>
+
+                </div>
+
+
+                <p
+                    id="tia-active-plc"
+                    class="target-summary"
+                >
+                    Active PLC: not selected
+                </p>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Create PLC
+                        </h3>
+
+                        <p class="hint">
+                            Model list comes directly from the local
+                            TIA Portal V21 Hardware Catalog.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-load-models-button"
+                        type="button"
+                    >
+                        Load PLC models
+                    </button>
+                </div>
+
+
+                <div class="form-grid">
+
+                    <div class="field-group">
+
+                        <label for="tia-plc-model">
+                            PLC model:
+                        </label>
+
+                        <select
+                            id="tia-plc-model"
+                            disabled
+                        >
+                            <option value="">
+                                Load models first
+                            </option>
+                        </select>
+
+                    </div>
+
+
+                    <div class="field-group">
+
+                        <label for="tia-device-name">
+                            Device name:
+                        </label>
+
+                        <input
+                            id="tia-device-name"
+                            type="text"
+                            placeholder="S7-1500 Station_2"
+                        >
+
+                    </div>
+
+
+                    <div class="field-group">
+
+                        <label for="tia-plc-name">
+                            PLC name:
+                        </label>
+
+                        <input
+                            id="tia-plc-name"
+                            type="text"
+                            placeholder="PLC_2"
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="tia-manual-container"
+                    class="manual-selection hidden"
+                >
+
+                    <div class="field-group">
+
+                        <label for="tia-manual-code">
+                            Catalog order number:
+                        </label>
+
+                        <input
+                            id="tia-manual-code"
+                            type="text"
+                            placeholder="6ES7511-1AL03-0AB0"
+                        >
+
+                    </div>
+
+                    <p class="hint">
+                        Accepted examples:
+                        6ES7511-1AL03-0AB0,
+                        6ES7 511-1AL03-0AB0,
+                        or OrderNumber:6ES7 511-1AL03-0AB0/V4.1.
+                    </p>
+
+                </div>
+
+
+                <div class="action-row create-plc-actions">
+
+                    <button
+                        id="tia-create-plc-button"
+                        type="button"
+                        class="primary-button"
+                    >
+                        Create PLC in TIA
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <p
+                id="tia-status"
+                class="status-box"
             >
+                Not connected.
+            </p>
+
+        </section>
 
 
-            <button
-                id="add-udt-button"
-                type="button"
-            >
-                New UDT
-            </button>
+        <section
+            class="tab-panel"
+            data-tab-panel="devices"
+        >
 
-        </div>
+            <div class="panel-header">
+                <div>
+                    <h2>
+                        Device configuration and I/O mapping
+                    </h2>
 
-
-        <div id="udt-container"></div>
-
-    </section>
-
-
-    <section>
-
-        <h2>
-            PLC Data Blocks
-        </h2>
+                    <p class="panel-description">
+                        Define repeated devices once, read configured TIA hardware,
+                        map signal patterns to physical channels and create PLC tags.
+                    </p>
+                </div>
+            </div>
 
 
-        <div class="form-row">
+            <div class="card">
 
-            <label for="new-db-name">
-                DB name:
-            </label>
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Device templates
+                        </h3>
 
-
-            <input
-                id="new-db-name"
-                type="text"
-                placeholder="DB_Process"
-            >
-
-
-            <button
-                id="add-db-button"
-                type="button"
-            >
-                New DB
-            </button>
-
-        </div>
+                        <p class="hint">
+                            Internal signals generate device_config names only.
+                            Input/Output signals can additionally be mapped to hardware.
+                        </p>
+                    </div>
+                </div>
 
 
-        <div id="db-container"></div>
+                <div class="form-row">
 
-    </section>
+                    <label for="new-device-template-name">
+                        Template name:
+                    </label>
 
+                    <input
+                        id="new-device-template-name"
+                        type="text"
+                        placeholder="Motor"
+                    >
+
+                    <button
+                        id="add-device-template-button"
+                        type="button"
+                    >
+                        New template
+                    </button>
+
+                </div>
+
+
+                <div id="device-template-container"></div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Device groups
+                        </h3>
+
+                        <p class="hint">
+                            Example: prefix M, start 1, quantity 4, digits 2
+                            generates M01 through M04.
+                        </p>
+                    </div>
+                </div>
+
+
+                <div class="device-group-grid">
+
+                    <div class="field-group">
+                        <label for="device-group-template">
+                            Template:
+                        </label>
+
+                        <select id="device-group-template">
+                            <option value="">
+                                Select template
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="device-group-prefix">
+                            Prefix:
+                        </label>
+
+                        <input
+                            id="device-group-prefix"
+                            type="text"
+                            value="M"
+                        >
+                    </div>
+
+                    <div class="field-group">
+                        <label for="device-group-start">
+                            Start number:
+                        </label>
+
+                        <input
+                            id="device-group-start"
+                            type="number"
+                            min="0"
+                            value="1"
+                        >
+                    </div>
+
+                    <div class="field-group">
+                        <label for="device-group-quantity">
+                            Quantity:
+                        </label>
+
+                        <input
+                            id="device-group-quantity"
+                            type="number"
+                            min="1"
+                            value="4"
+                        >
+                    </div>
+
+                    <div class="field-group">
+                        <label for="device-group-digits">
+                            Digits:
+                        </label>
+
+                        <input
+                            id="device-group-digits"
+                            type="number"
+                            min="1"
+                            max="12"
+                            value="2"
+                        >
+                    </div>
+
+                </div>
+
+
+                <div class="action-row device-group-actions">
+                    <button
+                        id="add-device-group-button"
+                        type="button"
+                        class="primary-button"
+                    >
+                        Generate device group
+                    </button>
+                </div>
+
+
+                <div class="table-wrapper">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Template</th>
+                                <th>Prefix</th>
+                                <th>Start</th>
+                                <th>Quantity</th>
+                                <th>Digits</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="device-groups-body"></tbody>
+                    </table>
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            TIA hardware / I/O channels
+                        </h3>
+
+                        <p class="hint">
+                            Reads channel metadata from the currently open TIA project.
+                            Hardware must already be configured and addressed in TIA.
+                        </p>
+                    </div>
+
+                    <button
+                        id="refresh-hardware-button"
+                        type="button"
+                    >
+                        Read hardware from TIA
+                    </button>
+                </div>
+
+
+                <p
+                    id="hardware-status"
+                    class="status-box"
+                >
+                    Hardware not loaded.
+                </p>
+
+
+                <h4 class="subsection-title">
+                    Detected I/O modules
+                </h4>
+
+                <p class="hint">
+                    Engineering view: one row per logical addressable module.
+                    Parent module and addressable submodule records are merged.
+                </p>
+
+                <div class="table-wrapper hardware-table-wrapper compact-hardware-table">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>I/O module</th>
+                                <th>I/O</th>
+                                <th>Channels</th>
+                                <th>Address range</th>
+                                <th>Type identifier</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="hardware-items-body"></tbody>
+                    </table>
+                </div>
+
+                <h4 class="subsection-title">
+                    Addressable I/O channels
+                </h4>
+
+                <div class="table-wrapper hardware-table-wrapper">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Module / item</th>
+                                <th>Channel</th>
+                                <th>I/O</th>
+                                <th>Channel type</th>
+                                <th>Address</th>
+                                <th>Width</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="hardware-channels-body"></tbody>
+                    </table>
+                </div>
+
+                <details class="raw-hardware-details">
+                    <summary>
+                        Raw hardware details
+                    </summary>
+
+                    <div class="details-content">
+                        <p class="hint">
+                            Full Openness hardware tree for diagnostics.
+                            Normally you do not need this view.
+                        </p>
+
+                        <div class="table-wrapper raw-hardware-table-wrapper">
+                            <table class="management-table">
+                                <thead>
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Module / item</th>
+                                        <th>Plugged</th>
+                                        <th>Address ranges</th>
+                                        <th>Channels</th>
+                                        <th>Type identifier</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="hardware-raw-items-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            I/O mapping
+                        </h3>
+
+                        <p class="hint">
+                            Select the first physical channel once for each repeated signal.
+                            The following devices are assigned the next compatible channels.
+                        </p>
+                    </div>
+                </div>
+
+
+                <div class="table-wrapper">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Template / group</th>
+                                <th>Signal</th>
+                                <th>I/O</th>
+                                <th>Data type</th>
+                                <th>First hardware channel</th>
+                                <th>Allocation</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="device-io-mapping-body"></tbody>
+                    </table>
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Generated PLC tags
+                        </h3>
+
+                        <p class="hint">
+                            Tags are written only to the Active PLC selected in the TIA Portal tab.
+                        </p>
+                    </div>
+                </div>
+
+
+                <p
+                    id="generated-plc-tags-status"
+                    class="status-box"
+                >
+                    Load hardware and map physical signals to generate PLC tags.
+                </p>
+
+
+                <div class="table-wrapper device-generated-table-wrapper">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Signal</th>
+                                <th>PLC tag</th>
+                                <th>Data type</th>
+                                <th>Address</th>
+                                <th>Module</th>
+                                <th>Channel</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="generated-plc-tags-body"></tbody>
+                    </table>
+                </div>
+
+
+                <div class="form-row plc-tag-actions">
+                    <label for="plc-tag-table-name">
+                        PLC tag table:
+                    </label>
+
+                    <input
+                        id="plc-tag-table-name"
+                        type="text"
+                        value="TIAEngineeringAssistant"
+                    >
+
+                    <button
+                        id="create-plc-tags-button"
+                        type="button"
+                        class="primary-button"
+                    >
+                        Create PLC tags in TIA
+                    </button>
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Generated device_config
+                        </h3>
+
+                        <p class="hint">
+                            Supported placeholders: {device}, {prefix},
+                            {index}, {n}, {n:02}.
+                        </p>
+                    </div>
+
+                    <button
+                        id="copy-device-config-button"
+                        type="button"
+                    >
+                        Copy JSON
+                    </button>
+                </div>
+
+
+                <p
+                    id="device-config-status"
+                    class="status-box"
+                >
+                    Nothing generated yet.
+                </p>
+
+
+                <div class="table-wrapper device-generated-table-wrapper">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Template</th>
+                                <th>Config key</th>
+                                <th>I/O</th>
+                                <th>Data type</th>
+                                <th>Generated tag</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="device-generated-body"></tbody>
+                    </table>
+                </div>
+
+
+                <pre
+                    id="device-config-preview"
+                    class="device-config-preview"
+                ></pre>
+
+            </div>
+
+        </section>
+
+
+        <section
+            class="tab-panel"
+            data-tab-panel="udt"
+        >
+
+            <div class="panel-header">
+                <div>
+                    <h2>
+                        UDT definitions
+                    </h2>
+
+                    <p class="panel-description">
+                        Define reusable PLC data types.
+                    </p>
+                </div>
+            </div>
+
+
+            <div class="card">
+
+                <div class="form-row">
+
+                    <label for="new-udt-name">
+                        UDT name:
+                    </label>
+
+                    <input
+                        id="new-udt-name"
+                        type="text"
+                        placeholder="UDT_CombustionZone"
+                    >
+
+                    <button
+                        id="add-udt-button"
+                        type="button"
+                    >
+                        New UDT
+                    </button>
+
+                </div>
+
+
+                <div id="udt-container"></div>
+
+            </div>
+
+        </section>
+
+
+        <section
+            class="tab-panel"
+            data-tab-panel="db"
+        >
+
+            <div class="panel-header">
+                <div>
+                    <h2>
+                        PLC Data Blocks
+                    </h2>
+
+                    <p class="panel-description">
+                        Define DBs using built-in types, UDTs,
+                        Arrays and Structs.
+                    </p>
+                </div>
+            </div>
+
+
+            <div class="card">
+
+                <div class="form-row">
+
+                    <label for="new-db-name">
+                        DB name:
+                    </label>
+
+                    <input
+                        id="new-db-name"
+                        type="text"
+                        placeholder="DB_Process"
+                    >
+
+                    <button
+                        id="add-db-button"
+                        type="button"
+                    >
+                        New DB
+                    </button>
+
+                </div>
+
+
+                <div id="db-container"></div>
+
+            </div>
+
+        </section>
+
+
+        <section
+            class="tab-panel"
+            data-tab-panel="preview"
+        >
+
+            <div class="panel-header">
+
+                <div>
+                    <h2>
+                        TIA source preview
+                    </h2>
+
+                    <p class="panel-description">
+                        Generate the source that will later be imported
+                        into the selected PLC through TIA Openness.
+                    </p>
+                </div>
+
+                <button
+                    id="generate-preview-button"
+                    type="button"
+                    class="primary-button"
+                >
+                    Generate source
+                </button>
+
+            </div>
+
+
+            <div class="card">
+
+                <p
+                    id="preview-target-plc"
+                    class="target-summary"
+                >
+                    Target PLC: not selected
+                </p>
+
+                <pre
+                    id="source-preview"
+                    class="source-preview"
+                ></pre>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <script
+        type="module"
+        src="/gui/js/tabs.js"
+    ></script>
 
     <script
         type="module"

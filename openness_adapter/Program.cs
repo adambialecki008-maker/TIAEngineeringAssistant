@@ -51,12 +51,32 @@ namespace TiaOpennessAdapter
                         return Inspect(args);
 
 
+                    case "list-project-plcs":
+                        return ListProjectPlcs(args);
+
+
                     case "list-plcs":
                         return ListPlcs(args);
 
 
+                    case "list-io":
+                        return ListIo(args);
+
+
+                    case "create-tags":
+                        return CreateTags(args);
+
+
                     case "create-plc":
                         return CreatePlc(args);
+
+
+                    case "rename-plc":
+                        return RenamePlc(args);
+
+
+                    case "delete-plc":
+                        return DeletePlc(args);
 
 
                     default:
@@ -84,32 +104,35 @@ namespace TiaOpennessAdapter
             string[] args
         )
         {
-            if (args.Length < 2)
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
             {
-                Console.Error.WriteLine(
-                    "TIA process PID is required."
-                );
-
-                return 1;
-            }
-
-
-            if (
-                !int.TryParse(
-                    args[1],
-                    out int processId
-                )
-            )
-            {
-                Console.Error.WriteLine(
-                    "PID must be an integer."
-                );
-
                 return 1;
             }
 
 
             return TiaService.InspectProcess(
+                processId
+            );
+        }
+
+
+        private static int ListProjectPlcs(
+            string[] args
+        )
+        {
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ListProjectPlcs(
                 processId
             );
         }
@@ -129,17 +152,11 @@ namespace TiaOpennessAdapter
             }
 
 
-            if (
-                !int.TryParse(
-                    args[1],
-                    out int processId
-                )
-            )
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
             {
-                Console.Error.WriteLine(
-                    "PID must be an integer."
-                );
-
                 return 1;
             }
 
@@ -151,24 +168,178 @@ namespace TiaOpennessAdapter
         }
 
 
-        private static int CreatePlc(
+        private static int ListIo(
             string[] args
         )
         {
-            if (args.Length < 3)
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ListProjectIo(
+                processId
+            );
+        }
+
+
+        private static int CreateTags(
+            string[] args
+        )
+        {
+            if (args.Length < 6)
             {
                 Console.Error.WriteLine(
-                    "PID and PLC selection are required."
+                    "PID, device name, PLC name, tag table name and tag file are required."
                 );
 
                 return 1;
             }
 
 
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.CreatePlcTags(
+                processId,
+                args[2],
+                args[3],
+                args[4],
+                args[5]
+            );
+        }
+
+
+        private static int CreatePlc(
+            string[] args
+        )
+        {
+            if (args.Length < 5)
+            {
+                Console.Error.WriteLine(
+                    "PID, PLC selection, PLC name and device name are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.CreatePlc(
+                processId,
+                args[2],
+                args[3],
+                args[4]
+            );
+        }
+
+
+        private static int RenamePlc(
+            string[] args
+        )
+        {
+            if (args.Length < 6)
+            {
+                Console.Error.WriteLine(
+                    "PID, current device name, current PLC name, "
+                    +
+                    "new device name and new PLC name are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.RenamePlc(
+                processId,
+                args[2],
+                args[3],
+                args[4],
+                args[5]
+            );
+        }
+
+
+        private static int DeletePlc(
+            string[] args
+        )
+        {
+            if (args.Length < 4)
+            {
+                Console.Error.WriteLine(
+                    "PID, device name and PLC name are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.DeletePlc(
+                processId,
+                args[2],
+                args[3]
+            );
+        }
+
+
+        private static bool TryReadProcessId(
+            string[] args,
+            out int processId
+        )
+        {
+            processId = 0;
+
+
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine(
+                    "TIA process PID is required."
+                );
+
+                return false;
+            }
+
+
             if (
                 !int.TryParse(
                     args[1],
-                    out int processId
+                    out processId
                 )
             )
             {
@@ -176,32 +347,11 @@ namespace TiaOpennessAdapter
                     "PID must be an integer."
                 );
 
-                return 1;
+                return false;
             }
 
 
-            string selection =
-                args[2];
-
-
-            string plcName =
-                args.Length >= 4
-                    ? args[3]
-                    : "PLC_1";
-
-
-            string deviceName =
-                args.Length >= 5
-                    ? args[4]
-                    : plcName;
-
-
-            return TiaService.CreatePlc(
-                processId,
-                selection,
-                plcName,
-                deviceName
-            );
+            return true;
         }
 
 
@@ -261,11 +411,31 @@ namespace TiaOpennessAdapter
             );
 
             Console.WriteLine(
+                "  list-project-plcs <PID>"
+            );
+
+            Console.WriteLine(
                 "  list-plcs <PID> <PLC_FAMILY>"
             );
 
             Console.WriteLine(
-                "  create-plc <PID> <TYPE_IDENTIFIER_OR_ORDER_NUMBER> [PLC_NAME] [DEVICE_NAME]"
+                "  list-io <PID>"
+            );
+
+            Console.WriteLine(
+                "  create-tags <PID> <DEVICE_NAME> <PLC_NAME> <TAG_TABLE_NAME> <TAG_FILE>"
+            );
+
+            Console.WriteLine(
+                "  create-plc <PID> <TYPE_IDENTIFIER_OR_ORDER_NUMBER> <PLC_NAME> <DEVICE_NAME>"
+            );
+
+            Console.WriteLine(
+                "  rename-plc <PID> <CURRENT_DEVICE_NAME> <CURRENT_PLC_NAME> <NEW_DEVICE_NAME> <NEW_PLC_NAME>"
+            );
+
+            Console.WriteLine(
+                "  delete-plc <PID> <DEVICE_NAME> <PLC_NAME>"
             );
         }
     }
