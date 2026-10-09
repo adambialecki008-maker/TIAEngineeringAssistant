@@ -1098,8 +1098,8 @@ function buildPhysicalTags(
                 continue;
             }
 
-            const startIndex =
-                compatible.findIndex(
+            const startChannel =
+                compatible.find(
                     (channel) =>
                         channelKey(
                             channel
@@ -1108,7 +1108,7 @@ function buildPhysicalTags(
                         mapping.start_channel_key
                 );
 
-            if (startIndex < 0) {
+            if (!startChannel) {
                 errors.push(
                     `${group.prefix} / ${signal.key || "signal"}: selected channel is no longer available.`
                 );
@@ -1117,13 +1117,48 @@ function buildPhysicalTags(
             }
 
 
+            /*
+             * Auto-mapping must stay inside the same physical module.
+             *
+             * Selecting DI_1 / channel 0 for four devices must map
+             * channels 0..3 of DI_1. It must never continue into the
+             * next compatible module when the current module runs out.
+             */
+            const moduleChannels =
+                compatible.filter(
+                    (channel) =>
+                        channel.device_name
+                        ===
+                        startChannel.device_name
+                        &&
+                        channel.item_path
+                        ===
+                        startChannel.item_path
+                );
+
+            const startIndex =
+                moduleChannels.findIndex(
+                    (channel) =>
+                        channelKey(
+                            channel
+                        )
+                        ===
+                        mapping.start_channel_key
+                );
+
+            const requiredWidth =
+                dataTypeWidthBits(
+                    signal.data_type
+                );
+
+
             for (
                 let offset = 0;
                 offset < group.quantity;
                 offset += 1
             ) {
                 const channel =
-                    compatible[
+                    moduleChannels[
                         startIndex
                         +
                         offset
@@ -1131,10 +1166,44 @@ function buildPhysicalTags(
 
                 if (!channel) {
                     errors.push(
-                        `${group.prefix} / ${signal.key || "signal"}: not enough consecutive compatible channels for ${group.quantity} devices.`
+                        `${group.prefix} / ${signal.key || "signal"}: module "${startChannel.item_name}" does not have ${group.quantity} consecutive compatible channels from channel ${startChannel.channel_number}.`
                     );
 
                     break;
+                }
+
+
+                if (
+                    offset > 0
+                    &&
+                    requiredWidth !== null
+                ) {
+                    const previousChannel =
+                        moduleChannels[
+                            startIndex
+                            +
+                            offset
+                            -
+                            1
+                        ];
+
+                    const expectedAddress =
+                        previousChannel
+                            .channel_address_bits
+                        +
+                        requiredWidth;
+
+                    if (
+                        channel.channel_address_bits
+                        !==
+                        expectedAddress
+                    ) {
+                        errors.push(
+                            `${group.prefix} / ${signal.key || "signal"}: channel sequence in module "${startChannel.item_name}" is not contiguous after ${formatRawChannelAddress(previousChannel)'}.`
+                        );
+
+                        break;
+                    }
                 }
 
                 const key =
