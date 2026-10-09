@@ -2240,24 +2240,6 @@ export function initDevicesUi() {
                 wrapper
             );
 
-            const hint =
-                document.createElement(
-                    "p"
-                );
-
-            hint.className =
-                "hint";
-
-            hint.textContent =
-                "Patterns: {device}, {prefix}, {index}, {n}, {n:02}. "
-                +
-                "Mark physical signals as Input or Output; "
-                +
-                "Internal signals stay in device_config only.";
-
-            content.appendChild(
-                hint
-            );
 
             details.append(
                 summary,
