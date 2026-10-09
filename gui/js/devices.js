@@ -1118,26 +1118,22 @@ function buildPhysicalTags(
 
 
             /*
-             * Auto-mapping must stay inside the same physical module.
+             * Continue through compatible channels in the same hardware
+             * station/device. The allocation may cross module boundaries.
              *
-             * Selecting DI_1 / channel 0 for four devices must map
-             * channels 0..3 of DI_1. It must never continue into the
-             * next compatible module when the current module runs out.
+             * Example:
+             * DI module 1, ch 7 -> DI module 2, ch 0 -> ch 1 -> ch 2.
              */
-            const moduleChannels =
+            const stationChannels =
                 compatible.filter(
                     (channel) =>
                         channel.device_name
                         ===
                         startChannel.device_name
-                        &&
-                        channel.item_path
-                        ===
-                        startChannel.item_path
                 );
 
             const startIndex =
-                moduleChannels.findIndex(
+                stationChannels.findIndex(
                     (channel) =>
                         channelKey(
                             channel
@@ -1146,15 +1142,10 @@ function buildPhysicalTags(
                         mapping.start_channel_key
                 );
 
-            const requiredWidth =
-                dataTypeWidthBits(
-                    signal.data_type
-                );
-
             const availableChannels =
                 Math.max(
                     0,
-                    moduleChannels.length
+                    stationChannels.length
                     -
                     startIndex
                 );
@@ -1165,7 +1156,7 @@ function buildPhysicalTags(
                 group.quantity
             ) {
                 errors.push(
-                    `${group.prefix} / ${signal.key || "signal"}: not enough I/O channels in module "${startChannel.item_name}". Required: ${group.quantity}, available from channel ${startChannel.channel_number}: ${availableChannels}.`
+                    `${group.prefix} / ${signal.key || "signal"}: not enough compatible I/O channels in station "${startChannel.device_name}". Required: ${group.quantity}, available from selected channel: ${availableChannels}.`
                 );
 
                 continue;
@@ -1178,45 +1169,12 @@ function buildPhysicalTags(
                 offset += 1
             ) {
                 const channel =
-                    moduleChannels[
+                    stationChannels[
                         startIndex
                         +
                         offset
                     ];
 
-
-                if (
-                    offset > 0
-                    &&
-                    requiredWidth !== null
-                ) {
-                    const previousChannel =
-                        moduleChannels[
-                            startIndex
-                            +
-                            offset
-                            -
-                            1
-                        ];
-
-                    const expectedAddress =
-                        previousChannel
-                            .channel_address_bits
-                        +
-                        requiredWidth;
-
-                    if (
-                        channel.channel_address_bits
-                        !==
-                        expectedAddress
-                    ) {
-                        errors.push(
-                            `${group.prefix} / ${signal.key || "signal"}: channel sequence in module "${startChannel.item_name}" is not contiguous after ${formatRawChannelAddress(previousChannel)}.`
-                        );
-
-                        break;
-                    }
-                }
 
                 const key =
                     channelKey(
