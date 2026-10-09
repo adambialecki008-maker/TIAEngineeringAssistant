@@ -1982,7 +1982,11 @@ export function initDevicesUi() {
 
                         persist();
 
-                        render();
+                        renderGenerated();
+
+                        renderMappings();
+
+                        renderPlcTags();
                     }
                 );
 
@@ -2047,7 +2051,11 @@ export function initDevicesUi() {
 
                         persist();
 
-                        render();
+                        renderGenerated();
+
+                        renderMappings();
+
+                        renderPlcTags();
                     }
                 );
 
