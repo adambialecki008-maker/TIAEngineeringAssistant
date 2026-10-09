@@ -1,0 +1,11 @@
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\bin\Debug\net48\TiaOpennessAdapter.exe.config
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\bin\Debug\net48\TiaOpennessAdapter.exe
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\bin\Debug\net48\TiaOpennessAdapter.pdb
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.csproj.AssemblyReference.cache
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.AssemblyInfoInputs.cache
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.AssemblyInfo.cs
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.csproj.CoreCompileInputs.cache
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.sourcelink.json
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.exe
+C:\Users\adamb\Desktop\Python\TIAEngineeringAssistant\openness_adapter\obj\Debug\net48\TiaOpennessAdapter.pdb

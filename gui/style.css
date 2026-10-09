@@ -83,10 +83,46 @@ button:hover {
     background: #eef1f4;
 }
 
+button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
 .hint {
     margin-bottom: 0;
     font-size: 13px;
     color: #606970;
+}
+
+
+/* TIA */
+
+.tia-row {
+    margin-top: 14px;
+}
+
+#tia-plc-model {
+    min-width: 430px;
+}
+
+#tia-manual-code {
+    min-width: 330px;
+}
+
+.tia-status {
+    margin: 14px 0 0;
+    padding: 9px 12px;
+    border-radius: 4px;
+    background: #f1f4f6;
+    font-size: 13px;
+}
+
+.tia-status.error {
+    background: #fbeaea;
+}
+
+.hidden {
+    display: none !important;
 }
 
 
@@ -176,7 +212,10 @@ td {
     }
 
     input,
-    select {
+    select,
+    #tia-plc-model,
+    #tia-manual-code {
         width: 100%;
+        min-width: 0;
     }
 }

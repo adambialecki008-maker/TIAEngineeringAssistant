@@ -1,3 +1,25 @@
+export async function getJson(
+    url
+) {
+    const response =
+        await fetch(url);
+
+
+    const data =
+        await response.json();
+
+
+    if (!response.ok) {
+        throw new Error(
+            getErrorMessage(data)
+        );
+    }
+
+
+    return data;
+}
+
+
 export async function postJson(
     url,
     payload
@@ -14,7 +36,9 @@ export async function postJson(
                 },
 
                 body:
-                    JSON.stringify(payload),
+                    JSON.stringify(
+                        payload
+                    ),
             }
         );
 
@@ -25,10 +49,28 @@ export async function postJson(
 
     if (!response.ok) {
         throw new Error(
-            JSON.stringify(data)
+            getErrorMessage(data)
         );
     }
 
 
     return data;
+}
+
+
+function getErrorMessage(
+    data
+) {
+    if (
+        data
+        &&
+        typeof data.detail === "string"
+    ) {
+        return data.detail;
+    }
+
+
+    return JSON.stringify(
+        data
+    );
 }

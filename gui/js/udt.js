@@ -6,10 +6,13 @@ import {
 import {
     createButton,
     createTextCell,
-    createInput,
-    createDataTypeSelect,
     getOpenNames,
 } from "./ui.js";
+
+import {
+    createMemberEditor,
+    formatMemberType,
+} from "./member-editor.js";
 
 import {
     postJson,
@@ -18,7 +21,6 @@ import {
 
 function requirePlc() {
     if (!projectConfig.plc_family) {
-
         alert(
             "Select PLC family first."
         );
@@ -44,7 +46,10 @@ export function addUdt(
 
 
     if (!name) {
-        alert("UDT name is required.");
+        alert(
+            "UDT name is required."
+        );
+
         return;
     }
 
@@ -52,7 +57,8 @@ export function addUdt(
     const duplicate =
         projectConfig.udts.some(
             (udt) =>
-                udt.name.toLowerCase() ===
+                udt.name.toLowerCase()
+                ===
                 name.toLowerCase()
         );
 
@@ -67,14 +73,15 @@ export function addUdt(
 
 
     projectConfig.udts.push({
-        name,
+        name: name,
         fields: [],
     });
 
 
     saveProjectConfig();
 
-    nameInput.value = "";
+    nameInput.value =
+        "";
 
     refresh();
 }
@@ -85,7 +92,10 @@ function renameUdt(
     refresh
 ) {
     const udt =
-        projectConfig.udts[udtIndex];
+        projectConfig.udts[
+            udtIndex
+        ];
+
 
     const oldName =
         udt.name;
@@ -108,20 +118,22 @@ function renameUdt(
 
 
     if (!newName) {
-        alert(
-            "UDT name is required."
-        );
-
         return;
     }
 
 
     const duplicate =
         projectConfig.udts.some(
-            (otherUdt, index) =>
-                index !== udtIndex &&
-                otherUdt.name.toLowerCase() ===
-                    newName.toLowerCase()
+            (
+                otherUdt,
+                index
+            ) =>
+                index !== udtIndex
+                &&
+                otherUdt.name
+                    .toLowerCase()
+                ===
+                newName.toLowerCase()
         );
 
 
@@ -134,35 +146,78 @@ function renameUdt(
     }
 
 
-    udt.name = newName;
+    udt.name =
+        newName;
 
 
-    /*
-        Update UDT references
-        inside other UDTs.
-    */
-    for (
-        const otherUdt
-        of projectConfig.udts
+    updateUdtReferences(
+        oldName,
+        newName
+    );
+
+
+    saveProjectConfig();
+    refresh();
+}
+
+
+function updateUdtReferences(
+    oldName,
+    newName
+) {
+    function updateMember(
+        member
     ) {
-        for (
-            const field
-            of otherUdt.fields
+        if (
+            member.data_type
+                .toLowerCase()
+            ===
+            oldName.toLowerCase()
         ) {
-            if (
-                field.data_type.toLowerCase() ===
-                oldName.toLowerCase()
-            ) {
-                field.data_type =
-                    newName;
-            }
+            member.data_type =
+                newName;
+        }
+
+
+        if (
+            member.array_element_type
+            &&
+            member.array_element_type
+                .toLowerCase()
+            ===
+            oldName.toLowerCase()
+        ) {
+            member.array_element_type =
+                newName;
+        }
+
+
+        for (
+            const child
+            of member.struct_members ?? []
+        ) {
+            updateMember(
+                child
+            );
         }
     }
 
 
-    /*
-        Update DB references.
-    */
+    for (
+        const currentUdt
+        of projectConfig.udts
+    ) {
+        for (
+            const field
+            of currentUdt.fields
+        ) {
+            updateMember(
+                field
+            );
+        }
+    }
+
+
     for (
         const db
         of projectConfig.dbs
@@ -171,19 +226,11 @@ function renameUdt(
             const member
             of db.members
         ) {
-            if (
-                member.data_type.toLowerCase() ===
-                oldName.toLowerCase()
-            ) {
-                member.data_type =
-                    newName;
-            }
+            updateMember(
+                member
+            );
         }
     }
-
-
-    saveProjectConfig();
-    refresh();
 }
 
 
@@ -192,77 +239,30 @@ function deleteUdt(
     refresh
 ) {
     const udt =
-        projectConfig.udts[udtIndex];
+        projectConfig.udts[
+            udtIndex
+        ];
 
 
-    const references = [];
-
-
-    for (
-        const otherUdt
-        of projectConfig.udts
+    if (
+        isUdtReferenced(
+            udt.name
+        )
     ) {
-
-        if (otherUdt === udt) {
-            continue;
-        }
-
-
-        const used =
-            otherUdt.fields.some(
-                (field) =>
-                    field.data_type.toLowerCase() ===
-                    udt.name.toLowerCase()
-            );
-
-
-        if (used) {
-            references.push(
-                `UDT ${otherUdt.name}`
-            );
-        }
-    }
-
-
-    for (
-        const db
-        of projectConfig.dbs
-    ) {
-
-        const used =
-            db.members.some(
-                (member) =>
-                    member.data_type.toLowerCase() ===
-                    udt.name.toLowerCase()
-            );
-
-
-        if (used) {
-            references.push(
-                `DB ${db.name}`
-            );
-        }
-    }
-
-
-    if (references.length > 0) {
-
         alert(
-            `Cannot delete ${udt.name}.\n` +
-            `Used by:\n${references.join("\n")}`
+            `Cannot delete ${udt.name}. ` +
+            `It is referenced by another type.`
         );
 
         return;
     }
 
 
-    const confirmed =
-        confirm(
+    if (
+        !confirm(
             `Delete UDT "${udt.name}"?`
-        );
-
-
-    if (!confirmed) {
+        )
+    ) {
         return;
     }
 
@@ -278,77 +278,82 @@ function deleteUdt(
 }
 
 
-function addField(
-    udtIndex,
-    refresh
+function isUdtReferenced(
+    udtName
 ) {
-    const udt =
-        projectConfig.udts[udtIndex];
+    function memberUsesUdt(
+        member
+    ) {
+        if (
+            member.data_type
+                .toLowerCase()
+            ===
+            udtName.toLowerCase()
+        ) {
+            return true;
+        }
 
 
-    const name =
-        document
-            .getElementById(
-                `udt-field-name-${udtIndex}`
-            )
-            .value
-            .trim();
+        if (
+            member.array_element_type
+            &&
+            member.array_element_type
+                .toLowerCase()
+            ===
+            udtName.toLowerCase()
+        ) {
+            return true;
+        }
 
 
-    const dataType =
-        document
-            .getElementById(
-                `udt-field-type-${udtIndex}`
-            )
-            .value;
-
-
-    const comment =
-        document
-            .getElementById(
-                `udt-field-comment-${udtIndex}`
-            )
-            .value
-            .trim();
-
-
-    if (!name || !dataType) {
-
-        alert(
-            "Field name and data type are required."
+        return (
+            member.struct_members
+            ?? []
+        ).some(
+            memberUsesUdt
         );
-
-        return;
     }
 
 
-    const duplicate =
-        udt.fields.some(
-            (field) =>
-                field.name.toLowerCase() ===
-                name.toLowerCase()
-        );
-
-
-    if (duplicate) {
-
-        alert(
-            `Field "${name}" already exists inside ${udt.name}.`
-        );
-
-        return;
+    for (
+        const udt
+        of projectConfig.udts
+    ) {
+        for (
+            const field
+            of udt.fields
+        ) {
+            if (
+                memberUsesUdt(
+                    field
+                )
+            ) {
+                return true;
+            }
+        }
     }
 
 
-    udt.fields.push({
-        name,
-        data_type: dataType,
-        comment: comment || null,
-    });
+    for (
+        const db
+        of projectConfig.dbs
+    ) {
+        for (
+            const member
+            of db.members
+        ) {
+            if (
+                memberUsesUdt(
+                    member
+                )
+            ) {
+                return true;
+            }
+        }
+    }
 
 
-    saveProjectConfig();
-    refresh();
+    return false;
 }
 
 
@@ -358,10 +363,14 @@ function renameField(
     refresh
 ) {
     const udt =
-        projectConfig.udts[udtIndex];
+        projectConfig.udts[
+            udtIndex
+        ];
 
     const field =
-        udt.fields[fieldIndex];
+        udt.fields[
+            fieldIndex
+        ];
 
 
     const result =
@@ -387,17 +396,22 @@ function renameField(
 
     const duplicate =
         udt.fields.some(
-            (otherField, index) =>
-                index !== fieldIndex &&
-                otherField.name.toLowerCase() ===
-                    newName.toLowerCase()
+            (
+                other,
+                index
+            ) =>
+                index !== fieldIndex
+                &&
+                other.name
+                    .toLowerCase()
+                ===
+                newName.toLowerCase()
         );
 
 
     if (duplicate) {
-
         alert(
-            "Field name must be unique inside the UDT."
+            "Field name must be unique."
         );
 
         return;
@@ -419,10 +433,14 @@ function deleteField(
     refresh
 ) {
     const udt =
-        projectConfig.udts[udtIndex];
+        projectConfig.udts[
+            udtIndex
+        ];
 
     const field =
-        udt.fields[fieldIndex];
+        udt.fields[
+            fieldIndex
+        ];
 
 
     if (
@@ -449,33 +467,26 @@ async function validateUdt(
     udtIndex
 ) {
     const udt =
-        projectConfig.udts[udtIndex];
-
-
-    if (udt.fields.length === 0) {
-
-        alert(
-            "UDT must contain at least one field."
-        );
-
-        return;
-    }
+        projectConfig.udts[
+            udtIndex
+        ];
 
 
     try {
-
         await postJson(
             "/api/v1/udt-specifications",
             udt
         );
+
 
         alert(
             `${udt.name} validated successfully.`
         );
 
     } catch (error) {
-
-        console.error(error);
+        console.error(
+            error
+        );
 
         alert(
             "UDT validation failed."
@@ -489,14 +500,20 @@ export function renderUdts(
     refresh
 ) {
     const openNames =
-        getOpenNames(container);
+        getOpenNames(
+            container
+        );
 
 
-    container.innerHTML = "";
+    container.innerHTML =
+        "";
 
 
     projectConfig.udts.forEach(
-        (udt, udtIndex) => {
+        (
+            udt,
+            udtIndex
+        ) => {
 
             const details =
                 document.createElement(
@@ -520,7 +537,8 @@ export function renderUdts(
 
 
             summary.textContent =
-                `${udt.name} (${udt.fields.length} fields)`;
+                `${udt.name} ` +
+                `(${udt.fields.length} fields)`;
 
 
             details.appendChild(
@@ -600,7 +618,10 @@ export function renderUdts(
 
 
             udt.fields.forEach(
-                (field, fieldIndex) => {
+                (
+                    field,
+                    fieldIndex
+                ) => {
 
                     const row =
                         document.createElement(
@@ -617,7 +638,9 @@ export function renderUdts(
 
                     row.appendChild(
                         createTextCell(
-                            field.data_type
+                            formatMemberType(
+                                field
+                            )
                         )
                     );
 
@@ -633,9 +656,6 @@ export function renderUdts(
                         document.createElement(
                             "td"
                         );
-
-                    actionCell.className =
-                        "actions-cell";
 
 
                     actionCell.appendChild(
@@ -680,55 +700,32 @@ export function renderUdts(
                 tbody
             );
 
-
             content.appendChild(
                 table
             );
 
 
             const editor =
-                document.createElement(
-                    "div"
-                );
+                createMemberEditor({
+                    prefix:
+                        `udt-field-${udtIndex}`,
 
-            editor.className =
-                "editor-row";
+                    existingMembers:
+                        udt.fields,
 
+                    excludeUdtName:
+                        udt.name,
 
-            editor.appendChild(
-                createInput(
-                    `udt-field-name-${udtIndex}`,
-                    "Field name"
-                )
-            );
+                    onAdd:
+                        (field) => {
+                            udt.fields.push(
+                                field
+                            );
 
-
-            editor.appendChild(
-                createDataTypeSelect(
-                    `udt-field-type-${udtIndex}`,
-                    udt.name
-                )
-            );
-
-
-            editor.appendChild(
-                createInput(
-                    `udt-field-comment-${udtIndex}`,
-                    "Comment"
-                )
-            );
-
-
-            editor.appendChild(
-                createButton(
-                    "Add field",
-                    () =>
-                        addField(
-                            udtIndex,
-                            refresh
-                        )
-                )
-            );
+                            saveProjectConfig();
+                            refresh();
+                        },
+                });
 
 
             content.appendChild(

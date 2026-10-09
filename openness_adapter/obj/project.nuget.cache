@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "eVy5y/lxh6Q=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\adamb\\Desktop\\Python\\TIAEngineeringAssistant\\openness_adapter\\TiaOpennessAdapter.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\adamb\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.3\\microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
+    "C:\\Users\\adamb\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net48\\1.0.3\\microsoft.netframework.referenceassemblies.net48.1.0.3.nupkg.sha512"
+  ],
+  "logs": []
+}

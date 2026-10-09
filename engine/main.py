@@ -18,12 +18,24 @@ from database.repository import (
 )
 from engine.udt import UdtSpecification
 from engine.plc_db import DataBlockSpecification
+from engine.project import (
+    GeneratedProjectSource,
+    ProjectSpecification,
+)
+
+from functions.tia_source_generator import (
+    generate_project_source,
+)
+from engine.tia_openness import (
+    router as tia_openness_router,
+)
 
 app = FastAPI(
     title="TIA Engineering Assistant",
     version="1.0.0",
     description=("Engineering review API for Siemens TIA Portal project data."),
 )
+app.include_router(tia_openness_router)
 app.mount("/gui", StaticFiles(directory="gui"), name="gui")
 
 
@@ -118,3 +130,15 @@ def create_db_specification(
     specification: DataBlockSpecification,
 ) -> DataBlockSpecification:
     return specification
+
+
+@app.post(
+    "/api/v1/project-source",
+    response_model=GeneratedProjectSource,
+)
+def generate_project_source_request(
+    project: ProjectSpecification,
+) -> GeneratedProjectSource:
+    source = generate_project_source(project)
+
+    return GeneratedProjectSource(source=source)

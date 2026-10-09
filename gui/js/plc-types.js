@@ -102,22 +102,103 @@ export const PLC_DATA_TYPES = {
 };
 
 
-export function getPlcDataTypes(plcFamily) {
-    return PLC_DATA_TYPES[plcFamily] ?? [];
+export function getPlcDataTypes(
+    plcFamily
+) {
+    return (
+        PLC_DATA_TYPES[plcFamily]
+        ?? []
+    );
 }
 
 
-export function isBuiltInDataType(
-    plcFamily,
-    dataType
+function checkDataType(
+    dataType,
+    path,
+    allowedTypes,
+    udtNames,
+    problems
 ) {
-    const allowedTypes =
-        getPlcDataTypes(plcFamily);
+    const normalized =
+        dataType.toLowerCase();
 
-    return allowedTypes.some(
-        (type) =>
-            type.toLowerCase() ===
-            dataType.toLowerCase()
+
+    if (
+        normalized === "array"
+        || normalized === "struct"
+    ) {
+        return;
+    }
+
+
+    if (
+        !allowedTypes.has(normalized)
+        &&
+        !udtNames.has(normalized)
+    ) {
+        problems.push(
+            `${path}: ${dataType}`
+        );
+    }
+}
+
+
+function checkMember(
+    member,
+    path,
+    allowedTypes,
+    udtNames,
+    problems
+) {
+    const memberPath =
+        `${path}.${member.name}`;
+
+
+    if (
+        member.data_type === "Array"
+    ) {
+        if (
+            member.array_element_type
+        ) {
+            checkDataType(
+                member.array_element_type,
+                `${memberPath}[]`,
+                allowedTypes,
+                udtNames,
+                problems
+            );
+        }
+
+        return;
+    }
+
+
+    if (
+        member.data_type === "Struct"
+    ) {
+        for (
+            const child
+            of member.struct_members ?? []
+        ) {
+            checkMember(
+                child,
+                memberPath,
+                allowedTypes,
+                udtNames,
+                problems
+            );
+        }
+
+        return;
+    }
+
+
+    checkDataType(
+        member.data_type,
+        memberPath,
+        allowedTypes,
+        udtNames,
+        problems
     );
 }
 
@@ -136,6 +217,7 @@ export function findIncompatibleDataTypes(
             )
         );
 
+
     const udtNames =
         new Set(
             config.udts.map(
@@ -144,39 +226,32 @@ export function findIncompatibleDataTypes(
             )
         );
 
+
     const problems = [];
 
 
     for (const udt of config.udts) {
         for (const field of udt.fields) {
-            const type =
-                field.data_type.toLowerCase();
-
-            if (
-                !allowedTypes.has(type) &&
-                !udtNames.has(type)
-            ) {
-                problems.push(
-                    `${udt.name}.${field.name}: ${field.data_type}`
-                );
-            }
+            checkMember(
+                field,
+                udt.name,
+                allowedTypes,
+                udtNames,
+                problems
+            );
         }
     }
 
 
     for (const db of config.dbs) {
         for (const member of db.members) {
-            const type =
-                member.data_type.toLowerCase();
-
-            if (
-                !allowedTypes.has(type) &&
-                !udtNames.has(type)
-            ) {
-                problems.push(
-                    `${db.name}.${member.name}: ${member.data_type}`
-                );
-            }
+            checkMember(
+                member,
+                db.name,
+                allowedTypes,
+                udtNames,
+                problems
+            );
         }
     }
 

@@ -6,18 +6,17 @@ import {
 import {
     createButton,
     createTextCell,
-    createInput,
-    createDataTypeSelect,
     getOpenNames,
 } from "./ui.js";
 
 import {
+    createMemberEditor,
+    formatMemberType,
+} from "./member-editor.js";
+
+import {
     postJson,
 } from "./api.js";
-
-
-const ARRAY_MIN_BOUND = -32768;
-const ARRAY_MAX_BOUND = 32767;
 
 
 function requirePlc() {
@@ -47,7 +46,10 @@ export function addDb(
 
 
     if (!name) {
-        alert("DB name is required.");
+        alert(
+            "DB name is required."
+        );
+
         return;
     }
 
@@ -55,7 +57,8 @@ export function addDb(
     const duplicate =
         projectConfig.dbs.some(
             (db) =>
-                db.name.toLowerCase() ===
+                db.name.toLowerCase()
+                ===
                 name.toLowerCase()
         );
 
@@ -77,7 +80,8 @@ export function addDb(
 
     saveProjectConfig();
 
-    nameInput.value = "";
+    nameInput.value =
+        "";
 
     refresh();
 }
@@ -88,7 +92,9 @@ function renameDb(
     refresh
 ) {
     const db =
-        projectConfig.dbs[dbIndex];
+        projectConfig.dbs[
+            dbIndex
+        ];
 
 
     const result =
@@ -108,20 +114,22 @@ function renameDb(
 
 
     if (!newName) {
-        alert(
-            "DB name is required."
-        );
-
         return;
     }
 
 
     const duplicate =
         projectConfig.dbs.some(
-            (otherDb, index) =>
-                index !== dbIndex &&
-                otherDb.name.toLowerCase() ===
-                    newName.toLowerCase()
+            (
+                other,
+                index
+            ) =>
+                index !== dbIndex
+                &&
+                other.name
+                    .toLowerCase()
+                ===
+                newName.toLowerCase()
         );
 
 
@@ -148,16 +156,16 @@ function deleteDb(
     refresh
 ) {
     const db =
-        projectConfig.dbs[dbIndex];
+        projectConfig.dbs[
+            dbIndex
+        ];
 
 
-    const confirmed =
-        confirm(
-            `Delete DB "${db.name}" and all members?`
-        );
-
-
-    if (!confirmed) {
+    if (
+        !confirm(
+            `Delete DB "${db.name}"?`
+        )
+    ) {
         return;
     }
 
@@ -173,233 +181,20 @@ function deleteDb(
 }
 
 
-function addMember(
-    dbIndex,
-    refresh
-) {
-    const db =
-        projectConfig.dbs[dbIndex];
-
-
-    const nameInput =
-        document.getElementById(
-            `db-member-name-${dbIndex}`
-        );
-
-    const typeSelect =
-        document.getElementById(
-            `db-member-type-${dbIndex}`
-        );
-
-    const commentInput =
-        document.getElementById(
-            `db-member-comment-${dbIndex}`
-        );
-
-
-    const name =
-        nameInput.value.trim();
-
-    const dataType =
-        typeSelect.value;
-
-    const comment =
-        commentInput.value.trim();
-
-
-    if (!name) {
-        alert(
-            "Member name is required."
-        );
-
-        return;
-    }
-
-
-    if (!dataType) {
-        alert(
-            "Data type is required."
-        );
-
-        return;
-    }
-
-
-    const duplicate =
-        db.members.some(
-            (member) =>
-                member.name.toLowerCase() ===
-                name.toLowerCase()
-        );
-
-
-    if (duplicate) {
-        alert(
-            `Member "${name}" already exists inside ${db.name}.`
-        );
-
-        return;
-    }
-
-
-    if (dataType === "Array") {
-        addArrayMember(
-            db,
-            dbIndex,
-            name,
-            comment,
-            refresh
-        );
-
-        return;
-    }
-
-
-    db.members.push({
-        name: name,
-        data_type: dataType,
-        comment: comment || null,
-
-        array_element_type: null,
-        array_lower_bound: null,
-        array_upper_bound: null,
-    });
-
-
-    saveProjectConfig();
-    refresh();
-}
-
-
-function addArrayMember(
-    db,
-    dbIndex,
-    name,
-    comment,
-    refresh
-) {
-    const elementTypeSelect =
-        document.getElementById(
-            `db-array-element-type-${dbIndex}`
-        );
-
-    const lowerBoundInput =
-        document.getElementById(
-            `db-array-lower-${dbIndex}`
-        );
-
-    const upperBoundInput =
-        document.getElementById(
-            `db-array-upper-${dbIndex}`
-        );
-
-
-    const elementType =
-        elementTypeSelect.value;
-
-    const lowerBound =
-        Number(
-            lowerBoundInput.value
-        );
-
-    const upperBound =
-        Number(
-            upperBoundInput.value
-        );
-
-
-    if (!elementType) {
-        alert(
-            "Array element type is required."
-        );
-
-        return;
-    }
-
-
-    if (
-        !Number.isInteger(lowerBound) ||
-        !Number.isInteger(upperBound)
-    ) {
-        alert(
-            "Array bounds must be integers."
-        );
-
-        return;
-    }
-
-
-    if (
-        lowerBound < ARRAY_MIN_BOUND ||
-        lowerBound > ARRAY_MAX_BOUND
-    ) {
-        alert(
-            `Lower bound must be between ` +
-            `${ARRAY_MIN_BOUND} and ${ARRAY_MAX_BOUND}.`
-        );
-
-        return;
-    }
-
-
-    if (
-        upperBound < ARRAY_MIN_BOUND ||
-        upperBound > ARRAY_MAX_BOUND
-    ) {
-        alert(
-            `Upper bound must be between ` +
-            `${ARRAY_MIN_BOUND} and ${ARRAY_MAX_BOUND}.`
-        );
-
-        return;
-    }
-
-
-    if (
-        upperBound < lowerBound
-    ) {
-        alert(
-            "Array upper bound must be greater than or equal to lower bound."
-        );
-
-        return;
-    }
-
-
-    db.members.push({
-        name: name,
-
-        data_type: "Array",
-
-        array_element_type:
-            elementType,
-
-        array_lower_bound:
-            lowerBound,
-
-        array_upper_bound:
-            upperBound,
-
-        comment:
-            comment || null,
-    });
-
-
-    saveProjectConfig();
-    refresh();
-}
-
-
 function renameMember(
     dbIndex,
     memberIndex,
     refresh
 ) {
     const db =
-        projectConfig.dbs[dbIndex];
+        projectConfig.dbs[
+            dbIndex
+        ];
 
     const member =
-        db.members[memberIndex];
+        db.members[
+            memberIndex
+        ];
 
 
     const result =
@@ -419,26 +214,28 @@ function renameMember(
 
 
     if (!newName) {
-        alert(
-            "Member name is required."
-        );
-
         return;
     }
 
 
     const duplicate =
         db.members.some(
-            (otherMember, index) =>
-                index !== memberIndex &&
-                otherMember.name.toLowerCase() ===
-                    newName.toLowerCase()
+            (
+                other,
+                index
+            ) =>
+                index !== memberIndex
+                &&
+                other.name
+                    .toLowerCase()
+                ===
+                newName.toLowerCase()
         );
 
 
     if (duplicate) {
         alert(
-            "Member name must be unique inside the DB."
+            "Member name must be unique."
         );
 
         return;
@@ -460,19 +257,21 @@ function deleteMember(
     refresh
 ) {
     const db =
-        projectConfig.dbs[dbIndex];
+        projectConfig.dbs[
+            dbIndex
+        ];
 
     const member =
-        db.members[memberIndex];
+        db.members[
+            memberIndex
+        ];
 
 
-    const confirmed =
-        confirm(
+    if (
+        !confirm(
             `Delete member "${member.name}"?`
-        );
-
-
-    if (!confirmed) {
+        )
+    ) {
         return;
     }
 
@@ -492,16 +291,9 @@ async function validateDb(
     dbIndex
 ) {
     const db =
-        projectConfig.dbs[dbIndex];
-
-
-    if (db.members.length === 0) {
-        alert(
-            "DB must contain at least one member."
-        );
-
-        return;
-    }
+        projectConfig.dbs[
+            dbIndex
+        ];
 
 
     try {
@@ -510,181 +302,19 @@ async function validateDb(
             db
         );
 
+
         alert(
             `${db.name} validated successfully.`
         );
 
     } catch (error) {
-        console.error(error);
+        console.error(
+            error
+        );
 
         alert(
             "DB validation failed."
         );
-    }
-}
-
-
-function getMemberTypeDisplay(
-    member
-) {
-    if (
-        member.data_type !== "Array"
-    ) {
-        return member.data_type;
-    }
-
-
-    return (
-        `Array[` +
-        `${member.array_lower_bound}..` +
-        `${member.array_upper_bound}] ` +
-        `of ${member.array_element_type}`
-    );
-}
-
-
-function createArrayEditor(
-    dbIndex
-) {
-    const container =
-        document.createElement(
-            "div"
-        );
-
-    container.id =
-        `db-array-options-${dbIndex}`;
-
-    container.className =
-        "editor-row";
-
-    container.style.display =
-        "none";
-
-
-    const typeLabel =
-        document.createElement(
-            "label"
-        );
-
-    typeLabel.textContent =
-        "Element type:";
-
-
-    const typeSelect =
-        createDataTypeSelect(
-            `db-array-element-type-${dbIndex}`
-        );
-
-
-    const lowerLabel =
-        document.createElement(
-            "label"
-        );
-
-    lowerLabel.textContent =
-        "Lower bound:";
-
-
-    const lowerInput =
-        createInput(
-            `db-array-lower-${dbIndex}`,
-            "0",
-            "number"
-        );
-
-    lowerInput.value = "0";
-
-    lowerInput.min =
-        String(ARRAY_MIN_BOUND);
-
-    lowerInput.max =
-        String(ARRAY_MAX_BOUND);
-
-
-    const upperLabel =
-        document.createElement(
-            "label"
-        );
-
-    upperLabel.textContent =
-        "Upper bound:";
-
-
-    const upperInput =
-        createInput(
-            `db-array-upper-${dbIndex}`,
-            "9",
-            "number"
-        );
-
-    upperInput.value = "9";
-
-    upperInput.min =
-        String(ARRAY_MIN_BOUND);
-
-    upperInput.max =
-        String(ARRAY_MAX_BOUND);
-
-
-    container.appendChild(
-        typeLabel
-    );
-
-    container.appendChild(
-        typeSelect
-    );
-
-    container.appendChild(
-        lowerLabel
-    );
-
-    container.appendChild(
-        lowerInput
-    );
-
-    container.appendChild(
-        upperLabel
-    );
-
-    container.appendChild(
-        upperInput
-    );
-
-
-    return container;
-}
-
-
-function updateArrayEditorVisibility(
-    dbIndex
-) {
-    const typeSelect =
-        document.getElementById(
-            `db-member-type-${dbIndex}`
-        );
-
-    const arrayEditor =
-        document.getElementById(
-            `db-array-options-${dbIndex}`
-        );
-
-
-    if (
-        !typeSelect ||
-        !arrayEditor
-    ) {
-        return;
-    }
-
-
-    if (
-        typeSelect.value === "Array"
-    ) {
-        arrayEditor.style.display =
-            "flex";
-    } else {
-        arrayEditor.style.display =
-            "none";
     }
 }
 
@@ -694,14 +324,20 @@ export function renderDbs(
     refresh
 ) {
     const openNames =
-        getOpenNames(container);
+        getOpenNames(
+            container
+        );
 
 
-    container.innerHTML = "";
+    container.innerHTML =
+        "";
 
 
     projectConfig.dbs.forEach(
-        (db, dbIndex) => {
+        (
+            db,
+            dbIndex
+        ) => {
 
             const details =
                 document.createElement(
@@ -725,7 +361,8 @@ export function renderDbs(
 
 
             summary.textContent =
-                `${db.name} (${db.members.length} members)`;
+                `${db.name} ` +
+                `(${db.members.length} members)`;
 
 
             details.appendChild(
@@ -825,7 +462,7 @@ export function renderDbs(
 
                     row.appendChild(
                         createTextCell(
-                            getMemberTypeDisplay(
+                            formatMemberType(
                                 member
                             )
                         )
@@ -843,9 +480,6 @@ export function renderDbs(
                         document.createElement(
                             "td"
                         );
-
-                    actionCell.className =
-                        "actions-cell";
 
 
                     actionCell.appendChild(
@@ -890,80 +524,33 @@ export function renderDbs(
                 tbody
             );
 
-
             content.appendChild(
                 table
             );
 
 
             const editor =
-                document.createElement(
-                    "div"
-                );
+                createMemberEditor({
+                    prefix:
+                        `db-member-${dbIndex}`,
 
-            editor.className =
-                "editor-row";
+                    existingMembers:
+                        db.members,
 
+                    onAdd:
+                        (member) => {
+                            db.members.push(
+                                member
+                            );
 
-            editor.appendChild(
-                createInput(
-                    `db-member-name-${dbIndex}`,
-                    "Member name"
-                )
-            );
-
-
-            const dataTypeSelect =
-                createDataTypeSelect(
-                    `db-member-type-${dbIndex}`,
-                    null,
-                    true
-                );
-
-
-            dataTypeSelect.addEventListener(
-                "change",
-                () =>
-                    updateArrayEditorVisibility(
-                        dbIndex
-                    )
-            );
-
-
-            editor.appendChild(
-                dataTypeSelect
-            );
-
-
-            editor.appendChild(
-                createInput(
-                    `db-member-comment-${dbIndex}`,
-                    "Comment"
-                )
-            );
-
-
-            editor.appendChild(
-                createButton(
-                    "Add member",
-                    () =>
-                        addMember(
-                            dbIndex,
-                            refresh
-                        )
-                )
-            );
+                            saveProjectConfig();
+                            refresh();
+                        },
+                });
 
 
             content.appendChild(
                 editor
-            );
-
-
-            content.appendChild(
-                createArrayEditor(
-                    dbIndex
-                )
             );
 
 

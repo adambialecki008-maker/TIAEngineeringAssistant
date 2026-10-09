@@ -12,23 +12,34 @@ export function createButton(
     handler
 ) {
     const button =
-        document.createElement("button");
+        document.createElement(
+            "button"
+        );
 
-    button.type = "button";
-    button.textContent = text;
+    button.type =
+        "button";
+
+    button.textContent =
+        text;
+
 
     button.addEventListener(
         "click",
         handler
     );
 
+
     return button;
 }
 
 
-export function createTextCell(text) {
+export function createTextCell(
+    text
+) {
     const cell =
-        document.createElement("td");
+        document.createElement(
+            "td"
+        );
 
     cell.textContent =
         text ?? "";
@@ -43,11 +54,18 @@ export function createInput(
     type = "text"
 ) {
     const input =
-        document.createElement("input");
+        document.createElement(
+            "input"
+        );
 
-    input.id = id;
-    input.type = type;
-    input.placeholder = placeholder;
+    input.id =
+        id;
+
+    input.type =
+        type;
+
+    input.placeholder =
+        placeholder;
 
     return input;
 }
@@ -56,20 +74,29 @@ export function createInput(
 export function createDataTypeSelect(
     id,
     excludeUdtName = null,
-    includeArray = false
+    includeArray = true,
+    includeStruct = true
 ) {
     const select =
-        document.createElement("select");
+        document.createElement(
+            "select"
+        );
 
-    select.id = id;
+    select.id =
+        id;
 
 
     const defaultOption =
-        document.createElement("option");
+        document.createElement(
+            "option"
+        );
 
-    defaultOption.value = "";
+    defaultOption.value =
+        "";
+
     defaultOption.textContent =
         "Select data type";
+
 
     select.appendChild(
         defaultOption
@@ -82,55 +109,45 @@ export function createDataTypeSelect(
         );
 
 
-    if (dataTypes.length === 0) {
-        const noPlcOption =
+    if (dataTypes.length > 0) {
+        const builtInGroup =
             document.createElement(
-                "option"
+                "optgroup"
             );
 
-        noPlcOption.value = "";
-        noPlcOption.disabled = true;
-        noPlcOption.textContent =
-            "Select PLC family first";
+        builtInGroup.label =
+            "TIA data types";
+
+
+        for (const type of dataTypes) {
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value =
+                type;
+
+            option.textContent =
+                type;
+
+
+            builtInGroup.appendChild(
+                option
+            );
+        }
+
 
         select.appendChild(
-            noPlcOption
-        );
-
-        return select;
-    }
-
-
-    const builtInGroup =
-        document.createElement(
-            "optgroup"
-        );
-
-    builtInGroup.label =
-        "TIA data types";
-
-
-    for (const type of dataTypes) {
-        const option =
-            document.createElement(
-                "option"
-            );
-
-        option.value = type;
-        option.textContent = type;
-
-        builtInGroup.appendChild(
-            option
+            builtInGroup
         );
     }
 
 
-    select.appendChild(
-        builtInGroup
-    );
-
-
-    if (includeArray) {
+    if (
+        includeArray
+        || includeStruct
+    ) {
         const complexGroup =
             document.createElement(
                 "optgroup"
@@ -140,17 +157,43 @@ export function createDataTypeSelect(
             "Complex data types";
 
 
-        const arrayOption =
-            document.createElement(
-                "option"
+        if (includeArray) {
+            const arrayOption =
+                document.createElement(
+                    "option"
+                );
+
+            arrayOption.value =
+                "Array";
+
+            arrayOption.textContent =
+                "Array";
+
+
+            complexGroup.appendChild(
+                arrayOption
             );
+        }
 
-        arrayOption.value = "Array";
-        arrayOption.textContent = "Array";
 
-        complexGroup.appendChild(
-            arrayOption
-        );
+        if (includeStruct) {
+            const structOption =
+                document.createElement(
+                    "option"
+                );
+
+            structOption.value =
+                "Struct";
+
+            structOption.textContent =
+                "Struct";
+
+
+            complexGroup.appendChild(
+                structOption
+            );
+        }
+
 
         select.appendChild(
             complexGroup
@@ -166,30 +209,41 @@ export function createDataTypeSelect(
                 }
 
                 return (
-                    udt.name.toLowerCase() !==
+                    udt.name.toLowerCase()
+                    !==
                     excludeUdtName.toLowerCase()
                 );
             }
         );
 
 
-    if (availableUdts.length > 0) {
+    if (
+        availableUdts.length > 0
+    ) {
         const udtGroup =
             document.createElement(
                 "optgroup"
             );
 
-        udtGroup.label = "UDTs";
+        udtGroup.label =
+            "UDTs";
 
 
-        for (const udt of availableUdts) {
+        for (
+            const udt
+            of availableUdts
+        ) {
             const option =
                 document.createElement(
                     "option"
                 );
 
-            option.value = udt.name;
-            option.textContent = udt.name;
+            option.value =
+                udt.name;
+
+            option.textContent =
+                udt.name;
+
 
             udtGroup.appendChild(
                 option

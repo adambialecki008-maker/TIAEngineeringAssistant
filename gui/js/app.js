@@ -18,6 +18,10 @@ import {
     renderDbs,
 } from "./db.js";
 
+import {
+    initTiaUi,
+} from "./tia.js";
+
 
 const plcFamilySelect =
     document.getElementById(
@@ -57,6 +61,14 @@ const dbContainer =
     );
 
 
+const tiaUi =
+    initTiaUi(
+        () =>
+            projectConfig
+                .plc_family
+    );
+
+
 function renderAll() {
     renderUdts(
         udtContainer,
@@ -79,7 +91,6 @@ function changePlcFamily() {
 
 
     if (!newFamily) {
-
         plcFamilySelect.value =
             previousFamily;
 
@@ -88,10 +99,10 @@ function changePlcFamily() {
 
 
     if (
-        previousFamily &&
+        previousFamily
+        &&
         previousFamily !== newFamily
     ) {
-
         const incompatible =
             findIncompatibleDataTypes(
                 projectConfig,
@@ -99,11 +110,14 @@ function changePlcFamily() {
             );
 
 
-        if (incompatible.length > 0) {
-
+        if (
+            incompatible.length > 0
+        ) {
             alert(
-                `Cannot change PLC to ${newFamily}.\n\n` +
-                `Unsupported data types:\n` +
+                `Cannot change PLC to ${newFamily}.\n\n`
+                +
+                `Unsupported data types:\n`
+                +
                 incompatible.join("\n")
             );
 
@@ -121,7 +135,10 @@ function changePlcFamily() {
 
 
     saveProjectConfig();
+
     renderAll();
+
+    tiaUi.familyChanged();
 }
 
 
@@ -144,9 +161,9 @@ addUdtButton.addEventListener(
 newUdtNameInput.addEventListener(
     "keydown",
     (event) => {
-
-        if (event.key === "Enter") {
-
+        if (
+            event.key === "Enter"
+        ) {
             addUdt(
                 newUdtNameInput,
                 renderAll
@@ -169,9 +186,9 @@ addDbButton.addEventListener(
 newDbNameInput.addEventListener(
     "keydown",
     (event) => {
-
-        if (event.key === "Enter") {
-
+        if (
+            event.key === "Enter"
+        ) {
             addDb(
                 newDbNameInput,
                 renderAll
@@ -183,7 +200,12 @@ newDbNameInput.addEventListener(
 
 loadProjectConfig();
 
+
 plcFamilySelect.value =
     projectConfig.plc_family;
 
+
 renderAll();
+
+
+tiaUi.refreshProcesses();
