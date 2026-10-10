@@ -495,6 +495,125 @@ namespace TiaOpennessAdapter
         }
 
 
+        public static int ListPlcTags(
+            int processId,
+            string deviceName,
+            string plcName
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                PlcTarget target =
+                    FindPlcTarget(
+                        project,
+                        deviceName,
+                        plcName
+                    );
+
+
+                if (target == null)
+                {
+                    Console.Error.WriteLine(
+                        "PLC_NOT_FOUND|" +
+                        SanitizeOutput(
+                            deviceName
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            plcName
+                        )
+                    );
+
+                    return 7;
+                }
+
+
+                int tagCount = 0;
+
+
+                foreach (
+                    PlcTagTable table
+                    in target
+                        .Software
+                        .TagTableGroup
+                        .TagTables
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    tagCount +=
+                        WritePlcTagTable(
+                            table,
+                            table.Name
+                        );
+                }
+
+
+                foreach (
+                    PlcTagTableUserGroup group
+                    in target
+                        .Software
+                        .TagTableGroup
+                        .Groups
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    tagCount +=
+                        WritePlcTagGroup(
+                            group,
+                            group.Name
+                        );
+                }
+
+
+                if (tagCount == 0)
+                {
+                    Console.WriteLine(
+                        "NO_PLC_TAGS"
+                    );
+                }
+            }
+
+
+            return 0;
+        }
+
+
         public static int CreatePlcTags(
             int processId,
             string deviceName,
@@ -2280,6 +2399,104 @@ namespace TiaOpennessAdapter
 
 
             return definitions;
+        }
+
+
+        private static int WritePlcTagTable(
+            PlcTagTable table,
+            string tablePath
+        )
+        {
+            int count = 0;
+
+
+            foreach (
+                PlcTag tag
+                in table
+                    .Tags
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                Console.WriteLine(
+                    "PLC_TAG|" +
+                    SanitizeOutput(
+                        tablePath
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        tag.Name
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        tag.DataTypeName
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        tag.LogicalAddress
+                    )
+                );
+
+
+                count += 1;
+            }
+
+
+            return count;
+        }
+
+
+        private static int WritePlcTagGroup(
+            PlcTagTableUserGroup group,
+            string groupPath
+        )
+        {
+            int count = 0;
+
+
+            foreach (
+                PlcTagTable table
+                in group
+                    .TagTables
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                count +=
+                    WritePlcTagTable(
+                        table,
+                        groupPath +
+                        "/" +
+                        table.Name
+                    );
+            }
+
+
+            foreach (
+                PlcTagTableUserGroup child
+                in group
+                    .Groups
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                count +=
+                    WritePlcTagGroup(
+                        child,
+                        groupPath +
+                        "/" +
+                        child.Name
+                    );
+            }
+
+
+            return count;
         }
 
 
