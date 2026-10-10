@@ -276,6 +276,85 @@ def test_delete_plc_response(
     )
 
 
+def test_existing_plc_tags_are_parsed(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_adapter(
+        *arguments,
+    ):
+        calls.append(
+            arguments
+        )
+
+        return [
+            (
+                "PLC_TAG|TIAEngineeringAssistant|"
+                "M01_Run|Bool|%I0.0"
+            ),
+            (
+                "PLC_TAG|Process/Inputs|"
+                "StartButton|Bool|%I1.0"
+            ),
+        ]
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+    response = client.get(
+        "/api/v1/tia/plc-tags",
+        params={
+            "process_id": 3544,
+            "device_name": "S7-1500 Station_1",
+            "plc_name": "PLC_1",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert calls == [
+        (
+            "list-tags",
+            "3544",
+            "S7-1500 Station_1",
+            "PLC_1",
+        )
+    ]
+
+    assert response.json() == [
+        {
+            "table_path":
+                "Process/Inputs",
+
+            "name":
+                "StartButton",
+
+            "data_type":
+                "Bool",
+
+            "logical_address":
+                "%I1.0",
+        },
+        {
+            "table_path":
+                "TIAEngineeringAssistant",
+
+            "name":
+                "M01_Run",
+
+            "data_type":
+                "Bool",
+
+            "logical_address":
+                "%I0.0",
+        },
+    ]
+
+
 def test_io_inventory_is_parsed(
     monkeypatch,
 ):
