@@ -669,7 +669,7 @@ def create_plc_tags(
             tag.data_type,
             tag.logical_address,
         ):
-            if "\\t" in value or "\\n" in value or "\\r" in value:
+            if "\t" in value or "\n" in value or "\r" in value:
                 raise HTTPException(
                     status_code=422,
                     detail=(
@@ -695,9 +695,9 @@ def create_plc_tags(
 
             for tag in request.tags:
                 temporary_file.write(
-                    f"{tag.name}\\t"
-                    f"{tag.data_type}\\t"
-                    f"{tag.logical_address}\\n"
+                    f"{tag.name}\t"
+                    f"{tag.data_type}\t"
+                    f"{tag.logical_address}\n"
                 )
 
 
