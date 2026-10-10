@@ -63,6 +63,10 @@ namespace TiaOpennessAdapter
                         return ListIo(args);
 
 
+                    case "list-tags":
+                        return ListTags(args);
+
+
                     case "create-tags":
                         return CreateTags(args);
 
@@ -183,6 +187,37 @@ namespace TiaOpennessAdapter
 
             return TiaService.ListProjectIo(
                 processId
+            );
+        }
+
+
+        private static int ListTags(
+            string[] args
+        )
+        {
+            if (args.Length < 4)
+            {
+                Console.Error.WriteLine(
+                    "PID, device name and PLC name are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ListPlcTags(
+                processId,
+                args[2],
+                args[3]
             );
         }
 
@@ -420,6 +455,10 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  list-io <PID>"
+            );
+
+            Console.WriteLine(
+                "  list-tags <PID> <DEVICE_NAME> <PLC_NAME>"
             );
 
             Console.WriteLine(
