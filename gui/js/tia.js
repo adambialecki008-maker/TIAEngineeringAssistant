@@ -38,6 +38,22 @@ export function initTiaUi(
             "tia-existing-plcs-body"
         );
 
+    const readTagsButton =
+        document.getElementById(
+            "tia-read-tags-button"
+        );
+
+    const plcTagsStatus =
+        document.getElementById(
+            "tia-plc-tags-status"
+        );
+
+    const plcTagsBody =
+        document.getElementById(
+            "tia-plc-tags-body"
+        );
+
+
     const loadModelsButton =
         document.getElementById(
             "tia-load-models-button"
@@ -259,6 +275,12 @@ export function initTiaUi(
 
         previewTargetPlcElement.textContent =
             previewText;
+
+
+        if (readTagsButton) {
+            readTagsButton.disabled =
+                !target;
+        }
     }
 
 
@@ -284,6 +306,14 @@ export function initTiaUi(
 
         renderExistingPlcs();
 
+        renderEmptyPlcTags(
+            "Click Read PLC tags to load tags from the Active PLC."
+        );
+
+        setPlcTagsStatus(
+            `Active PLC: ${plc.plc_name}. Tags not loaded yet.`
+        );
+
 
         setStatus(
             `Active PLC set to ${plc.plc_name} `
@@ -303,6 +333,14 @@ export function initTiaUi(
         updateTargetSummary();
 
         renderExistingPlcs();
+
+        renderEmptyPlcTags(
+            "Select an Active PLC first."
+        );
+
+        setPlcTagsStatus(
+            "Select an Active PLC first."
+        );
     }
 
 
@@ -509,6 +547,222 @@ export function initTiaUi(
             existingPlcsBody.appendChild(
                 row
             );
+        }
+    }
+
+
+    function renderEmptyPlcTags(
+        message
+    ) {
+        if (!plcTagsBody) {
+            return;
+        }
+
+
+        plcTagsBody.replaceChildren();
+
+
+        const row =
+            document.createElement(
+                "tr"
+            );
+
+        const cell =
+            document.createElement(
+                "td"
+            );
+
+        cell.colSpan =
+            4;
+
+        cell.className =
+            "empty-table-cell";
+
+        cell.textContent =
+            message;
+
+
+        row.appendChild(
+            cell
+        );
+
+        plcTagsBody.appendChild(
+            row
+        );
+    }
+
+
+    function renderPlcTags(
+        tags
+    ) {
+        if (!plcTagsBody) {
+            return;
+        }
+
+
+        plcTagsBody.replaceChildren();
+
+
+        if (tags.length === 0) {
+            renderEmptyPlcTags(
+                "No PLC tags found in the Active PLC."
+            );
+
+            return;
+        }
+
+
+        for (
+            const tag
+            of tags
+        ) {
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+
+            for (
+                const value
+                of [
+                    tag.table_path,
+                    tag.name,
+                    tag.data_type,
+                    tag.logical_address
+                    || "—",
+                ]
+            ) {
+                const cell =
+                    document.createElement(
+                        "td"
+                    );
+
+                cell.textContent =
+                    value;
+
+                row.appendChild(
+                    cell
+                );
+            }
+
+
+            plcTagsBody.appendChild(
+                row
+            );
+        }
+    }
+
+
+    function setPlcTagsStatus(
+        message,
+        type = "normal"
+    ) {
+        if (!plcTagsStatus) {
+            return;
+        }
+
+
+        plcTagsStatus.textContent =
+            message;
+
+        plcTagsStatus.classList.toggle(
+            "error",
+            type === "error"
+        );
+
+        plcTagsStatus.classList.toggle(
+            "success",
+            type === "success"
+        );
+    }
+
+
+    async function readPlcTags() {
+        const processId =
+            selectedProcessId();
+
+        const target =
+            projectConfig.tia_target;
+
+
+        if (!processId) {
+            setPlcTagsStatus(
+                "Select a TIA process first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (!target) {
+            setPlcTagsStatus(
+                "Select an Active PLC first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        readTagsButton.disabled =
+            true;
+
+        renderEmptyPlcTags(
+            "Reading PLC tags from TIA Portal..."
+        );
+
+        setPlcTagsStatus(
+            `Reading tags from ${target.plc_name}...`
+        );
+
+
+        try {
+            const query =
+                new URLSearchParams({
+                    process_id:
+                        String(
+                            processId
+                        ),
+
+                    device_name:
+                        target.device_name,
+
+                    plc_name:
+                        target.plc_name,
+                });
+
+
+            const tags =
+                await getJson(
+                    "/api/v1/tia/plc-tags?"
+                    +
+                    query.toString()
+                );
+
+
+            renderPlcTags(
+                tags
+            );
+
+            setPlcTagsStatus(
+                `${tags.length} PLC tag(s) read from ${target.plc_name}.`,
+                "success"
+            );
+
+        } catch (error) {
+            renderEmptyPlcTags(
+                "PLC tag read failed."
+            );
+
+            setPlcTagsStatus(
+                error.message,
+                "error"
+            );
+
+        } finally {
+            readTagsButton.disabled =
+                !projectConfig.tia_target;
         }
     }
 
@@ -1520,6 +1774,14 @@ export function initTiaUi(
     );
 
 
+    if (readTagsButton) {
+        readTagsButton.addEventListener(
+            "click",
+            readPlcTags
+        );
+    }
+
+
     processSelect.addEventListener(
         "change",
         async () => {
@@ -1528,6 +1790,14 @@ export function initTiaUi(
             existingPlcs = [];
 
             renderExistingPlcs();
+
+            renderEmptyPlcTags(
+                "Select an Active PLC and click Read PLC tags."
+            );
+
+            setPlcTagsStatus(
+                "PLC tags not loaded."
+            );
 
 
             if (
@@ -1575,6 +1845,18 @@ export function initTiaUi(
 
 
     updateTargetSummary();
+
+    renderEmptyPlcTags(
+        projectConfig.tia_target
+            ? "Click Read PLC tags to load tags from the Active PLC."
+            : "Select an Active PLC first."
+    );
+
+    setPlcTagsStatus(
+        projectConfig.tia_target
+            ? "PLC tags not loaded."
+            : "Select an Active PLC first."
+    );
 
     suggestCreateNames();
 
