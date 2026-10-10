@@ -96,6 +96,13 @@ class IoInventory(BaseModel):
     channels: list[IoChannel]
 
 
+class PlcTagInfo(BaseModel):
+    table_path: str
+    name: str
+    data_type: str
+    logical_address: str
+
+
 class PlcTagSpec(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     data_type: str = Field(min_length=1, max_length=64)
@@ -504,6 +511,74 @@ def get_project_plcs(
 
 
     return plcs
+
+
+@router.get(
+    "/plc-tags",
+    response_model=list[PlcTagInfo],
+)
+def get_plc_tags(
+    process_id: int = Query(
+        ge=1
+    ),
+    device_name: str = Query(
+        min_length=1,
+        max_length=128,
+    ),
+    plc_name: str = Query(
+        min_length=1,
+        max_length=128,
+    ),
+):
+    lines = _run_adapter(
+        "list-tags",
+        str(
+            process_id
+        ),
+        device_name.strip(),
+        plc_name.strip(),
+    )
+
+
+    tags = []
+
+
+    for line in lines:
+        if not line.startswith(
+            "PLC_TAG|"
+        ):
+            continue
+
+
+        parts = line.split(
+            "|",
+            4,
+        )
+
+
+        if len(parts) != 5:
+            continue
+
+
+        tags.append(
+            PlcTagInfo(
+                table_path=parts[1],
+                name=parts[2],
+                data_type=parts[3],
+                logical_address=parts[4],
+            )
+        )
+
+
+    tags.sort(
+        key=lambda tag: (
+            tag.table_path.casefold(),
+            tag.name.casefold(),
+        )
+    )
+
+
+    return tags
 
 
 @router.get(
