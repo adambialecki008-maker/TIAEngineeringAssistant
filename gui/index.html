@@ -321,6 +321,67 @@
                 <div class="card-header">
                     <div>
                         <h3>
+                            PLC tags
+                        </h3>
+
+                        <p class="hint">
+                            Read existing tag tables and tags from the Active PLC.
+                            This operation is read-only.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-read-tags-button"
+                        type="button"
+                        disabled
+                    >
+                        Read PLC tags
+                    </button>
+                </div>
+
+
+                <p
+                    id="tia-plc-tags-status"
+                    class="status-box"
+                >
+                    Select an Active PLC first.
+                </p>
+
+
+                <div class="table-wrapper">
+
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Tag table</th>
+                                <th>Name</th>
+                                <th>Data type</th>
+                                <th>Address</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="tia-plc-tags-body">
+                            <tr>
+                                <td
+                                    colspan="4"
+                                    class="empty-table-cell"
+                                >
+                                    No PLC tags loaded.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
                             Create PLC
                         </h3>
 
