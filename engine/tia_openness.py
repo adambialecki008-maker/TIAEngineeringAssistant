@@ -618,8 +618,7 @@ def _parse_structure_xml(
         )
 
 
-        for child
-        in _direct_member_children(
+        for child in _direct_member_children(
             member
         ):
             append_member(
@@ -630,8 +629,7 @@ def _parse_structure_xml(
             )
 
 
-    for section
-    in root.iter():
+    for section in root.iter():
         if (
             _xml_local_name(
                 section.tag
@@ -648,8 +646,7 @@ def _parse_structure_xml(
         )
 
 
-        for member
-        in _direct_member_children(
+        for member in _direct_member_children(
             section
         ):
             append_member(
