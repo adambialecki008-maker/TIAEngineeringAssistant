@@ -60,11 +60,30 @@ def validate_hmi_translation(source: str, translated: str) -> None:
             source, translated, "changed a dynamic placeholder"
         )
 
-    # Keep PLC/tag identifiers with mixed letters+digits (212BP2, M10.0 etc.).
-    ids = re.findall(r"(?<!\w)[A-Za-z]*\d+[A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*(?!\w)", source)
-    for identifier in ids:
-        if identifier not in translated:
-            _reject_unsafe_proposal(
-                source, translated,
-                "changed HMI/PLC identifier " + repr(identifier),
-            )
+    # Preserve numbered instruction prefixes without treating the following
+    # human-language word as part of an identifier: "1.Naciagnij" is prose,
+    # NOT a PLC tag. Accept spelling/diacritic corrections after "1.".
+    step_prefix = r"(?m)^[ \t]*(\d+[.)])(?=\s*[^\W\d_])"
+    if re.findall(step_prefix, source) != re.findall(step_prefix, translated):
+        _reject_unsafe_proposal(
+            source, translated, "changed numbered instruction prefix",
+        )
+
+    # PLC identifiers require both a letter and a digit in the identifier
+    # itself (e.g. 212BP2, M10.0, DB1.DBX2.0, I0.0, QW128).
+    # Pure numeric prefixes followed by a dot and a word are NOT identifiers.
+    plc_identifier = (
+        r"(?<!\w)(?:"
+        r"[A-Za-z]+\d+[A-Za-z0-9]*(?:\.(?:[A-Za-z]+\d+[A-Za-z0-9]*|\d+))*"
+        r"|"
+        r"\d+[A-Za-z]+\d*[A-Za-z0-9]*(?:\.(?:[A-Za-z]+\d+[A-Za-z0-9]*|\d+))*"
+        r")(?!\w)"
+    )
+    ids = Counter(re.findall(plc_identifier, source))
+    found = Counter(re.findall(plc_identifier, translated))
+    if ids != found:
+        _reject_unsafe_proposal(
+            source, translated,
+            "changed HMI/PLC identifier(s): expected "
+            + repr(dict(ids)) + ", proposed " + repr(dict(found)),
+        )
