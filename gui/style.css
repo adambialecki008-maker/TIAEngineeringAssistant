@@ -1458,3 +1458,29 @@ td {
         min-width: 700px;
     }
 }
+
+/* Explicit opt-in Ollama -> TIA import batches. */
+.hmi-batch-panel {
+    margin: 18px 0 22px;
+    padding: 16px;
+    border: 1px solid #405362;
+    border-radius: 8px;
+    background: #15202a;
+}
+.hmi-batch-panel h4 {
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+.hmi-batch-panel .form-grid {
+    margin-top: 14px;
+}
+.hmi-batch-panel input[type="number"] {
+    color: #f1f6f9;
+    background: #101820;
+    border: 1px solid #405362;
+}
+#tia-hmi-batch-status {
+    margin-top: 10px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
