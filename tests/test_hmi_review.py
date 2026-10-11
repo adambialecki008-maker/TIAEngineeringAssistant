@@ -205,3 +205,41 @@ def test_pilot_preserves_unreviewed_sibling_texts_in_same_hmi(monkeypatch):
         ("main-1", "212BP2 Za zaworem"),
         ("main-2", "Zgniatarka"),
     ]
+
+
+def test_translation_model_discovery_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        review_module, "list_ollama_models",
+        lambda: ["gemma3:4b", "qwen2.5:7b"],
+    )
+    monkeypatch.setattr(
+        review_module, "resolve_ollama_model",
+        lambda available: None if len(available) > 1 else available[0],
+    )
+    response = client.get("/api/v1/tia/hmis/translation-models")
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "ollama",
+        "models": ["gemma3:4b", "qwen2.5:7b"],
+        "selected_model": None,
+    }
+
+
+def test_preparation_stops_if_ollama_offline_before_export(monkeypatch):
+    from fastapi import HTTPException
+
+    review_module._REVIEWS.clear()
+
+    def unavailable(_requested):
+        raise HTTPException(503, "Cannot connect to local Ollama")
+
+    def forbidden_adapter(*args):
+        raise AssertionError("Preparing must not modify TIA when Ollama is offline")
+
+    monkeypatch.setattr(review_module, "resolve_ollama_model", unavailable)
+    monkeypatch.setattr(tia_openness, "_run_adapter", forbidden_adapter)
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert response.status_code == 503
+    assert "Ollama" in response.json()["detail"]
