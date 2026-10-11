@@ -2766,32 +2766,23 @@ export function initTiaUi(
                 });
 
 
-            const [
-                projectInfo,
-                plcs,
-            ] =
-                await Promise.all([
-                    getJson(
-                        "/api/v1/tia/project-info?"
-                        +
-                        query.toString()
-                    ),
-
-                    getJson(
-                        "/api/v1/tia/plcs?"
-                        +
-                        query.toString()
-                    ),
-                ]);
+            const context =
+                await getJson(
+                    "/api/v1/tia/project-context?"
+                    +
+                    query.toString()
+                );
 
 
             currentProjectName =
-                projectInfo.project_name
+                context.project_name
                 ||
                 "";
 
             existingPlcs =
-                plcs;
+                context.plcs
+                ??
+                [];
 
             updateTargetSummary();
 
