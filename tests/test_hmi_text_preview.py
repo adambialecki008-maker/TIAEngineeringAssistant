@@ -187,6 +187,7 @@ def test_translate_imports_only_selected_hmi_and_renames_target_header(
     monkeypatch,
 ):
     import engine.tia.hmi_translation as translation
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-used")
 
     commands = []
     imported = []
@@ -263,6 +264,7 @@ def test_view_path_match_is_limited_to_device_root():
 
 def test_translation_returns_error_when_tia_import_reports_failure(monkeypatch):
     import engine.tia.hmi_translation as translation
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-used")
 
     def adapter(*args):
         if args[0] == "add-project-language":
@@ -302,6 +304,7 @@ def test_translation_returns_error_when_tia_import_reports_failure(monkeypatch):
 
 def test_pilot_limits_number_of_unique_rows(monkeypatch):
     import engine.tia.hmi_translation as translation
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-used")
 
     translated = []
     imported = []
