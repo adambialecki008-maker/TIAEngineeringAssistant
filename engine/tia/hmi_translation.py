@@ -54,28 +54,104 @@ def _project_text_columns(worksheet):
     return None
 
 
+def _canonical_reference_part(
+    value,
+) -> str:
+    text = str(
+        value
+        or
+        ""
+    ).casefold()
+
+    result = []
+    pending_separator = False
+
+    for character in text:
+        if character.isalnum():
+            if pending_separator and result:
+                result.append(
+                    " "
+                )
+
+            result.append(
+                character
+            )
+
+            pending_separator = False
+
+        else:
+            pending_separator = True
+
+    return "".join(
+        result
+    ).strip()
+
+
+def _segment_matches_target(
+    segment: str,
+    target: str,
+) -> bool:
+    if not target:
+        return False
+
+    if segment == target:
+        return True
+
+    if not segment.startswith(
+        target
+    ):
+        return False
+
+    if len(segment) == len(target):
+        return True
+
+    return not segment[
+        len(target)
+    ].isalnum()
+
+
 def _reference_matches_hmi(
     reference,
     device_name: str,
     hmi_name: str,
 ) -> bool:
-    text = str(reference or "").replace("/", "\\")
+    text = str(
+        reference
+        or
+        ""
+    ).replace(
+        "/",
+        "\\",
+    )
+
     segments = [
-        segment.strip().casefold()
-        for segment in text.split("\\")
-        if segment.strip()
+        _canonical_reference_part(
+            segment
+        )
+        for segment
+        in text.split(
+            "\\"
+        )
+        if str(
+            segment
+        ).strip()
     ]
+
     targets = {
-        device_name.strip().casefold(),
-        hmi_name.strip().casefold(),
+        _canonical_reference_part(
+            device_name
+        ),
+        _canonical_reference_part(
+            hmi_name
+        ),
     }
 
     for segment in segments:
         for target in targets:
-            if not target:
-                continue
-
-            if segment == target or segment.startswith(target + " ["):
+            if _segment_matches_target(
+                segment,
+                target,
+            ):
                 return True
 
     return False
@@ -331,6 +407,7 @@ def translate_hmi_texts(
 
         workbook = load_workbook(temporary_path)
         matching_cells = []
+        seen_references = []
 
         for worksheet in workbook.worksheets:
             columns = _project_text_columns(
@@ -356,6 +433,20 @@ def translate_hmi_texts(
                     row=row_index,
                     column=reference_column,
                 ).value
+
+                if (
+                    reference is not None
+                    and str(reference).strip()
+                    and len(seen_references) < 12
+                ):
+                    reference_text = str(
+                        reference
+                    ).strip()
+
+                    if reference_text not in seen_references:
+                        seen_references.append(
+                            reference_text
+                        )
 
                 if not _reference_matches_hmi(
                     reference,
@@ -388,12 +479,21 @@ def translate_hmi_texts(
                 )
 
         if not matching_cells:
+            examples = (
+                " | ".join(
+                    seen_references[:5]
+                )
+                if seen_references
+                else "(no non-empty Reference values found)"
+            )
+
             raise HTTPException(
                 status_code=404,
                 detail=(
                     "No project-text rows were found for HMI "
                     f'"{request.hmi_name}". '
-                    "Check that the HMI name appears in the TIA Project texts Reference column."
+                    "Example Reference values from the exported XLSX: "
+                    + examples
                 ),
             )
 
