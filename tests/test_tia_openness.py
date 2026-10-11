@@ -499,6 +499,97 @@ def test_delete_plc_response(
     )
 
 
+def test_plc_program_blocks_are_parsed(
+    monkeypatch,
+):
+    calls = []
+
+
+    def fake_run_adapter(
+        *arguments,
+    ):
+        calls.append(
+            arguments
+        )
+
+        return [
+            (
+                "PLC_PROGRAM_BLOCK|Process|"
+                "FB_Motor|FB|120|SCL|True|2048|512"
+            ),
+            (
+                "PLC_PROGRAM_BLOCK||"
+                "Main|OB|1|LAD|True|1024|256"
+            ),
+            (
+                "PLC_PROGRAM_BLOCK|Data|"
+                "MotorDb|DB|20||False|4096|1024"
+            ),
+        ]
+
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+
+    response = client.get(
+        "/api/v1/tia/plc-program-blocks",
+        params={
+            "process_id": 3544,
+            "device_name": "S7-1500 Station_1",
+            "plc_name": "PLC_1",
+        },
+    )
+
+
+    assert response.status_code == 200
+
+    assert calls == [
+        (
+            "list-program-blocks",
+            "3544",
+            "S7-1500 Station_1",
+            "PLC_1",
+        )
+    ]
+
+    assert response.json() == [
+        {
+            "group_path": "Data",
+            "name": "MotorDb",
+            "kind": "DB",
+            "number": 20,
+            "programming_language": "",
+            "is_consistent": False,
+            "load_memory_bytes": 4096,
+            "work_memory_bytes": 1024,
+        },
+        {
+            "group_path": "Process",
+            "name": "FB_Motor",
+            "kind": "FB",
+            "number": 120,
+            "programming_language": "SCL",
+            "is_consistent": True,
+            "load_memory_bytes": 2048,
+            "work_memory_bytes": 512,
+        },
+        {
+            "group_path": "",
+            "name": "Main",
+            "kind": "OB",
+            "number": 1,
+            "programming_language": "LAD",
+            "is_consistent": True,
+            "load_memory_bytes": 1024,
+            "work_memory_bytes": 256,
+        },
+    ]
+
+
 def test_plc_structures_are_parsed(
     monkeypatch,
 ):
