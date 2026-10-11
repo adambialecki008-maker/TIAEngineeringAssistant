@@ -391,7 +391,11 @@ def _preview_workbook(workbook, request):
                 matched += 1
 
             # Show matched examples first without suppressing unmatched diagnostics.
-            if len(rows) < 100 or matches:
+            matched_in_preview = sum(row.matches_hmi for row in rows)
+            unmatched_in_preview = len(rows) - matched_in_preview
+            if (matches and matched_in_preview < 50) or (
+                not matches and unmatched_in_preview < 50
+            ):
                 rows.append(
                     HmiProjectTextPreviewRow(
                         sheet=worksheet.title,
