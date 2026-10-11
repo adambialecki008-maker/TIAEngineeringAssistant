@@ -479,6 +479,64 @@ summary {
 }
 
 
+/* Existing PLC diagnostics */
+
+.plc-state-badge {
+    display: inline-flex;
+    align-items: center;
+    min-width: 78px;
+    padding: 4px 8px;
+    border: 1px solid #cfd6dc;
+    border-radius: 999px;
+    background: #f5f7f8;
+    color: #4f5963;
+    font-size: 12px;
+    font-weight: 600;
+    justify-content: center;
+}
+
+.plc-state-badge[data-state="online"] {
+    border-color: #a9cdb4;
+    background: #edf7f0;
+    color: #25643a;
+}
+
+.plc-state-badge[data-state="offline"] {
+    border-color: #d4d8dc;
+    background: #f5f6f7;
+    color: #59636c;
+}
+
+.plc-state-badge[data-state="notreachable"],
+.plc-state-badge[data-state="not reachable"],
+.plc-state-badge[data-state="incompatible"],
+.plc-state-badge[data-state="protected"] {
+    border-color: #e5c1c1;
+    background: #fbefef;
+    color: #8a3030;
+}
+
+.plc-resources-cell {
+    min-width: 265px;
+}
+
+.plc-resource-primary {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.plc-resource-secondary {
+    margin-top: 4px;
+    color: #6c7680;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.tia-runtime-note {
+    margin-top: 10px;
+}
+
+
 /* TIA inventory */
 
 .tia-inventory-details {
