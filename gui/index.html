@@ -536,6 +536,53 @@
                     </div>
 
 
+                    <section class="hmi-batch-panel">
+                        <h4>Batch translate + import to TIA</h4>
+                        <p class="hint">
+                            Automated mode: Ollama translates one batch, then TIA imports
+                            and verifies it before the next batch begins.
+                            Unlike the manual review workflow above, individual
+                            translations are not approved before import.
+                            Use only after a successful pilot and project backup.
+                        </p>
+                        <div class="form-grid hmi-translation-grid">
+                            <div class="field-group">
+                                <label for="tia-hmi-batch-size">Batch size (unique texts)</label>
+                                <input id="tia-hmi-batch-size" type="number"
+                                       min="1" max="200" step="1" value="15">
+                            </div>
+                            <div class="field-group">
+                                <label for="tia-hmi-total-to-translate">Total to translate (unique texts)</label>
+                                <input id="tia-hmi-total-to-translate" type="number"
+                                       min="1" max="100000" step="1"
+                                       placeholder="All matched texts">
+                            </div>
+                        </div>
+                        <p class="hint">
+                            Example: batch size 15, total 150 = up to 10 verified TIA imports.
+                            Every text with the same source string in this HMI is updated
+                            together. Blank total means all unique source texts.
+                        </p>
+                        <div class="action-row hmi-translation-actions">
+                            <button id="tia-hmi-batch-start" type="button"
+                                    class="primary-button" disabled>
+                                Start batch import
+                            </button>
+                            <button id="tia-hmi-batch-resume" type="button"
+                                    class="secondary-button" disabled>
+                                Resume saved job
+                            </button>
+                            <button id="tia-hmi-batch-pause" type="button"
+                                    class="secondary-button" disabled>
+                                Pause after this batch
+                            </button>
+                        </div>
+                        <p id="tia-hmi-batch-status" class="status-box"
+                           aria-live="polite">
+                            Select an HMI, source/target cultures and Ollama model.
+                        </p>
+                    </section>
+
                     <div id="tia-hmi-preview-results" class="hidden">
                         <p id="tia-hmi-preview-summary" class="hint"></p>
                         <div class="hmi-preview-toolbar">
