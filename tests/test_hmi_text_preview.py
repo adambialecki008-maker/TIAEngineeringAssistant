@@ -259,3 +259,89 @@ def test_view_path_match_is_limited_to_device_root():
         "HMI_RT_1",
         "HMI_00_Main",
     )
+
+
+def test_translation_returns_error_when_tia_import_reports_failure(monkeypatch):
+    import engine.tia.hmi_translation as translation
+
+    def adapter(*args):
+        if args[0] == "add-project-language":
+            return ["LANGUAGE_ADDED|pl-PL"]
+        if args[0] == "export-project-texts":
+            _write_tia_v21_export(Path(args[-1]))
+            return ["PROJECT_TEXTS_EXPORTED|" + args[-1]]
+        if args[0] == "import-project-texts":
+            return [
+                "PROJECT_TEXTS_IMPORTED|Failed|C:\\\\TIA\\\\import-log.txt",
+                "PROJECT_SAVED|Project",
+            ]
+        raise AssertionError(args[0])
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    monkeypatch.setattr(
+        translation,
+        "_translate_texts",
+        lambda texts, target: {text: text for text in texts},
+    )
+    response = client.post(
+        "/api/v1/tia/hmis/translate-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "NotMatching",
+            "hmi_name": "HMI_RT_1",
+            "view_path_root": "HMI_00_Main",
+            "source_culture": "en-US",
+            "target_culture": "pl-PL",
+            "max_rows": 10,
+        },
+    )
+    assert response.status_code == 502
+    assert "Import state: Failed" in response.json()["detail"]
+    assert "import-log.txt" in response.json()["detail"]
+
+
+def test_pilot_limits_number_of_unique_rows(monkeypatch):
+    import engine.tia.hmi_translation as translation
+
+    translated = []
+    imported = []
+
+    def adapter(*args):
+        if args[0] == "add-project-language":
+            return ["LANGUAGE_ADDED|pl-PL"]
+        if args[0] == "export-project-texts":
+            _write_tia_v21_export(Path(args[-1]))
+            return ["PROJECT_TEXTS_EXPORTED|" + args[-1]]
+        if args[0] == "import-project-texts":
+            workbook = load_workbook(Path(args[2]))
+            rows = list(workbook["User Texts"].values)
+            imported.extend(rows[1:])
+            workbook.close()
+            return ["PROJECT_TEXTS_IMPORTED|Success|", "PROJECT_SAVED|Project"]
+        raise AssertionError(args[0])
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    monkeypatch.setattr(
+        translation,
+        "_translate_texts",
+        lambda texts, target: (
+            translated.extend(texts) or {text: text for text in texts}
+        ),
+    )
+    response = client.post(
+        "/api/v1/tia/hmis/translate-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "Unrelated inventory",
+            "hmi_name": "HMI_RT_1",
+            "view_path_root": "HMI_00_Main",
+            "source_culture": "en-US",
+            "target_culture": "pl-PL",
+            "max_rows": 1,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["translated_rows"] == 1
+    assert len(imported) == 1
+    assert len(translated) == 1
+    assert "HMI_00_Main" in imported[0][1]
