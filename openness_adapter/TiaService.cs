@@ -800,6 +800,126 @@ namespace TiaOpennessAdapter
         }
 
 
+        public static int ListPlcProgramBlocks(
+            int processId,
+            string deviceName,
+            string plcName
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                PlcTarget target =
+                    FindPlcTarget(
+                        project,
+                        deviceName,
+                        plcName
+                    );
+
+
+                if (target == null)
+                {
+                    Console.Error.WriteLine(
+                        "PLC_NOT_FOUND|" +
+                        SanitizeOutput(
+                            deviceName
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            plcName
+                        )
+                    );
+
+                    return 7;
+                }
+
+
+                int count = 0;
+
+
+                foreach (
+                    PlcBlock block
+                    in target
+                        .Software
+                        .BlockGroup
+                        .Blocks
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    WriteProgramBlock(
+                        block,
+                        ""
+                    );
+
+                    count += 1;
+                }
+
+
+                foreach (
+                    PlcBlockUserGroup group
+                    in target
+                        .Software
+                        .BlockGroup
+                        .Groups
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    count +=
+                        WriteProgramBlockGroup(
+                            group,
+                            group.Name
+                        );
+                }
+
+
+                if (count == 0)
+                {
+                    Console.WriteLine(
+                        "NO_PLC_PROGRAM_BLOCKS"
+                    );
+                }
+            }
+
+
+            return 0;
+        }
+
+
         public static int ExportPlcStructure(
             int processId,
             string deviceName,
@@ -3772,6 +3892,171 @@ namespace TiaOpennessAdapter
 
 
             return null;
+        }
+
+
+        private static int WriteProgramBlockGroup(
+            PlcBlockUserGroup group,
+            string groupPath
+        )
+        {
+            int count = 0;
+
+
+            foreach (
+                PlcBlock block
+                in group
+                    .Blocks
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                WriteProgramBlock(
+                    block,
+                    groupPath
+                );
+
+                count += 1;
+            }
+
+
+            foreach (
+                PlcBlockUserGroup child
+                in group
+                    .Groups
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                count +=
+                    WriteProgramBlockGroup(
+                        child,
+                        groupPath +
+                        "/" +
+                        child.Name
+                    );
+            }
+
+
+            return count;
+        }
+
+
+        private static void WriteProgramBlock(
+            PlcBlock block,
+            string groupPath
+        )
+        {
+            string kind =
+                GetResourceObjectType(
+                    block
+                );
+
+
+            if (
+                string.Equals(
+                    kind,
+                    "Other",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                kind =
+                    block
+                        .GetType()
+                        .Name;
+            }
+
+
+            Console.WriteLine(
+                "PLC_PROGRAM_BLOCK|" +
+                SanitizeOutput(
+                    groupPath
+                ) +
+                "|" +
+                SanitizeOutput(
+                    block.Name
+                ) +
+                "|" +
+                SanitizeOutput(
+                    kind
+                ) +
+                "|" +
+                SanitizeOutput(
+                    ReadPropertyText(
+                        block,
+                        "Number"
+                    )
+                ) +
+                "|" +
+                SanitizeOutput(
+                    ReadPropertyText(
+                        block,
+                        "ProgrammingLanguage"
+                    )
+                ) +
+                "|" +
+                SanitizeOutput(
+                    ReadPropertyText(
+                        block,
+                        "IsConsistent"
+                    )
+                ) +
+                "|" +
+                ReadBlockLoadMemory(
+                    block
+                ) +
+                "|" +
+                ReadBlockWorkMemory(
+                    block
+                )
+            );
+        }
+
+
+        private static string ReadPropertyText(
+            object value,
+            string propertyName
+        )
+        {
+            try
+            {
+                var property =
+                    value
+                        .GetType()
+                        .GetProperty(
+                            propertyName
+                        );
+
+
+                if (property == null)
+                {
+                    return "";
+                }
+
+
+                object rawValue =
+                    property.GetValue(
+                        value,
+                        null
+                    );
+
+
+                return (
+                    rawValue
+                    != null
+                        ? rawValue.ToString()
+                        : ""
+                );
+            }
+            catch
+            {
+                return "";
+            }
         }
 
 
