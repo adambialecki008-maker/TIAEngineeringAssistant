@@ -468,6 +468,229 @@ namespace TiaOpennessAdapter
         }
 
 
+        public static int ExportProjectTexts(
+            int processId,
+            string sourceCultureName,
+            string targetCultureName,
+            string outputFilePath
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            CultureInfo sourceCulture;
+            CultureInfo targetCulture;
+
+
+            try
+            {
+                sourceCulture =
+                    CultureInfo.GetCultureInfo(
+                        sourceCultureName
+                    );
+
+                targetCulture =
+                    CultureInfo.GetCultureInfo(
+                        targetCultureName
+                    );
+            }
+            catch
+            {
+                Console.Error.WriteLine(
+                    "INVALID_PROJECT_TEXT_CULTURE"
+                );
+
+                return 3;
+            }
+
+
+            if (
+                string.Equals(
+                    sourceCulture.Name,
+                    targetCulture.Name,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                Console.Error.WriteLine(
+                    "PROJECT_TEXT_LANGUAGES_MUST_DIFFER"
+                );
+
+                return 3;
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                FileInfo outputFile =
+                    new FileInfo(
+                        outputFilePath
+                    );
+
+
+                if (
+                    outputFile.Directory
+                    != null
+                    &&
+                    !outputFile.Directory.Exists
+                )
+                {
+                    outputFile
+                        .Directory
+                        .Create();
+                }
+
+
+                if (outputFile.Exists)
+                {
+                    outputFile.Delete();
+                }
+
+
+                project.ExportProjectTexts(
+                    outputFile,
+                    sourceCulture,
+                    targetCulture
+                );
+
+
+                Console.WriteLine(
+                    "PROJECT_TEXTS_EXPORTED|" +
+                    SanitizeOutput(
+                        outputFile.FullName
+                    )
+                );
+            }
+
+
+            return 0;
+        }
+
+
+        public static int ImportProjectTexts(
+            int processId,
+            string inputFilePath,
+            bool updateSourceLanguage
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            FileInfo inputFile =
+                new FileInfo(
+                    inputFilePath
+                );
+
+
+            if (!inputFile.Exists)
+            {
+                Console.Error.WriteLine(
+                    "PROJECT_TEXT_FILE_NOT_FOUND|" +
+                    SanitizeOutput(
+                        inputFilePath
+                    )
+                );
+
+                return 3;
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                using (
+                    ExclusiveAccess exclusiveAccess =
+                        portal.ExclusiveAccess(
+                            "TIA Engineering Assistant is importing HMI translations..."
+                        )
+                )
+                {
+                    var result =
+                        project.ImportProjectTexts(
+                            inputFile,
+                            updateSourceLanguage
+                        );
+
+
+                    Console.WriteLine(
+                        "PROJECT_TEXTS_IMPORTED|" +
+                        SanitizeOutput(
+                            result.State.ToString()
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            result.Path
+                            != null
+                                ? result.Path.FullName
+                                : ""
+                        )
+                    );
+
+
+                    SaveProject(
+                        project
+                    );
+                }
+            }
+
+
+            return 0;
+        }
+
+
         public static int ListProjectIo(
             int processId
         )
