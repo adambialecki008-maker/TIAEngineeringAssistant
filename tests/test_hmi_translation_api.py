@@ -1,12 +1,12 @@
-"""OpenAI Responses API translation integration: requests and errors."""
+"""Ollama local HMI translation API tests — no network or API key required."""
 import io
 import json
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pytest
 from fastapi import HTTPException
 
-import engine.tia.hmi_translation as translation
+import engine.tia.ollama_translation as ollama
 
 
 class FakeResponse:
@@ -23,87 +23,116 @@ class FakeResponse:
         return json.dumps(self.payload).encode("utf-8")
 
 
-def test_translation_model_uses_structured_json(monkeypatch):
-    captured = {}
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_TRANSLATION_MODEL", "gpt-6-luna")
+def test_local_ollama_model_discovery_and_translation(monkeypatch):
+    requests = []
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OLLAMA_TRANSLATION_MODEL", raising=False)
 
     def fake_urlopen(request, timeout):
-        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        requests.append(request)
+        if request.full_url.endswith("/api/tags"):
+            return FakeResponse({"models": [
+                {"name": "qwen2.5:7b"},
+                {"name": "gemma3:4b"},
+            ]})
+        assert request.full_url.endswith("/api/chat")
+        data = json.loads(request.data)
+        assert data["stream"] is False
+        assert data["format"]["type"] == "object"
+        assert data["format"]["required"] == ["0", "1"]
+        assert data["options"] == {"temperature": 0}
+        assert data["model"] == "qwen2.5:7b"
         return FakeResponse({
-            "status": "completed",
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": json.dumps({
-                                "0": "Zgniatarka",
-                                "1": "Za zaworem",
-                            }),
-                        }
-                    ],
-                }
-            ],
+            "done": True,
+            "message": {"role": "assistant", "content": json.dumps({
+                "0": "Zgniatarka", "1": "Za zaworem",
+            })},
         })
 
-    monkeypatch.setattr(translation.urllib_request, "urlopen", fake_urlopen)
-
-    result = translation._translate_batch(
-        ["Zgniatarka", "Za zaworem"], "pl-PL",
-    )
-    assert result == {
+    monkeypatch.setattr(ollama.urllib_request, "urlopen", fake_urlopen)
+    assert ollama.list_ollama_models() == ["gemma3:4b", "qwen2.5:7b"]
+    assert ollama.translate_ollama_texts(
+        ["Zgniatarka", "Za zaworem"], "pl-PL", "qwen2.5:7b",
+    ) == {
         "Zgniatarka": "Zgniatarka",
         "Za zaworem": "Za zaworem",
     }
-
-    payload = captured["payload"]
-    assert payload["model"] == "gpt-6-luna"
-    assert payload["reasoning"] == {"effort": "none"}
-    assert payload["text"]["format"]["type"] == "json_schema"
-    assert payload["text"]["format"]["strict"] is True
-    assert payload["text"]["format"]["schema"]["required"] == ["0", "1"]
+    assert any(req.full_url.endswith("/api/tags") for req in requests)
+    assert any(req.full_url.endswith("/api/chat") for req in requests)
 
 
-def test_insufficient_quota_has_actionable_error(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_TRANSLATION_MODEL", "gpt-6-luna")
-
-    def fake_urlopen(request, timeout):
-        body = json.dumps({
-            "error": {
-                "code": "insufficient_quota",
-                "message": "You exceeded your current quota.",
-            }
-        }).encode("utf-8")
-        raise HTTPError(request.full_url, 429, "Too Many Requests", {}, io.BytesIO(body))
-
-    monkeypatch.setattr(translation.urllib_request, "urlopen", fake_urlopen)
-
-    with pytest.raises(HTTPException) as error:
-        translation._translate_batch(["Zgniatarka"], "pl-PL")
-
-    assert error.value.status_code == 429
-    assert "billing/quota" in error.value.detail
-    assert "ChatGPT Plus" in error.value.detail
+def test_one_installed_model_autoselected(monkeypatch):
+    monkeypatch.delenv("OLLAMA_TRANSLATION_MODEL", raising=False)
+    assert ollama.resolve_ollama_model(available=["qwen2.5:7b"]) == "qwen2.5:7b"
 
 
-def test_incomplete_model_response_is_reported(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_TRANSLATION_MODEL", "gpt-6-luna")
+def test_multiple_models_require_selection(monkeypatch):
+    monkeypatch.delenv("OLLAMA_TRANSLATION_MODEL", raising=False)
+    with pytest.raises(HTTPException) as err:
+        ollama.resolve_ollama_model(available=["gemma3:4b", "qwen2.5:7b"])
+    assert err.value.status_code == 422
+    assert "Choose" in err.value.detail
 
+
+def test_missing_model_returns_available_names():
+    with pytest.raises(HTTPException) as err:
+        ollama.resolve_ollama_model(
+            requested="unknown-model", available=["qwen2.5:7b"],
+        )
+    assert err.value.status_code == 422
+    assert "qwen2.5:7b" in err.value.detail
+
+
+def test_local_ollama_unavailable_error(monkeypatch):
+    def unavailable(request, timeout):
+        raise URLError("Connection refused")
+
+    monkeypatch.setattr(ollama.urllib_request, "urlopen", unavailable)
+    with pytest.raises(HTTPException) as err:
+        ollama.list_ollama_models()
+    assert err.value.status_code == 503
+    assert "Ollama" in err.value.detail
+
+
+def test_local_ollama_model_not_installed_http_error(monkeypatch):
+    def missing_model(request, timeout):
+        raise HTTPError(
+            request.full_url, 404, "Not Found", {},
+            io.BytesIO(b'{"error":"model not found"}'),
+        )
+
+    monkeypatch.setattr(ollama.urllib_request, "urlopen", missing_model)
+    with pytest.raises(HTTPException) as err:
+        ollama.translate_ollama_batch(["Zgniatarka"], "pl-PL", "missing")
+    assert err.value.status_code == 502
+    assert "model not found" in err.value.detail
+
+
+def test_local_ollama_rejects_placeholder_output(monkeypatch):
     monkeypatch.setattr(
-        translation.urllib_request,
-        "urlopen",
-        lambda _req, timeout: FakeResponse({
-            "status": "incomplete",
-            "incomplete_details": {"reason": "max_output_tokens"},
-            "output": [],
+        ollama.urllib_request, "urlopen",
+        lambda req, timeout: FakeResponse({
+            "done": True,
+            "message": {"content": '{"0":"Text"}'},
         }),
     )
-    with pytest.raises(HTTPException) as error:
-        translation._translate_batch(["Zgniatarka"], "pl-PL")
+    with pytest.raises(HTTPException) as err:
+        ollama.translate_ollama_batch(["Zgniatarka"], "pl-PL", "qwen2.5:7b")
+    assert err.value.status_code == 502
+    assert "placeholder" in err.value.detail
 
-    assert error.value.status_code == 502
-    assert "max_output_tokens" in error.value.detail
+
+def test_local_ollama_rejects_missing_translation_id(monkeypatch):
+    monkeypatch.setattr(
+        ollama.urllib_request, "urlopen",
+        lambda req, timeout: FakeResponse({
+            "done": True,
+            "message": {"content": '{"0":"Zgniatarka"}'},
+        }),
+    )
+    with pytest.raises(HTTPException) as err:
+        ollama.translate_ollama_batch(
+            ["Zgniatarka", "Za zaworem"], "pl-PL", "qwen2.5:7b",
+        )
+    assert err.value.status_code == 502
+    assert "IDs" in err.value.detail
