@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, Field
 
 
@@ -262,6 +263,7 @@ class TranslateHmiTextsRequest(BaseModel):
     )
     view_path_root: str | None = Field(default=None, max_length=128)
     ollama_model: str | None = Field(default=None, max_length=128)
+    translation_strategy: Literal["ollama", "copy"] = "ollama"
     progress_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     # Safety default: a small pilot import. null explicitly requests full scope.
     max_rows: int | None = Field(default=10, ge=1, le=100000)
