@@ -1258,7 +1258,8 @@ namespace TiaOpennessAdapter
         public static int ListPlcProgramBlocks(
             int processId,
             string deviceName,
-            string plcName
+            string plcName,
+            bool programOnly = false
         )
         {
             TiaPortalProcess process =
@@ -1333,6 +1334,10 @@ namespace TiaOpennessAdapter
                         )
                 )
                 {
+                    if (programOnly && block is DataBlock)
+                    {
+                        continue;
+                    }
                     WriteProgramBlock(
                         block,
                         ""
@@ -1357,7 +1362,8 @@ namespace TiaOpennessAdapter
                     count +=
                         WriteProgramBlockGroup(
                             group,
-                            group.Name
+                            group.Name,
+                            programOnly
                         );
                 }
 
@@ -4802,7 +4808,8 @@ namespace TiaOpennessAdapter
 
         private static int WriteProgramBlockGroup(
             PlcBlockUserGroup group,
-            string groupPath
+            string groupPath,
+            bool programOnly = false
         )
         {
             int count = 0;
@@ -4818,6 +4825,10 @@ namespace TiaOpennessAdapter
                     )
             )
             {
+                if (programOnly && block is DataBlock)
+                {
+                    continue;
+                }
                 WriteProgramBlock(
                     block,
                     groupPath
@@ -4842,7 +4853,8 @@ namespace TiaOpennessAdapter
                         child,
                         groupPath +
                         "/" +
-                        child.Name
+                        child.Name,
+                        programOnly
                     );
             }
 
