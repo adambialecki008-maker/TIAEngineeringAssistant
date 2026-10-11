@@ -1179,7 +1179,8 @@ export function initTiaUi(
         }
         if (hmiBatchStartButton) {
             hmiBatchStartButton.disabled = busy || !isVerified
-                || !selection?.view_path_root || !hasTranslationEngine;
+                || !selection?.view_path_root || !hasTranslationEngine
+                || !latestHmiScan?.missingUnique;
         }
         if (hmiBatchResumeButton) {
             hmiBatchResumeButton.disabled = busy || !savedHmiBatchJobId();
