@@ -60,10 +60,12 @@ export function initTiaUi(
         );
 
 
-    const plcTagsSort =
-        document.getElementById(
-            "tia-plc-tags-sort"
-        );
+    const plcTagSortButtons =
+        [
+            ...document.querySelectorAll(
+                "[data-plc-tag-sort]"
+            ),
+        ];
 
     const plcTagsTableFilter =
         document.getElementById(
@@ -231,6 +233,11 @@ export function initTiaUi(
 
 
     let loadedPlcTags = [];
+
+    let plcTagSortState = {
+        key: "name",
+        direction: "asc",
+    };
 
     let loadedPlcStructures = {
         data_blocks: [],
@@ -962,77 +969,87 @@ export function initTiaUi(
         );
     }
 
+    function plcTagSortValue(
+        tag,
+        key
+    ) {
+        if (key === "table") {
+            return (
+                tag.table_path
+                ||
+                "(root)"
+            );
+        }
+
+        if (key === "type") {
+            return (
+                tag.data_type
+                ||
+                "(unknown)"
+            );
+        }
+
+        if (key === "address") {
+            return (
+                tag.logical_address
+                ||
+                ""
+            );
+        }
+
+
+        return (
+            tag.name
+            ||
+            ""
+        );
+    }
+
+
     function sortedPlcTags(
         tags
     ) {
         const result =
             [...tags];
 
-        const mode =
-            plcTagsSort?.value
-            ??
-            "name-asc";
+        const direction =
+            plcTagSortState.direction
+            ===
+            "desc"
+                ? -1
+                : 1;
+
+        const key =
+            plcTagSortState.key;
 
 
         result.sort(
             (left, right) => {
-                if (
-                    mode
-                    ===
-                    "address-asc"
-                    ||
-                    mode
-                    ===
-                    "address-desc"
-                ) {
-                    const direction =
-                        mode === "address-desc"
-                            ? -1
-                            : 1;
-
-                    const addressResult =
-                        compareText(
-                            left.logical_address,
-                            right.logical_address
-                        );
-
-                    if (addressResult !== 0) {
-                        return (
-                            addressResult
-                            *
-                            direction
-                        );
-                    }
-
-                    return compareText(
-                        left.name,
-                        right.name
-                    );
-                }
-
-
-                const direction =
-                    mode === "name-desc"
-                        ? -1
-                        : 1;
-
-                const nameResult =
+                const primary =
                     compareText(
-                        left.name,
-                        right.name
+                        plcTagSortValue(
+                            left,
+                            key
+                        ),
+                        plcTagSortValue(
+                            right,
+                            key
+                        )
                     );
 
-                if (nameResult !== 0) {
+
+                if (primary !== 0) {
                     return (
-                        nameResult
+                        primary
                         *
                         direction
                     );
                 }
 
+
                 return compareText(
-                    left.table_path,
-                    right.table_path
+                    left.name,
+                    right.name
                 );
             }
         );
@@ -1041,6 +1058,91 @@ export function initTiaUi(
         return result;
     }
 
+
+    function renderPlcTagSortHeaders() {
+        for (
+            const button
+            of plcTagSortButtons
+        ) {
+            const key =
+                button.dataset
+                    .plcTagSort;
+
+            const isActive =
+                key
+                ===
+                plcTagSortState.key;
+
+            const labels = {
+                table:
+                    "Tag table / group",
+
+                name:
+                    "Name",
+
+                type:
+                    "Data type",
+
+                address:
+                    "Address",
+            };
+
+
+            button.classList.toggle(
+                "active",
+                isActive
+            );
+
+            button.textContent =
+                labels[key]
+                +
+                (
+                    isActive
+                        ? (
+                            plcTagSortState.direction
+                            ===
+                            "asc"
+                                ? " ↑"
+                                : " ↓"
+                        )
+                        : ""
+                );
+        }
+    }
+
+
+    function setPlcTagSort(
+        key
+    ) {
+        if (
+            plcTagSortState.key
+            ===
+            key
+        ) {
+            plcTagSortState.direction =
+                plcTagSortState.direction
+                ===
+                "asc"
+                    ? "desc"
+                    : "asc";
+
+        } else {
+            plcTagSortState = {
+                key:
+                    key,
+
+                direction:
+                    "asc",
+            };
+        }
+
+
+        renderPlcTagSortHeaders();
+
+        renderPlcTags(
+            loadedPlcTags
+        );
+    }
 
     function isSafetyTag(
         tag
@@ -2949,12 +3051,16 @@ export function initTiaUi(
     }
 
 
-    if (plcTagsSort) {
-        plcTagsSort.addEventListener(
-            "change",
+    for (
+        const button
+        of plcTagSortButtons
+    ) {
+        button.addEventListener(
+            "click",
             () =>
-                renderPlcTags(
-                    loadedPlcTags
+                setPlcTagSort(
+                    button.dataset
+                        .plcTagSort
                 )
         );
     }
@@ -3095,6 +3201,8 @@ export function initTiaUi(
 
 
     updateTargetSummary();
+
+    renderPlcTagSortHeaders();
 
     resetPlcTagFilters();
 
