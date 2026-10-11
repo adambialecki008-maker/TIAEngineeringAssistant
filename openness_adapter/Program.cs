@@ -55,6 +55,14 @@ namespace TiaOpennessAdapter
                         return ListProjectPlcs(args);
 
 
+                    case "list-project-languages":
+                        return ListProjectLanguages(args);
+
+
+                    case "add-project-language":
+                        return AddProjectLanguage(args);
+
+
                     case "list-plcs":
                         return ListPlcs(args);
 
@@ -154,6 +162,55 @@ namespace TiaOpennessAdapter
 
             return TiaService.ListProjectPlcs(
                 processId
+            );
+        }
+
+
+        private static int ListProjectLanguages(
+            string[] args
+        )
+        {
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ListProjectLanguages(
+                processId
+            );
+        }
+
+
+        private static int AddProjectLanguage(
+            string[] args
+        )
+        {
+            if (args.Length < 3)
+            {
+                Console.Error.WriteLine(
+                    "PID and culture name are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.AddProjectLanguage(
+                processId,
+                args[2]
             );
         }
 
@@ -594,6 +651,14 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  list-project-plcs <PID>"
+            );
+
+            Console.WriteLine(
+                "  list-project-languages <PID>"
+            );
+
+            Console.WriteLine(
+                "  add-project-language <PID> <CULTURE>"
             );
 
             Console.WriteLine(
