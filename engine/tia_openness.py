@@ -46,6 +46,14 @@ class TiaProcess(
     process_id: int
 
 
+class PlcResourceRow(BaseModel):
+    object_type: str
+    load_memory_bytes: int = 0
+    code_work_memory_bytes: int = 0
+    data_work_memory_bytes: int = 0
+    retain_memory_bytes: int | None = None
+
+
 class ProjectPlc(
     BaseModel
 ):
@@ -66,6 +74,8 @@ class ProjectPlc(
     udt_count: int = 0
 
     tag_count: int = 0
+
+    resource_rows: list[PlcResourceRow] = []
 
 
 class ProjectHmi(BaseModel):
@@ -788,6 +798,7 @@ def get_project_context(
 
 
     metrics_by_target = {}
+    resources_by_target = {}
 
 
     for line in lines:
@@ -831,6 +842,55 @@ def get_project_context(
                     software_type=parts[5],
                     software_name=parts[6],
                 )
+            )
+
+
+        elif line.startswith(
+            "PLC_RESOURCE|"
+        ):
+            parts = line.split(
+                "|",
+                7,
+            )
+
+
+            if len(parts) != 8:
+                continue
+
+
+            try:
+                row = PlcResourceRow(
+                    object_type=parts[3],
+                    load_memory_bytes=int(
+                        parts[4]
+                    ),
+                    code_work_memory_bytes=int(
+                        parts[5]
+                    ),
+                    data_work_memory_bytes=int(
+                        parts[6]
+                    ),
+                    retain_memory_bytes=(
+                        int(
+                            parts[7]
+                        )
+                        if parts[7].strip()
+                        else None
+                    ),
+                )
+
+            except ValueError:
+                continue
+
+
+            resources_by_target.setdefault(
+                (
+                    parts[1].casefold(),
+                    parts[2].casefold(),
+                ),
+                [],
+            ).append(
+                row
             )
 
 
@@ -932,6 +992,16 @@ def get_project_context(
 
         plc.tag_count =
             metrics["tag_count"]
+
+
+        plc.resource_rows =
+            resources_by_target.get(
+                (
+                    plc.device_name.casefold(),
+                    plc.plc_name.casefold(),
+                ),
+                [],
+            )
 
 
     if not project_name:
