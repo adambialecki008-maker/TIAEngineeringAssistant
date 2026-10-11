@@ -38,3 +38,19 @@ def test_exact_polish_label_is_always_accepted():
         "{Tag_1} Alarm",
     ):
         validate_hmi_translation(text, text)
+
+
+def test_corrupted_polish_proposal_shows_safe_recovery():
+    source = "(Pneumatyczna)"
+    with pytest.raises(HTTPException) as error:
+        validate_hmi_translation(source, "({Pneumatyczna})")
+    message = error.value.detail
+    assert "BEFORE TIA import" in message
+    assert "Copy original Polish labels" in message
+    assert repr(source) in message
+    assert repr("({Pneumatyczna})") in message
+
+
+def test_existing_polish_source_cannot_be_silently_corrupted():
+    with pytest.raises(HTTPException):
+        validate_hmi_translation("(Hydrauliczna)", "({Hydrauliczna})")
