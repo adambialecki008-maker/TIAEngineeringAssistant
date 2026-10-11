@@ -243,3 +243,40 @@ def test_preparation_stops_if_ollama_offline_before_export(monkeypatch):
     )
     assert response.status_code == 503
     assert "Ollama" in response.json()["detail"]
+
+
+def test_preparation_progress_endpoint(monkeypatch):
+    from uuid import uuid4
+
+    _setup(monkeypatch)
+    progress_id = uuid4().hex
+    request = {**REQUEST, "progress_id": progress_id}
+
+    def translated(texts, target, model, progress=None):
+        assert progress is not None
+        progress(len(texts), len(texts))
+        return {text: text for text in texts}
+
+    monkeypatch.setattr(review_module, "_translate_texts", translated)
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=request,
+    )
+    assert response.status_code == 200, response.text
+
+    status = client.get(
+        "/api/v1/tia/hmis/translation-progress/" + progress_id,
+    )
+    assert status.status_code == 200
+    data = status.json()
+    assert data["stage"] == "ready"
+    assert data["total"] == 2
+    assert data["completed"] == 2
+    assert data["percent"] == 100.0
+    assert data["elapsed_seconds"] >= 0
+
+
+def test_preparation_progress_rejects_bad_identifier():
+    response = client.get(
+        "/api/v1/tia/hmis/translation-progress/not-valid",
+    )
+    assert response.status_code == 400
