@@ -1233,3 +1233,46 @@ td {
     color: #f0c27b;
     font-weight: 600;
 }
+
+
+
+/* PLC block inspector */
+
+.plc-block-detail-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 12px 0 14px;
+}
+
+.plc-block-detail-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 9px 10px;
+    border: 1px solid #303a45;
+    border-radius: 6px;
+    background: #171d24;
+}
+
+.plc-block-detail-meta-item span {
+    color: #8f9ba7;
+    font-size: 11px;
+}
+
+.plc-block-detail-meta-item strong {
+    color: #edf2f6;
+    font-size: 13px;
+}
+
+@media (max-width: 900px) {
+    .plc-block-detail-meta {
+        grid-template-columns: repeat(2, minmax(140px, 1fr));
+    }
+}
+
+@media (max-width: 620px) {
+    .plc-block-detail-meta {
+        grid-template-columns: 1fr;
+    }
+}
