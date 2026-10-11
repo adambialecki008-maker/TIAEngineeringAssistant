@@ -24,7 +24,8 @@ REQUEST = {
 }
 
 
-def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None):
+def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
+                     first_source="Zgniatarka"):
     monkeypatch.setattr(batches, "JOB_DIR", tmp_path)
     monkeypatch.setattr(
         batches, "resolve_ollama_model",
@@ -45,7 +46,7 @@ def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None):
             "en-US*", "pl-PL", 'ref="0"',
         ])
         for row_id, root, source in [
-            ("main-1", "HMI_00_Main", "Zgniatarka"),
+            ("main-1", "HMI_00_Main", first_source),
             ("main-2", "HMI_00_Main", "Za zaworem"),
             ("other-1", "Another_HMI", "Unrelated"),
         ]:
@@ -256,3 +257,44 @@ def test_batch_source_copy_does_not_call_ollama(monkeypatch, tmp_path):
     assert response.json()["status"] == "completed"
     assert live["main-1"] == "Zgniatarka"
     assert "import-project-texts" in commands
+
+
+def test_numbered_polish_instruction_imports_after_identifier_guard_fix(
+    monkeypatch, tmp_path,
+):
+    """Check the full Ollama -> XLSX -> TIA re-export path for '1.Naciagnij'."""
+    source = (
+        "1.Naciagnij linke \n"
+        "do tej pozycji \n"
+        "(koncowka w obrebie\n zielonego wskaznika)"
+    )
+    target = (
+        "1.Naciągnij linkę\n"
+        "do tej pozycji\n"
+        "(końcówka w obrębie\nzielonego wskaźnika)"
+    )
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, culture, model, progress=None: {
+            text: target if text == source else text for text in texts
+        },
+    )
+    started = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    assert started.status_code == 200, started.text
+    run = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{started.json()['job_id']}/next",
+        json={},
+    )
+    assert run.status_code == 200, run.text
+    assert run.json()["completed_unique"] == 1
+    assert run.json()["last_verified_batch"]["verified_rows"] == 1
+    assert run.json()["status"] == "completed"
+    assert live["main-1"] == target
+    assert commands.count("import-project-texts") == 1
+    assert commands.count("export-project-texts") == 4
