@@ -1036,7 +1036,10 @@ export function initTiaUi(
                 const row = document.createElement("tr");
                 for (const value of [
                     item.matches_hmi ? "Yes" : "No",
-                    item.source_text, item.category, item.reference,
+                    item.source_text,
+                    item.target_text || "— (empty)",
+                    item.category,
+                    item.reference,
                 ]) {
                     const cell = document.createElement("td");
                     cell.textContent = String(value ?? "");
