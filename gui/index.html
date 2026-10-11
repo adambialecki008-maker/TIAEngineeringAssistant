@@ -382,6 +382,103 @@
                 <div class="card-header">
                     <div>
                         <h3>
+                            PLC data structures
+                        </h3>
+
+                        <p class="hint">
+                            Read existing Data Blocks and UDTs from the Active PLC.
+                            This operation is read-only.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-read-structures-button"
+                        type="button"
+                        disabled
+                    >
+                        Read DB / UDT
+                    </button>
+                </div>
+
+
+                <p
+                    id="tia-plc-structures-status"
+                    class="status-box"
+                >
+                    Select an Active PLC first.
+                </p>
+
+
+                <h4>
+                    Data Blocks
+                </h4>
+
+                <div class="table-wrapper">
+
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Group</th>
+                                <th>Name</th>
+                                <th>DB number</th>
+                                <th>Kind</th>
+                                <th>Consistent</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="tia-plc-dbs-body">
+                            <tr>
+                                <td
+                                    colspan="5"
+                                    class="empty-table-cell"
+                                >
+                                    No Data Blocks loaded.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+
+                <h4>
+                    UDTs
+                </h4>
+
+                <div class="table-wrapper">
+
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Group</th>
+                                <th>Name</th>
+                                <th>Kind</th>
+                                <th>Consistent</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="tia-plc-udts-body">
+                            <tr>
+                                <td
+                                    colspan="4"
+                                    class="empty-table-cell"
+                                >
+                                    No UDTs loaded.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
                             Create PLC
                         </h3>
 
