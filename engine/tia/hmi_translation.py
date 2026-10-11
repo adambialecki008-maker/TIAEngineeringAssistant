@@ -803,6 +803,19 @@ def translate_hmi_texts(
             if len(parts) == 3:
                 import_log = parts[2]
 
+        # ProjectTextResult.State is authoritative for import success.
+        # Do not report success merely because Openness returned a result.
+        if import_state.strip().casefold() not in {"success", "succeeded"}:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "TIA project texts import did not report success. "
+                    "Import state: " + (import_state or "(missing)") + ". "
+                    "Import log: " + (import_log or "(not returned)") + ". "
+                    "Check the log before trying another import."
+                ),
+            )
+
         return TranslateHmiTextsResponse(
             status="translated",
             hmi_name=request.hmi_name,
