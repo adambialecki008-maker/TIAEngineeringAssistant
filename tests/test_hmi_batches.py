@@ -211,3 +211,48 @@ def test_explicit_view_path_root_required(monkeypatch, tmp_path):
     )
     assert response.status_code == 422
     assert not list(tmp_path.glob("*.json"))
+
+
+def test_batch_size_greater_than_total_imports_only_total(monkeypatch, tmp_path):
+    live, commands, imports = setup_batch_mock(monkeypatch, tmp_path)
+    response = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 5, "total_to_translate": 2},
+    )
+    assert response.status_code == 200, response.text
+    job = response.json()
+    assert job["total_batches"] == 1
+    assert job["total_unique"] == 2
+
+    completed = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job['job_id']}/next", json={},
+    )
+    assert completed.status_code == 200, completed.text
+    result = completed.json()
+    assert result["status"] == "completed"
+    assert result["completed_unique"] == 2
+    assert result["last_verified_batch"]["verified_unique"] == 2
+    assert len(imports) == 1
+    assert commands.count("import-project-texts") == 1
+
+
+def test_batch_source_copy_does_not_call_ollama(monkeypatch, tmp_path):
+    live, commands, imports = setup_batch_mock(monkeypatch, tmp_path)
+    def forbidden_translation(*args, **kwargs):
+        raise AssertionError("Ollama may not be invoked in exact copy mode")
+    monkeypatch.setattr(review, "_translate_texts", forbidden_translation)
+    monkeypatch.setattr(batches, "resolve_ollama_model", forbidden_translation)
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1,
+              "translation_strategy": "copy"},
+    )
+    assert created.status_code == 200, created.text
+    response = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{created.json()['job_id']}/next",
+        json={},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "completed"
+    assert live["main-1"] == "Zgniatarka"
+    assert "import-project-texts" in commands
