@@ -1326,14 +1326,7 @@ td {
 
 
 
-/* HMI languages */
-
-.hmi-language-panel {
-    margin-top: 18px;
-    padding-top: 16px;
-    border-top: 1px solid #303944;
-}
-
+/* Compact card headers are also used outside language management. */
 .compact-card-header {
     margin-bottom: 10px;
 }
@@ -1341,43 +1334,6 @@ td {
 .compact-card-header h4 {
     margin: 0 0 4px;
 }
-
-.hmi-language-actions {
-    margin-top: 12px;
-}
-
-#tia-language-select {
-    min-width: 280px;
-}
-
-.language-chip-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-}
-
-.language-chip {
-    display: inline-flex;
-    align-items: center;
-    min-height: 28px;
-    padding: 4px 9px;
-    border: 1px solid #3a4854;
-    border-radius: 999px;
-    background: #1a232b;
-    color: #cbd7df;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-@media (max-width: 620px) {
-    #tia-language-select {
-        width: 100%;
-        min-width: 0;
-    }
-}
-
-
 
 /* Per-HMI translation */
 
