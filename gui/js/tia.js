@@ -43,6 +43,26 @@ export function initTiaUi(
             "tia-existing-hmis-body"
         );
 
+    const languageSelect =
+        document.getElementById(
+            "tia-language-select"
+        );
+
+    const addLanguageButton =
+        document.getElementById(
+            "tia-add-language-button"
+        );
+
+    const languagesStatus =
+        document.getElementById(
+            "tia-languages-status"
+        );
+
+    const activeLanguagesElement =
+        document.getElementById(
+            "tia-active-languages"
+        );
+
     const readTagsButton =
         document.getElementById(
             "tia-read-tags-button"
@@ -340,6 +360,8 @@ export function initTiaUi(
     let existingPlcs = [];
 
     let existingHmis = [];
+
+    let projectLanguages = [];
 
     let currentProjectName = "";
 
