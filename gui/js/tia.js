@@ -4944,6 +4944,8 @@ export function initTiaUi(
                 "Select a TIA process first."
             );
 
+            await refreshProjectLanguages();
+
             return;
         }
 
@@ -5018,6 +5020,8 @@ export function initTiaUi(
             renderExistingPlcs();
 
             renderExistingHmis();
+
+            await refreshProjectLanguages();
 
             suggestCreateNames();
 
@@ -5978,6 +5982,14 @@ export function initTiaUi(
         "change",
         modelChanged
     );
+
+
+    if (addLanguageButton) {
+        addLanguageButton.addEventListener(
+            "click",
+            addProjectLanguage
+        );
+    }
 
 
     createPlcButton.addEventListener(
