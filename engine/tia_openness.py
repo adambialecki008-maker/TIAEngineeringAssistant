@@ -75,7 +75,9 @@ class ProjectPlc(
 
     tag_count: int = 0
 
-    resource_rows: list[PlcResourceRow] = []
+    resource_rows: list[PlcResourceRow] = Field(
+        default_factory=list
+    )
 
 
 class ProjectHmi(BaseModel):
