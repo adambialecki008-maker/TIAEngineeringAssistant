@@ -132,11 +132,6 @@ export function initTiaUi(
     const hmiReviewSummary = document.getElementById("tia-hmi-review-summary");
     const hmiReviewRows = document.getElementById("tia-hmi-review-rows");
 
-    const hmiPreviewButton =
-        document.getElementById(
-            "tia-hmi-preview-button"
-        );
-
     const hmiPreviewResults =
         document.getElementById(
             "tia-hmi-preview-results"
@@ -1163,9 +1158,6 @@ export function initTiaUi(
                 : "Translate up to " + (count || 0)
                     + " unique source texts without importing into TIA.";
         }
-        if (hmiPreviewButton) {
-            hmiPreviewButton.disabled = busy || !selection;
-        }
         if (hmiScanButton) {
             hmiScanButton.disabled = busy || !selection;
         }
@@ -1494,7 +1486,7 @@ export function initTiaUi(
             || (selection.translation_strategy !== "copy"
                 && !selection.ollama_model)) {
             setHmiBatchStatus(
-                "Select an explicit HMI ViewPath root and run Preview texts first.",
+                "Select an explicit HMI ViewPath root and click Scan HMI / Count texts first.",
                 true
             );
             return;
@@ -1761,7 +1753,7 @@ export function initTiaUi(
                 }
                 setHmiTranslationStatus(
                     "No matching HMI rows. Select the correct exported ViewPath root "
-                    + "above, then click Preview texts again.", "error"
+                    + "above, then click Scan HMI / Count texts again.", "error"
                 );
                 return false;
             }
@@ -2014,7 +2006,7 @@ export function initTiaUi(
         const key = hmiTranslationKey(selection);
         if (!selection || !key || key !== verifiedHmiPreviewKey) {
             setHmiTranslationStatus(
-                "Preview this HMI and ViewPath root before preparing translations.",
+                "Scan this HMI and ViewPath root before preparing translations.",
                 "error"
             );
             return;
@@ -2253,7 +2245,7 @@ export function initTiaUi(
                 } else {
                     setHmiTranslationStatus(
                         "TIA import verified: " + count + " row(s). "
-                        + "Automatic preview did not complete; click Preview texts "
+                        + "Automatic scan did not complete; click Scan HMI / Count texts "
                         + "again before preparing further translations.",
                         "error"
                     );
@@ -2263,7 +2255,7 @@ export function initTiaUi(
                 setHmiTranslationStatus(
                     "TIA import verified: " + count + " row(s), but the HMI "
                     + "selection changed. Reselect the source/target language "
-                    + "and click Preview texts before continuing.",
+                    + "and click Scan HMI / Count texts before continuing.",
                     "success"
                 );
             }
@@ -7478,13 +7470,6 @@ export function initTiaUi(
         );
     }
 
-
-    if (hmiPreviewButton) {
-        hmiPreviewButton.addEventListener(
-            "click",
-            previewSelectedHmi
-        );
-    }
 
 
     if (hmiTranslateButton) {
