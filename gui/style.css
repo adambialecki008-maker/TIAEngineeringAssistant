@@ -456,6 +456,24 @@ summary {
     overflow: auto;
 }
 
+.table-sort-button {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.table-sort-button:hover,
+.table-sort-button.active {
+    color: #2f5f86;
+    background: transparent;
+}
+
 .tia-tag-summary {
     margin-top: 14px;
 }
