@@ -219,3 +219,29 @@ class PlcMutationResponse(BaseModel):
     plc_name: str
     type_identifier: str | None = None
     project_saved: str | None = None
+
+
+
+class ProjectLanguageInfo(BaseModel):
+    culture: str
+    english_name: str
+    native_name: str
+    is_active: bool
+    is_editing: bool
+    is_reference: bool
+
+
+class AddProjectLanguageRequest(BaseModel):
+    process_id: int = Field(
+        ge=1
+    )
+    culture: str = Field(
+        min_length=2,
+        max_length=32,
+    )
+
+
+class AddProjectLanguageResponse(BaseModel):
+    status: str
+    culture: str
+    project_saved: str | None = None
