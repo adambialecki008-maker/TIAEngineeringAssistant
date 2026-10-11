@@ -196,6 +196,7 @@ def _preview_workbook(workbook, request):
     references = []
     reference_set = set()
     roots = Counter()
+    matched_roots = Counter()
     diagnostics = []
     total = 0
     matched = 0
@@ -281,6 +282,12 @@ def _preview_workbook(workbook, request):
             )
             if matches:
                 matched += 1
+                # Count roots across the full export, including alarms and
+                # other text categories. Never guess from the first 50 rows.
+                if "viewpath" in str(head[reference_col - 1]).casefold():
+                    matched_root = _view_path_root(reference)
+                    if matched_root:
+                        matched_roots[matched_root] += 1
                 source_text = str(source)
                 unique_sources.add(source_text)
                 # Keep eligibility identical to the batch-job start endpoint.
@@ -318,6 +325,10 @@ def _preview_workbook(workbook, request):
         view_path_roots=[
             HmiProjectTextRoot(root=name, rows=count)
             for name, count in roots.most_common(50)
+        ],
+        matched_view_path_roots=[
+            HmiProjectTextRoot(root=name, rows=count)
+            for name, count in matched_roots.most_common()
         ],
         total_text_rows=total,
         matched_text_rows=matched,
