@@ -344,3 +344,91 @@ def test_source_copy_does_not_call_ollama_and_preserves_label(monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["examples"][0]["proposed_target"] == "212BP2 Za zaworem"
     assert commands == ["export-project-texts"]
+
+
+def test_import_info_state_is_verified_after_reexport(monkeypatch):
+    """TIA Openness may report 'Info' for a completed project-text import."""
+    live, commands, imported = _setup(monkeypatch)
+    original_adapter = tia_openness._run_adapter
+
+    def adapter(*args):
+        result = original_adapter(*args)
+        if args[0] == "import-project-texts":
+            return [
+                line.replace("PROJECT_TEXTS_IMPORTED|Success|",
+                             "PROJECT_TEXTS_IMPORTED|Info|", 1)
+                for line in result
+            ]
+        return result
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    prepared = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert prepared.status_code == 200, prepared.text
+    response = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": prepared.json()["review_id"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "verified"
+    assert response.json()["import_state"] == "Info"
+    assert response.json()["verified_rows"] == 2
+    assert commands.count("export-project-texts") == 3
+    assert commands.count("import-project-texts") == 1
+
+
+def test_info_state_cannot_bypass_failed_reexport_verification(monkeypatch):
+    _live, commands, imported = _setup(monkeypatch, verify_updates=False)
+    original_adapter = tia_openness._run_adapter
+
+    def adapter(*args):
+        result = original_adapter(*args)
+        if args[0] == "import-project-texts":
+            return [
+                line.replace("PROJECT_TEXTS_IMPORTED|Success|",
+                             "PROJECT_TEXTS_IMPORTED|Info|", 1)
+                for line in result
+            ]
+        return result
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    prepared = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert prepared.status_code == 200, prepared.text
+    response = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": prepared.json()["review_id"]},
+    )
+    assert response.status_code == 502
+    assert "re-export verification failed" in response.json()["detail"]
+    assert commands.count("export-project-texts") == 3
+
+
+def test_import_warning_still_stops_before_reporting_success(monkeypatch):
+    _live, commands, imported = _setup(monkeypatch)
+    original_adapter = tia_openness._run_adapter
+
+    def adapter(*args):
+        result = original_adapter(*args)
+        if args[0] == "import-project-texts":
+            return [
+                line.replace("PROJECT_TEXTS_IMPORTED|Success|",
+                             "PROJECT_TEXTS_IMPORTED|Warning|", 1)
+                for line in result
+            ]
+        return result
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    prepared = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert prepared.status_code == 200, prepared.text
+    response = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": prepared.json()["review_id"]},
+    )
+    assert response.status_code == 502
+    assert "Warning" in response.json()["detail"]
+    assert commands.count("export-project-texts") == 2
