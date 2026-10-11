@@ -1128,7 +1128,8 @@ export function initTiaUi(
         if (hmiTranslateButton) {
             const count = manualHmiPrepareCount();
             hmiTranslateButton.textContent = count
-                ? "Prepare " + count + " text(s) for review"
+                ? "Prepare " + count + (count === 1 ? " text" : " texts")
+                    + " for review"
                 : "Prepare one batch (review)";
             hmiTranslateButton.disabled =
                 busy || !isVerified || !hmiOllamaModelSelect?.value
