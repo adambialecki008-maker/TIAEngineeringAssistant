@@ -261,6 +261,7 @@ class TranslateHmiTextsRequest(BaseModel):
         max_length=128,
     )
     view_path_root: str | None = Field(default=None, max_length=128)
+    ollama_model: str | None = Field(default=None, max_length=128)
     # Safety default: a small pilot import. null explicitly requests full scope.
     max_rows: int | None = Field(default=10, ge=1, le=100000)
     source_culture: str = Field(
