@@ -2554,6 +2554,11 @@ namespace TiaOpennessAdapter
             );
 
 
+            WriteResourceAttributes(
+                target
+            );
+
+
             foreach (
                 string objectType
                 in new[]
@@ -2584,6 +2589,146 @@ namespace TiaOpennessAdapter
                     values[0],
                     values[1],
                     values[2]
+                );
+            }
+        }
+
+
+        private static void WriteResourceAttributes(
+            PlcTarget target
+        )
+        {
+            WriteResourceAttributes(
+                target,
+                "DeviceItem",
+                target.DeviceItem
+            );
+
+            WriteResourceAttributes(
+                target,
+                "Device",
+                target.Device
+            );
+
+            WriteResourceAttributes(
+                target,
+                "PlcSoftware",
+                target.Software
+            );
+        }
+
+
+        private static void WriteResourceAttributes(
+            PlcTarget target,
+            string source,
+            object value
+        )
+        {
+            IEngineeringObject engineeringObject =
+                value
+                as IEngineeringObject;
+
+
+            if (engineeringObject == null)
+            {
+                return;
+            }
+
+
+            IList<EngineeringAttributeInfo> infos;
+
+
+            try
+            {
+                infos =
+                    engineeringObject
+                        .GetAttributeInfos();
+            }
+            catch
+            {
+                return;
+            }
+
+
+            foreach (
+                EngineeringAttributeInfo info
+                in infos
+            )
+            {
+                string name =
+                    info.Name
+                    ??
+                    "";
+
+                string normalized =
+                    name
+                        .ToLowerInvariant();
+
+
+                if (
+                    !normalized.Contains(
+                        "memory"
+                    )
+                    &&
+                    !normalized.Contains(
+                        "retain"
+                    )
+                    &&
+                    !normalized.Contains(
+                        "resource"
+                    )
+                )
+                {
+                    continue;
+                }
+
+
+                string attributeValue =
+                    "";
+
+
+                try
+                {
+                    object rawValue =
+                        engineeringObject
+                            .GetAttribute(
+                                name
+                            );
+
+
+                    attributeValue =
+                        rawValue
+                        != null
+                            ? rawValue.ToString()
+                            : "";
+                }
+                catch
+                {
+                    continue;
+                }
+
+
+                Console.WriteLine(
+                    "PLC_RESOURCE_ATTR|" +
+                    SanitizeOutput(
+                        target.Device.Name
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        target.DeviceItem.Name
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        source
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        name
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        attributeValue
+                    )
                 );
             }
         }
