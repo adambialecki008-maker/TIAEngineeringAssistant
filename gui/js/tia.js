@@ -1617,10 +1617,11 @@ export function initTiaUi(
                     + latestHmiScan.rows + " total text rows; "
                     + latestHmiScan.unique + " distinct source texts; "
                     + latestHmiScan.eligible
-                    + " eligible unique texts (usable Total to translate). "
+                    + " unique alphabetic source texts; "
                     + latestHmiScan.missingRows + " rows / "
                     + latestHmiScan.missingUnique
-                    + " unique texts have an empty or 'Text' target. "
+                    + " unique texts have an empty or 'Text' target "
+                    + "(recommended Total to translate). "
                     + "Missing-target counts are estimates, not confirmed "
                     + "untranslated-text counts.";
             }
