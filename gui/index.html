@@ -520,9 +520,30 @@
 
                     <div id="tia-hmi-preview-results" class="hidden">
                         <p id="tia-hmi-preview-summary" class="hint"></p>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead><tr><th>Match</th><th>Source text</th><th>Existing target (TIA export, not translated)</th><th>Category</th><th>Reference</th></tr></thead>
+                        <div class="hmi-preview-toolbar">
+                            <label for="tia-hmi-preview-filter">Show sample rows:</label>
+                            <select id="tia-hmi-preview-filter">
+                                <option value="matched">Selected HMI</option>
+                                <option value="unmatched">Other devices (diagnostic)</option>
+                            </select>
+                            <span id="tia-hmi-preview-sample-count" class="hint"></span>
+                        </div>
+                        <div class="table-wrapper hmi-text-table-wrapper">
+                            <table class="hmi-text-table hmi-preview-table">
+                                <colgroup>
+                                    <col style="width: 37%">
+                                    <col style="width: 37%">
+                                    <col style="width: 16%">
+                                    <col style="width: 10%">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Source text</th>
+                                        <th>Current target (TIA)</th>
+                                        <th>Category</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
                                 <tbody id="tia-hmi-preview-rows"></tbody>
                             </table>
                         </div>
@@ -535,14 +556,20 @@
                     <div id="tia-hmi-review-results" class="hidden">
                         <h4>Prepared translations — review before importing</h4>
                         <p id="tia-hmi-review-summary" class="hint"></p>
-                        <div class="table-wrapper">
-                            <table>
+                        <div class="table-wrapper hmi-text-table-wrapper">
+                            <table class="hmi-text-table hmi-review-table">
+                                <colgroup>
+                                    <col style="width: 30%">
+                                    <col style="width: 28%">
+                                    <col style="width: 32%">
+                                    <col style="width: 10%">
+                                </colgroup>
                                 <thead>
                                     <tr>
-                                        <th>Source (TIA slot)</th>
-                                        <th>Current target in TIA</th>
-                                        <th>Proposed target</th>
-                                        <th>ViewPath</th>
+                                        <th>Source text</th>
+                                        <th>Current target (TIA)</th>
+                                        <th>Proposed translation (AI)</th>
+                                        <th>Details</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tia-hmi-review-rows"></tbody>
