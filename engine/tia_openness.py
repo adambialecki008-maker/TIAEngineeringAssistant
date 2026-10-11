@@ -10,6 +10,9 @@ from engine.tia.adapter import (
 from engine.tia.hardware import (
     router as hardware_router,
 )
+from engine.tia.languages import (
+    router as languages_router,
+)
 from engine.tia.models import *  # noqa: F401,F403
 from engine.tia.plc_management import (
     router as plc_management_router,
@@ -41,6 +44,7 @@ router = APIRouter(
 
 for subrouter in (
     project_router,
+    languages_router,
     program_router,
     structures_router,
     tags_router,
