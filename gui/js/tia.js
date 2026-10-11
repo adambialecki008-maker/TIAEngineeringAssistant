@@ -1174,6 +1174,8 @@ export function initTiaUi(
                 hmiOllamaStatus.textContent = available.length === 0
                     ? "No Ollama models installed. Run ollama list or pull a model."
                     : available.length + " Ollama model(s) available."
+                        + " Each local API request processes up to "
+                        + response.request_batch_size + " text(s)."
                         + " No OpenAI API key is needed."
                         + (!selected && available.length > 1
                             ? " Choose a model from the list." : "");
