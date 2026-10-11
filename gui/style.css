@@ -1354,6 +1354,13 @@ td {
     margin-bottom: 10px;
 }
 
+/* Always show the current read-only scan, review, or import status
+   directly beneath its action buttons, above long preview tables. */
+.hmi-action-status {
+    margin: 0 0 12px;
+    overflow-wrap: anywhere;
+}
+
 #tia-hmi-source-language,
 #tia-hmi-target-language {
     width: 100%;
