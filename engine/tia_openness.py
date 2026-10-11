@@ -68,6 +68,15 @@ class ProjectPlc(
     tag_count: int = 0
 
 
+class ProjectHmi(BaseModel):
+    device_name: str
+    hmi_name: str
+    device_type_identifier: str = ""
+    hmi_type_identifier: str = ""
+    software_type: str = ""
+    software_name: str = ""
+
+
 class TiaProjectInfo(BaseModel):
     project_name: str
 
@@ -75,6 +84,7 @@ class TiaProjectInfo(BaseModel):
 class TiaProjectContext(BaseModel):
     project_name: str
     plcs: list[ProjectPlc]
+    hmis: list[ProjectHmi]
 
 
 class HardwareItem(BaseModel):
@@ -774,6 +784,7 @@ def get_project_context(
 
     project_name = ""
     plcs = []
+    hmis = []
 
 
     metrics_by_target = {}
@@ -796,6 +807,31 @@ def get_project_context(
             ):
                 project_name =
                     parts[1].strip()
+
+
+        elif line.startswith(
+            "HMI|"
+        ):
+            parts = line.split(
+                "|",
+                6,
+            )
+
+
+            if len(parts) != 7:
+                continue
+
+
+            hmis.append(
+                ProjectHmi(
+                    device_name=parts[1],
+                    hmi_name=parts[2],
+                    device_type_identifier=parts[3],
+                    hmi_type_identifier=parts[4],
+                    software_type=parts[5],
+                    software_name=parts[6],
+                )
+            )
 
 
         elif line.startswith(
@@ -911,6 +947,7 @@ def get_project_context(
     return TiaProjectContext(
         project_name=project_name,
         plcs=plcs,
+        hmis=hmis,
     )
 
 
