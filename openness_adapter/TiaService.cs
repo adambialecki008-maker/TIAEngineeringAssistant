@@ -2040,10 +2040,21 @@ namespace TiaOpennessAdapter
                     DeviceItem item =
                         itemPath.Item;
 
-                    SoftwareContainer container =
-                        item.GetService<
-                            SoftwareContainer
-                        >();
+                    SoftwareContainer container;
+
+
+                    try
+                    {
+                        container =
+                            item.GetService<
+                                SoftwareContainer
+                            >();
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
 
                     var software =
                         container?.Software;
@@ -2060,37 +2071,36 @@ namespace TiaOpennessAdapter
                     }
 
 
-                    string softwareType =
-                        software
-                            .GetType()
-                            .FullName
-                        ??
-                        software
-                            .GetType()
-                            .Name;
+                    Type softwareType =
+                        software.GetType();
 
-                    string softwareTypeLower =
-                        softwareType
-                            .ToLowerInvariant();
+                    bool isClassicHmi =
+                        TypeIsOrDerivesFrom(
+                            softwareType,
+                            "Siemens.Engineering.Hmi.HmiTarget"
+                        );
+
+                    bool isUnifiedHmi =
+                        TypeIsOrDerivesFrom(
+                            softwareType,
+                            "Siemens.Engineering.HmiUnified.HmiSoftware"
+                        );
 
 
                     if (
-                        !softwareTypeLower.Contains(
-                            "hmi"
-                        )
+                        !isClassicHmi
                         &&
-                        !softwareTypeLower.Contains(
-                            "wincc"
-                        )
-                        &&
-                        !softwareTypeLower.Contains(
-                            "unified"
-                        )
+                        !isUnifiedHmi
                     )
                     {
                         continue;
                     }
 
+
+                    string softwareTypeName =
+                        softwareType.FullName
+                        ??
+                        softwareType.Name;
 
                     string key =
                         device.Name
@@ -2101,7 +2111,7 @@ namespace TiaOpennessAdapter
                         +
                         "|"
                         +
-                        softwareType;
+                        softwareTypeName;
 
 
                     if (!yielded.Add(
@@ -2113,43 +2123,9 @@ namespace TiaOpennessAdapter
 
 
                     string softwareName =
-                        "";
-
-
-                    try
-                    {
-                        var nameProperty =
+                        ReadObjectName(
                             software
-                                .GetType()
-                                .GetProperty(
-                                    "Name"
-                                );
-
-
-                        if (
-                            nameProperty
-                            != null
-                        )
-                        {
-                            object nameValue =
-                                nameProperty.GetValue(
-                                    software,
-                                    null
-                                );
-
-
-                            softwareName =
-                                nameValue
-                                != null
-                                    ? nameValue.ToString()
-                                    : "";
-                        }
-                    }
-                    catch
-                    {
-                        softwareName =
-                            "";
-                    }
+                        );
 
 
                     Console.WriteLine(
@@ -2175,7 +2151,7 @@ namespace TiaOpennessAdapter
                         ) +
                         "|" +
                         SanitizeOutput(
-                            softwareType
+                            softwareTypeName
                         ) +
                         "|" +
                         SanitizeOutput(
@@ -2187,6 +2163,83 @@ namespace TiaOpennessAdapter
         }
 
 
+        private static bool TypeIsOrDerivesFrom(
+            Type type,
+            string expectedFullName
+        )
+        {
+            Type current =
+                type;
+
+
+            while (
+                current != null
+            )
+            {
+                if (
+                    string.Equals(
+                        current.FullName,
+                        expectedFullName,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    return true;
+                }
+
+
+                current =
+                    current.BaseType;
+            }
+
+
+            return false;
+        }
+
+
+        private static string ReadObjectName(
+            object value
+        )
+        {
+            try
+            {
+                var nameProperty =
+                    value
+                        .GetType()
+                        .GetProperty(
+                            "Name"
+                        );
+
+
+                if (
+                    nameProperty == null
+                )
+                {
+                    return "";
+                }
+
+
+                object nameValue =
+                    nameProperty.GetValue(
+                        value,
+                        null
+                    );
+
+
+                return (
+                    nameValue
+                    != null
+                        ? nameValue.ToString()
+                        : ""
+                );
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+
         private static void WritePlcMetrics(
             PlcTarget target
         )
@@ -2194,17 +2247,18 @@ namespace TiaOpennessAdapter
             PlcSoftware software =
                 target.Software;
 
+            List<PlcBlock> blocks =
+                EnumeratePlcBlocks(
+                    software
+                )
+                .ToList();
+
 
             int blockCount =
-                EnumeratePlcBlocks(
-                    software
-                )
-                .Count();
+                blocks.Count;
 
             int dataBlockCount =
-                EnumeratePlcBlocks(
-                    software
-                )
+                blocks
                 .OfType<DataBlock>()
                 .Count();
 
@@ -2272,6 +2326,278 @@ namespace TiaOpennessAdapter
                 "|" +
                 tagCount
             );
+
+
+            long totalLoadMemory =
+                0;
+
+            long totalCodeWorkMemory =
+                0;
+
+            long totalDataWorkMemory =
+                0;
+
+            Dictionary<
+                string,
+                long[]
+            > resourceByType =
+                new Dictionary<
+                    string,
+                    long[]
+                >(
+                    StringComparer.OrdinalIgnoreCase
+                );
+
+
+            foreach (
+                PlcBlock block
+                in blocks
+            )
+            {
+                long loadMemory =
+                    ReadBlockLoadMemory(
+                        block
+                    );
+
+                long workMemory =
+                    ReadBlockWorkMemory(
+                        block
+                    );
+
+                bool isDataBlock =
+                    block
+                    is DataBlock;
+
+                string objectType =
+                    GetResourceObjectType(
+                        block
+                    );
+
+
+                totalLoadMemory +=
+                    loadMemory;
+
+
+                if (isDataBlock)
+                {
+                    totalDataWorkMemory +=
+                        workMemory;
+                }
+                else
+                {
+                    totalCodeWorkMemory +=
+                        workMemory;
+                }
+
+
+                if (
+                    !resourceByType
+                        .TryGetValue(
+                            objectType,
+                            out long[] values
+                        )
+                )
+                {
+                    values =
+                        new long[3];
+
+                    resourceByType[
+                        objectType
+                    ] =
+                        values;
+                }
+
+
+                values[0] +=
+                    loadMemory;
+
+
+                if (isDataBlock)
+                {
+                    values[2] +=
+                        workMemory;
+                }
+                else
+                {
+                    values[1] +=
+                        workMemory;
+                }
+            }
+
+
+            WritePlcResource(
+                target,
+                "Used",
+                totalLoadMemory,
+                totalCodeWorkMemory,
+                totalDataWorkMemory
+            );
+
+
+            foreach (
+                string objectType
+                in new[]
+                {
+                    "OB",
+                    "FC",
+                    "FB",
+                    "DB",
+                    "Other",
+                }
+            )
+            {
+                if (
+                    !resourceByType
+                        .TryGetValue(
+                            objectType,
+                            out long[] values
+                        )
+                )
+                {
+                    continue;
+                }
+
+
+                WritePlcResource(
+                    target,
+                    objectType,
+                    values[0],
+                    values[1],
+                    values[2]
+                );
+            }
+        }
+
+
+        private static void WritePlcResource(
+            PlcTarget target,
+            string objectType,
+            long loadMemory,
+            long codeWorkMemory,
+            long dataWorkMemory
+        )
+        {
+            Console.WriteLine(
+                "PLC_RESOURCE|" +
+                SanitizeOutput(
+                    target.Device.Name
+                ) +
+                "|" +
+                SanitizeOutput(
+                    target.DeviceItem.Name
+                ) +
+                "|" +
+                SanitizeOutput(
+                    objectType
+                ) +
+                "|" +
+                loadMemory +
+                "|" +
+                codeWorkMemory +
+                "|" +
+                dataWorkMemory +
+                "|"
+            );
+        }
+
+
+        private static long ReadBlockLoadMemory(
+            PlcBlock block
+        )
+        {
+            try
+            {
+                return Math.Max(
+                    0L,
+                    Convert.ToInt64(
+                        block.LoadMemoryLength
+                    )
+                );
+            }
+            catch
+            {
+                return 0L;
+            }
+        }
+
+
+        private static long ReadBlockWorkMemory(
+            PlcBlock block
+        )
+        {
+            try
+            {
+                return Math.Max(
+                    0L,
+                    Convert.ToInt64(
+                        block.WorkMemoryLength
+                    )
+                );
+            }
+            catch
+            {
+                return 0L;
+            }
+        }
+
+
+        private static string GetResourceObjectType(
+            PlcBlock block
+        )
+        {
+            if (
+                block
+                is DataBlock
+            )
+            {
+                return "DB";
+            }
+
+
+            string typeName =
+                block
+                    .GetType()
+                    .Name
+                    .ToUpperInvariant();
+
+
+            if (
+                typeName == "OB"
+                ||
+                typeName.Contains(
+                    "ORGANIZATION"
+                )
+            )
+            {
+                return "OB";
+            }
+
+
+            if (
+                typeName == "FB"
+                ||
+                typeName.Contains(
+                    "FUNCTIONBLOCK"
+                )
+            )
+            {
+                return "FB";
+            }
+
+
+            if (
+                typeName == "FC"
+                ||
+                typeName.Contains(
+                    "FUNCTION"
+                )
+            )
+            {
+                return "FC";
+            }
+
+
+            return "Other";
         }
 
 
