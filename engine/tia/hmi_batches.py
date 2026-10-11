@@ -198,10 +198,11 @@ def run_next_hmi_batch(job_id: str, action: BatchJobAction):
                     "may be uncertain. Check actual TIA texts before using "
                     "retry_failed_batch.",
                 )
-        if job.get("pause_requested") and not action.retry_failed_batch:
-            job["status"] = "paused"
-            _save_job(job)
-            return _public_job(job)
+        # Calling /next from an explicitly paused job means resume.
+        # A pause requested DURING a running batch is handled at the
+        # previous batch's commit boundary, never mid-import.
+        if job["status"] == "paused":
+            job["pause_requested"] = False
         job["pause_requested"] = False
         job["status"] = "processing"
         job["error"] = None
