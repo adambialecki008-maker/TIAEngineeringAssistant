@@ -503,7 +503,16 @@
                             class="primary-button"
                             disabled
                         >
-                            Translate & import
+                            Prepare translations
+                        </button>
+
+                        <button
+                            id="tia-hmi-import-reviewed-button"
+                            type="button"
+                            class="primary-button"
+                            disabled
+                        >
+                            Import reviewed texts
                         </button>
 
                     </div>
@@ -521,6 +530,25 @@
                             <summary>ViewPath / XLSX diagnostics</summary>
                             <pre id="tia-hmi-preview-references" class="hmi-preview-references"></pre>
                         </details>
+                    </div>
+
+                    <div id="tia-hmi-review-results" class="hidden">
+                        <h4>Prepared translations — review before importing</h4>
+                        <p id="tia-hmi-review-summary" class="hint"></p>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Source (TIA slot)</th>
+                                        <th>Current target in TIA</th>
+                                        <th>Proposed target</th>
+                                        <th>ViewPath</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tia-hmi-review-rows"></tbody>
+                            </table>
+                        </div>
+                        <p class="hint">Nothing is imported until you click Import reviewed texts. Refreshing the page discards the prepared review.</p>
                     </div>
 
                     <p
