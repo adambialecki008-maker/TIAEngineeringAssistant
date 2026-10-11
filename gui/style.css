@@ -510,6 +510,35 @@ summary {
     font-weight: 700;
 }
 
+.tia-structure-detail {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #dde2e6;
+}
+
+.tia-structure-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.tia-structure-detail-header h4 {
+    margin: 0;
+}
+
+.tia-structure-member-table-wrapper {
+    max-height: 520px;
+    margin-top: 12px;
+    overflow: auto;
+}
+
+#tia-plc-structure-detail-body td:nth-child(2),
+#tia-plc-structure-detail-body td:nth-child(3) {
+    font-family: Consolas, "Courier New", monospace;
+}
+
 
 /* Devices */
 
