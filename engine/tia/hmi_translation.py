@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from openpyxl import load_workbook
 
 from engine.tia.adapter import read_project_saved
+from engine.tia.hmi_text_safety import needs_target_fill
 from engine.tia.compat import run_adapter
 from engine.tia.ollama_translation import (
     resolve_ollama_model,
@@ -286,10 +287,7 @@ def _preview_workbook(workbook, request):
                 if any(char.isalpha() for char in source_text):
                     eligible_sources.add(source_text)
                     target_text = str(cell_value(target_col) or "")
-                    if not target_text.strip() or (
-                        target_text.strip().casefold() == "text"
-                        and source_text.strip().casefold() != "text"
-                    ):
+                    if needs_target_fill(source_text, target_text):
                         missing_target_rows += 1
                         missing_target_sources.add(source_text)
 
