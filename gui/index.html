@@ -489,6 +489,22 @@
                             Local Ollama server — no OpenAI API key required.
                         </p>
                     </div>
+                    <div class="field-group">
+                        <label for="tia-hmi-translation-strategy">Text handling:</label>
+                        <select id="tia-hmi-translation-strategy">
+                            <option value="copy" selected>
+                                Copy original Polish labels into missing target cells (no AI)
+                            </option>
+                            <option value="ollama">
+                                Translate missing target texts with Ollama
+                            </option>
+                        </select>
+                        <p class="hint">
+                            Your TIA export contains Polish source texts in the
+                            en-US* column. Copy mode preserves them exactly.
+                            Both modes leave already populated target texts unchanged.
+                        </p>
+                    </div>
 
                     <div class="hmi-translation-batch-controls">
                         <h4>HMI text scan and translation scope</h4>
@@ -587,24 +603,42 @@
                             translations are not approved before import.
                             Use only after a successful pilot and project backup.
                         </p>
-                        <p class="hint">
-                            Example: batch size 5, total 50 = up to 10 verified TIA imports.
-                            This automatic mode imports after each batch without manual review;
-                            Prepare one batch (review) above never imports automatically.
+                        <p id="tia-hmi-batch-plan" class="hmi-batch-plan"
+                           aria-live="polite">
+                            Example: batch size 5 and total 50 means 10 batches.
+                            Every completed batch is imported and verified in TIA.
                         </p>
-                        <div class="action-row hmi-translation-actions">
-                            <button id="tia-hmi-batch-start" type="button"
-                                    class="primary-button" disabled>
-                                Start batch import
-                            </button>
-                            <button id="tia-hmi-batch-resume" type="button"
-                                    class="secondary-button" disabled>
-                                Resume saved job
-                            </button>
-                            <button id="tia-hmi-batch-pause" type="button"
-                                    class="secondary-button" disabled>
-                                Pause after this batch
-                            </button>
+                        <label class="hmi-batch-repeat-label" for="tia-hmi-batch-auto-repeat">
+                            <input type="checkbox" id="tia-hmi-batch-auto-repeat" checked>
+                            Continue automatically with the next batch until
+                            Total to translate is reached
+                        </label>
+                        <div class="hmi-batch-start-row">
+                            <div class="action-row hmi-translation-actions">
+                                <button id="tia-hmi-batch-start" type="button"
+                                        class="primary-button" disabled>
+                                    Start batch import
+                                </button>
+                                <button id="tia-hmi-batch-resume" type="button"
+                                        class="secondary-button" disabled>
+                                    Resume saved job
+                                </button>
+                                <button id="tia-hmi-batch-pause" type="button"
+                                        class="secondary-button" disabled>
+                                    Pause after this batch
+                                </button>
+                            </div>
+                            <div class="hmi-batch-progress" role="group"
+                                 aria-label="Verified TIA import progress">
+                                <div class="hmi-batch-progress-caption">
+                                    <strong>Verified in TIA</strong>
+                                    <span id="tia-hmi-batch-progress-text">0 / —</span>
+                                </div>
+                                <progress id="tia-hmi-batch-progress" max="100"
+                                          value="0"></progress>
+                                <p class="hint">Progress advances after TIA import
+                                   and verification, not after Ollama alone.</p>
+                            </div>
                         </div>
                         <p id="tia-hmi-batch-status" class="status-box"
                            aria-live="polite">
