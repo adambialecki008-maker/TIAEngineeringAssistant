@@ -139,3 +139,40 @@ unique strings for automatic import, while manual Prepare still processes
 only one batch (max 50). This value is **not** the number of HMI XLSX rows;
 repeated strings can correspond to many HMI elements. Confirm the scan
 counts before starting any import.
+
+
+## Explicit batch plan, verified progress and safe Polish labels
+
+The GUI now displays a live **batch plan** and an optional checked
+**Continue automatically with the next batch until Total to translate
+is reached** setting. Examples:
+
+- Batch size 5, total 50: 10 sequential batches of 5 unique texts.
+- Batch size 5, total 3: 1 batch of 3 unique texts (not 5).
+- Batch size 5, total 13: 3 batches, sized 5, 5 and 3.
+
+The bar **Verified in TIA** is placed immediately beside **Start batch
+import**. It advances only after a batch has been imported and verified by
+a TIA re-export. During translation or import, a separate stage message
+continues to update; an AI-generated text alone never advances the bar.
+
+The selected HMI text export has previously contained Polish strings in
+the en-US* source column. To avoid broken local-model paraphrases such as
+`(Hydrauliczna)` -> `(cykliski)`, the new **Text handling** dropdown
+defaults to **Copy original Polish labels into missing target cells (no AI)**.
+For genuinely foreign-language text requiring translation, explicitly
+select **Translate missing target texts with Ollama** and review a small pilot
+before automatic import.
+
+Both review and batch endpoints only fill empty or generic `Text` target
+cells. Populated target values are not overwritten by automated imports.
+Translations that damage structural brackets, substitution placeholders or
+identifiers are rejected before import. These checks do not establish
+semantic translation accuracy; a project backup and small verified pilot
+remain required. Existing populated-but-incorrect translations must be
+corrected separately.
+
+Run:
+```powershell
+python -m pytest tests/test_hmi_batches.py tests/test_hmi_review.py tests/test_hmi_text_preview.py tests/test_hmi_text_safety.py tests/test_hmi_translation_api.py -q
+```
