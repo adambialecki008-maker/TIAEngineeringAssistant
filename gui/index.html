@@ -627,6 +627,102 @@
                 <div class="card-header">
                     <div>
                         <h3>
+                            PLC program blocks
+                        </h3>
+
+                        <p class="hint">
+                            Inspect OB, FC, FB and DB blocks from the Active PLC.
+                            This operation is read-only.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-read-program-blocks-button"
+                        type="button"
+                        disabled
+                    >
+                        Read program blocks
+                    </button>
+                </div>
+
+
+                <p
+                    id="tia-plc-program-blocks-status"
+                    class="status-box"
+                >
+                    Select an Active PLC first.
+                </p>
+
+
+                <details class="tia-inventory-details">
+
+                    <summary id="tia-plc-program-blocks-summary">
+                        Program blocks
+                    </summary>
+
+                    <div class="details-content">
+
+                        <div class="tia-inventory-toolbar">
+                            <div class="tia-inventory-filter">
+                                <label for="tia-plc-program-blocks-kind-filter">
+                                    Type:
+                                </label>
+
+                                <select id="tia-plc-program-blocks-kind-filter">
+                                    <option value="">
+                                        All block types
+                                    </option>
+                                    <option value="OB">OB</option>
+                                    <option value="FC">FC</option>
+                                    <option value="FB">FB</option>
+                                    <option value="DB">DB</option>
+                                </select>
+                            </div>
+                        </div>
+
+
+                        <div class="table-wrapper tia-inventory-table-wrapper">
+
+                            <table class="management-table">
+                                <thead>
+                                    <tr>
+                                        <th>Group</th>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Number</th>
+                                        <th>Language</th>
+                                        <th>Consistent</th>
+                                        <th>Load memory</th>
+                                        <th>Work memory</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="tia-plc-program-blocks-body">
+                                    <tr>
+                                        <td
+                                            colspan="8"
+                                            class="empty-table-cell"
+                                        >
+                                            No program blocks loaded.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                </details>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
                             PLC data structures
                         </h3>
 
