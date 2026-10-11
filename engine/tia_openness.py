@@ -1,6 +1,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 
 from fastapi import (
     APIRouter,
@@ -121,6 +122,23 @@ class PlcUdtInfo(BaseModel):
 class PlcStructuresInfo(BaseModel):
     data_blocks: list[PlcDataBlockInfo]
     udts: list[PlcUdtInfo]
+
+
+class PlcStructureMemberInfo(BaseModel):
+    section: str = ""
+    path: str
+    name: str
+    data_type: str = ""
+    level: int = 0
+    offset: str = ""
+    comment: str = ""
+
+
+class PlcStructureDetail(BaseModel):
+    kind: str
+    group_path: str
+    name: str
+    members: list[PlcStructureMemberInfo]
 
 
 class PlcTagSpec(BaseModel):
@@ -411,6 +429,240 @@ def _run_adapter(
     ]
 
 
+def _xml_local_name(
+    tag: str,
+) -> str:
+    return (
+        tag
+        .rsplit(
+            "}",
+            1,
+        )[-1]
+        .rsplit(
+            ":",
+            1,
+        )[-1]
+    )
+
+
+def _xml_attribute(
+    element: ET.Element,
+    *names: str,
+) -> str:
+    attributes = {
+        key.casefold():
+            value
+
+        for key, value
+        in element.attrib.items()
+    }
+
+
+    for name in names:
+        value = attributes.get(
+            name.casefold()
+        )
+
+
+        if value is not None:
+            return value
+
+
+    return ""
+
+
+def _xml_comment(
+    member: ET.Element,
+) -> str:
+    preferred_names = {
+        "multilanguagetext",
+        "text",
+        "comment",
+    }
+
+
+    for element in member.iter():
+        if (
+            element is member
+            or
+            _xml_local_name(
+                element.tag
+            ).casefold()
+            not in preferred_names
+        ):
+            continue
+
+
+        text = (
+            element.text
+            or ""
+        ).strip()
+
+
+        if text:
+            return text
+
+
+    return ""
+
+
+def _direct_member_children(
+    element: ET.Element,
+) -> list[ET.Element]:
+    members = []
+
+
+    def walk(
+        node: ET.Element,
+    ):
+        for child in list(
+            node
+        ):
+            if (
+                _xml_local_name(
+                    child.tag
+                )
+                ==
+                "Member"
+            ):
+                members.append(
+                    child
+                )
+
+                continue
+
+
+            walk(
+                child
+            )
+
+
+    walk(
+        element
+    )
+
+
+    return members
+
+
+def _parse_structure_xml(
+    file_path: Path,
+) -> list[PlcStructureMemberInfo]:
+    root = ET.parse(
+        file_path
+    ).getroot()
+
+
+    result = []
+    seen_members = set()
+
+
+    def append_member(
+        member: ET.Element,
+        section: str,
+        parent_path: str,
+        level: int,
+    ):
+        member_id = id(
+            member
+        )
+
+
+        if member_id in seen_members:
+            return
+
+
+        seen_members.add(
+            member_id
+        )
+
+
+        name = _xml_attribute(
+            member,
+            "Name",
+        )
+
+
+        if not name:
+            return
+
+
+        path = (
+            f"{parent_path}.{name}"
+            if parent_path
+            else name
+        )
+
+
+        result.append(
+            PlcStructureMemberInfo(
+                section=section,
+                path=path,
+                name=name,
+                data_type=_xml_attribute(
+                    member,
+                    "Datatype",
+                    "DataType",
+                    "Type",
+                ),
+                level=level,
+                offset=_xml_attribute(
+                    member,
+                    "Offset",
+                    "ByteOffset",
+                ),
+                comment=_xml_comment(
+                    member
+                ),
+            )
+        )
+
+
+        for child
+        in _direct_member_children(
+            member
+        ):
+            append_member(
+                child,
+                section,
+                path,
+                level + 1,
+            )
+
+
+    for section
+    in root.iter():
+        if (
+            _xml_local_name(
+                section.tag
+            )
+            !=
+            "Section"
+        ):
+            continue
+
+
+        section_name = _xml_attribute(
+            section,
+            "Name",
+        )
+
+
+        for member
+        in _direct_member_children(
+            section
+        ):
+            append_member(
+                member,
+                section_name,
+                "",
+                0,
+            )
+
+
+    return result
+
+
 def _read_project_saved(
     lines: list[str],
 ) -> str | None:
@@ -647,6 +899,112 @@ def get_plc_structures(
         data_blocks=data_blocks,
         udts=udts,
     )
+
+
+@router.get(
+    "/plc-structure",
+    response_model=PlcStructureDetail,
+)
+def get_plc_structure(
+    process_id: int = Query(
+        ge=1
+    ),
+    device_name: str = Query(
+        min_length=1,
+        max_length=128,
+    ),
+    plc_name: str = Query(
+        min_length=1,
+        max_length=128,
+    ),
+    kind: str = Query(
+        pattern="^(db|udt)$",
+    ),
+    group_path: str = Query(
+        default="",
+        max_length=512,
+    ),
+    name: str = Query(
+        min_length=1,
+        max_length=128,
+    ),
+):
+    temporary_path = None
+
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".xml",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(
+                handle.name
+            )
+
+
+        _run_adapter(
+            "export-structure",
+            str(
+                process_id
+            ),
+            device_name.strip(),
+            plc_name.strip(),
+            kind.strip().lower(),
+            group_path.strip(),
+            name.strip(),
+            str(
+                temporary_path
+            ),
+        )
+
+
+        if (
+            not temporary_path.exists()
+            or
+            temporary_path.stat().st_size
+            ==
+            0
+        ):
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "TIA Openness did not produce "
+                    "a structure XML file."
+                ),
+            )
+
+
+        try:
+            members = _parse_structure_xml(
+                temporary_path
+            )
+
+        except ET.ParseError as error:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Cannot parse exported TIA structure XML: "
+                    f"{error}"
+                ),
+            )
+
+
+        return PlcStructureDetail(
+            kind=kind.strip().lower(),
+            group_path=group_path.strip(),
+            name=name.strip(),
+            members=members,
+        )
+
+    finally:
+        if (
+            temporary_path
+            and
+            temporary_path.exists()
+        ):
+            temporary_path.unlink(
+                missing_ok=True
+            )
 
 
 @router.get(
