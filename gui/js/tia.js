@@ -65,6 +65,16 @@ export function initTiaUi(
             "tia-plc-tags-sort"
         );
 
+    const plcTagsTableFilter =
+        document.getElementById(
+            "tia-plc-tags-table-filter"
+        );
+
+    const plcTagsTypeFilter =
+        document.getElementById(
+            "tia-plc-tags-type-filter"
+        );
+
     const plcTagsBreakdown =
         document.getElementById(
             "tia-plc-tags-breakdown"
@@ -99,16 +109,6 @@ export function initTiaUi(
         qw:
             document.getElementById(
                 "tia-tag-count-qw"
-            ),
-
-        id:
-            document.getElementById(
-                "tia-tag-count-id"
-            ),
-
-        qd:
-            document.getElementById(
-                "tia-tag-count-qd"
             ),
 
         other:
@@ -429,6 +429,8 @@ export function initTiaUi(
 
         loadedPlcTags = [];
 
+        resetPlcTagFilters();
+
         loadedPlcStructures = {
             data_blocks: [],
             udts: [],
@@ -731,6 +733,208 @@ export function initTiaUi(
     }
 
 
+    function resetPlcTagFilters() {
+        if (plcTagsTableFilter) {
+            plcTagsTableFilter.replaceChildren();
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value = "";
+            option.textContent =
+                "All tag tables";
+
+            plcTagsTableFilter.appendChild(
+                option
+            );
+        }
+
+
+        if (plcTagsTypeFilter) {
+            plcTagsTypeFilter.replaceChildren();
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value = "";
+            option.textContent =
+                "All data types";
+
+            plcTagsTypeFilter.appendChild(
+                option
+            );
+        }
+    }
+
+
+    function fillPlcTagFilter(
+        select,
+        values,
+        allLabel
+    ) {
+        if (!select) {
+            return;
+        }
+
+
+        const previousValue =
+            select.value;
+
+
+        select.replaceChildren();
+
+
+        const allOption =
+            document.createElement(
+                "option"
+            );
+
+        allOption.value = "";
+        allOption.textContent =
+            allLabel;
+
+        select.appendChild(
+            allOption
+        );
+
+
+        for (
+            const value
+            of values
+        ) {
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value =
+                value;
+
+            option.textContent =
+                value;
+
+            select.appendChild(
+                option
+            );
+        }
+
+
+        if (
+            previousValue
+            &&
+            values.includes(
+                previousValue
+            )
+        ) {
+            select.value =
+                previousValue;
+        }
+    }
+
+
+    function populatePlcTagFilters(
+        tags
+    ) {
+        const tables =
+            [
+                ...new Set(
+                    tags
+                        .map(
+                            (tag) =>
+                                tag.table_path
+                                ||
+                                "(root)"
+                        )
+                ),
+            ]
+            .sort(
+                compareText
+            );
+
+        const dataTypes =
+            [
+                ...new Set(
+                    tags
+                        .map(
+                            (tag) =>
+                                tag.data_type
+                                ||
+                                "(unknown)"
+                        )
+                ),
+            ]
+            .sort(
+                compareText
+            );
+
+
+        fillPlcTagFilter(
+            plcTagsTableFilter,
+            tables,
+            "All tag tables"
+        );
+
+        fillPlcTagFilter(
+            plcTagsTypeFilter,
+            dataTypes,
+            "All data types"
+        );
+    }
+
+
+    function filteredPlcTags(
+        tags
+    ) {
+        const selectedTable =
+            plcTagsTableFilter?.value
+            ??
+            "";
+
+        const selectedType =
+            plcTagsTypeFilter?.value
+            ??
+            "";
+
+
+        return tags.filter(
+            (tag) => {
+                const table =
+                    tag.table_path
+                    ||
+                    "(root)";
+
+                const dataType =
+                    tag.data_type
+                    ||
+                    "(unknown)";
+
+
+                return (
+                    (
+                        !selectedTable
+                        ||
+                        table
+                        ===
+                        selectedTable
+                    )
+                    &&
+                    (
+                        !selectedType
+                        ||
+                        dataType
+                        ===
+                        selectedType
+                    )
+                );
+            }
+        );
+    }
+
+
     function sortedPlcTags(
         tags
     ) {
@@ -852,12 +1056,6 @@ export function initTiaUi(
             qw:
                 0,
 
-            id:
-                0,
-
-            qd:
-                0,
-
             other:
                 0,
         };
@@ -901,20 +1099,6 @@ export function initTiaUi(
                 )
             ) {
                 counts.qw += 1;
-
-            } else if (
-                /^%ID\d+$/.test(
-                    address
-                )
-            ) {
-                counts.id += 1;
-
-            } else if (
-                /^%QD\d+$/.test(
-                    address
-                )
-            ) {
-                counts.qd += 1;
 
             } else if (
                 /^%I(?:B)?\d+(?:\.\d+)?$/.test(
@@ -1041,20 +1225,29 @@ export function initTiaUi(
         }
 
 
+        const visibleTags =
+            filteredPlcTags(
+                tags
+            );
+
         const orderedTags =
             sortedPlcTags(
-                tags
+                visibleTags
             );
 
 
         if (plcTagsSummary) {
             plcTagsSummary.textContent =
-                `PLC tags list (${tags.length})`;
+                visibleTags.length
+                ===
+                tags.length
+                    ? `PLC tags list (${tags.length})`
+                    : `PLC tags list (${visibleTags.length} / ${tags.length})`;
         }
 
 
         renderPlcTagSummary(
-            tags
+            visibleTags
         );
 
         plcTagsBody.replaceChildren();
@@ -1063,6 +1256,38 @@ export function initTiaUi(
         if (tags.length === 0) {
             renderEmptyPlcTags(
                 "No PLC tags found in the Active PLC."
+            );
+
+            return;
+        }
+
+
+        if (visibleTags.length === 0) {
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+            const cell =
+                document.createElement(
+                    "td"
+                );
+
+            cell.colSpan =
+                4;
+
+            cell.className =
+                "empty-table-cell";
+
+            cell.textContent =
+                "No PLC tags match the selected filters.";
+
+            row.appendChild(
+                cell
+            );
+
+            plcTagsBody.appendChild(
+                row
             );
 
             return;
@@ -1082,11 +1307,15 @@ export function initTiaUi(
             for (
                 const value
                 of [
-                    tag.table_path,
+                    tag.table_path
+                    ||
+                    "(root)",
+
                     tag.name,
                     tag.data_type,
                     tag.logical_address
-                    || "—",
+                    ||
+                    "—",
                 ]
             ) {
                 const cell =
@@ -1108,7 +1337,6 @@ export function initTiaUi(
             );
         }
     }
-
 
     function setPlcTagsStatus(
         message,
@@ -1201,6 +1429,10 @@ export function initTiaUi(
             loadedPlcTags =
                 tags;
 
+
+            populatePlcTagFilters(
+                loadedPlcTags
+            );
 
             renderPlcTags(
                 loadedPlcTags
@@ -2665,6 +2897,28 @@ export function initTiaUi(
     }
 
 
+    if (plcTagsTableFilter) {
+        plcTagsTableFilter.addEventListener(
+            "change",
+            () =>
+                renderPlcTags(
+                    loadedPlcTags
+                )
+        );
+    }
+
+
+    if (plcTagsTypeFilter) {
+        plcTagsTypeFilter.addEventListener(
+            "change",
+            () =>
+                renderPlcTags(
+                    loadedPlcTags
+                )
+        );
+    }
+
+
     if (plcDbsSort) {
         plcDbsSort.addEventListener(
             "change",
@@ -2695,6 +2949,8 @@ export function initTiaUi(
             existingPlcs = [];
 
             loadedPlcTags = [];
+
+            resetPlcTagFilters();
 
             loadedPlcStructures = {
                 data_blocks: [],
@@ -2765,6 +3021,8 @@ export function initTiaUi(
 
 
     updateTargetSummary();
+
+    resetPlcTagFilters();
 
     renderEmptyPlcTags(
         projectConfig.tia_target
