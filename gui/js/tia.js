@@ -1177,7 +1177,7 @@ export function initTiaUi(
         const selection = hmiTranslationSelection();
         if (!selection) {
             setHmiTranslationStatus("Select HMI, source slot and target language.", "error");
-            return;
+            return false;
         }
 
         invalidateHmiPreview();
@@ -1188,7 +1188,7 @@ export function initTiaUi(
         try {
             const result = await postJson("/api/v1/tia/hmis/preview-texts", selection);
             if (hmiTranslationKey(hmiTranslationSelection()) !== previewKey) {
-                return;
+                return false;
             }
             lastHmiPreviewRows = result.sample_rows || [];
             renderHmiPreviewRows();
@@ -1234,14 +1234,17 @@ export function initTiaUi(
                     `Preview found ${result.matched_text_rows} matching text row(s). `
                     + "Check the sample references before translating.", "success"
                 );
+                return true;
             } else {
                 setHmiTranslationStatus(
                     "No matching HMI rows. Select the correct exported ViewPath root "
                     + "above, then click Preview texts again.", "error"
                 );
+                return false;
             }
         } catch (error) {
             setHmiTranslationStatus(error.message, "error");
+            return false;
         } finally {
             hmiPreviewInProgress = false;
             updateHmiTranslateButtonState();
@@ -1658,14 +1661,23 @@ export function initTiaUi(
                 // A completed import changes the XLSX values. Re-preview the
                 // updated TIA project before preparing the remaining texts.
                 // This preserves the verified HMI root and target language.
-                await previewSelectedHmi();
-                setHmiTranslationStatus(
-                    "TIA import verified: " + count + " row(s). "
-                    + "Selection restored and project texts refreshed. "
-                    + "Choose All matched texts (if desired), then Prepare translations. "
-                    + (result.import_log ? "Log: " + result.import_log : ""),
-                    "success"
-                );
+                const previewUpdated = await previewSelectedHmi();
+                if (previewUpdated) {
+                    setHmiTranslationStatus(
+                        "TIA import verified: " + count + " row(s). "
+                        + "Selection restored and project texts refreshed. "
+                        + "Choose All matched texts (if desired), then Prepare translations. "
+                        + (result.import_log ? "Log: " + result.import_log : ""),
+                        "success"
+                    );
+                } else {
+                    setHmiTranslationStatus(
+                        "TIA import verified: " + count + " row(s). "
+                        + "Automatic preview did not complete; click Preview texts "
+                        + "again before preparing further translations.",
+                        "error"
+                    );
+                }
             } else {
                 invalidateHmiPreview();
                 setHmiTranslationStatus(
