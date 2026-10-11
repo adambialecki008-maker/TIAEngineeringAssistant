@@ -54,6 +54,10 @@ def test_tia_project_context_is_parsed(
                 "System:Device.S71500|"
                 "OrderNumber:6ES7..."
             ),
+            (
+                "PLC_METRICS|Station_1|PLC_1|Online|"
+                "420|83|12|976"
+            ),
         ]
 
     monkeypatch.setattr(
@@ -95,6 +99,21 @@ def test_tia_project_context_is_parsed(
 
                 "plc_type_identifier":
                     "OrderNumber:6ES7...",
+
+                "online_state":
+                    "Online",
+
+                "block_count":
+                    420,
+
+                "data_block_count":
+                    83,
+
+                "udt_count":
+                    12,
+
+                "tag_count":
+                    976,
             },
         ],
     }
@@ -190,6 +209,21 @@ def test_existing_project_plcs_are_parsed(
                     "OrderNumber:"
                     "6ES7 516-3AP03-0AB0/V4.1"
                 ),
+
+            "online_state":
+                "Unavailable",
+
+            "block_count":
+                0,
+
+            "data_block_count":
+                0,
+
+            "udt_count":
+                0,
+
+            "tag_count":
+                0,
         }
     ]
 
