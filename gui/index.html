@@ -356,6 +356,27 @@
 
                     <div class="details-content">
 
+                        <div class="tia-inventory-toolbar">
+                            <label for="tia-plc-tags-sort">
+                                Sort:
+                            </label>
+
+                            <select id="tia-plc-tags-sort">
+                                <option value="name-asc">
+                                    Name A → Z
+                                </option>
+                                <option value="name-desc">
+                                    Name Z → A
+                                </option>
+                                <option value="address-asc">
+                                    Address ascending
+                                </option>
+                                <option value="address-desc">
+                                    Address descending
+                                </option>
+                            </select>
+                        </div>
+
                         <div class="table-wrapper tia-inventory-table-wrapper">
 
                             <table class="management-table">
@@ -385,6 +406,22 @@
                     </div>
 
                 </details>
+
+
+                <div
+                    id="tia-plc-tags-breakdown"
+                    class="tia-tag-summary hidden"
+                >
+                    <span><strong>Total:</strong> <span id="tia-tag-count-total">0</span></span>
+                    <span><strong>Inputs:</strong> <span id="tia-tag-count-inputs">0</span></span>
+                    <span><strong>Outputs:</strong> <span id="tia-tag-count-outputs">0</span></span>
+                    <span><strong>Safety:</strong> <span id="tia-tag-count-safety">0</span></span>
+                    <span><strong>IW:</strong> <span id="tia-tag-count-iw">0</span></span>
+                    <span><strong>QW:</strong> <span id="tia-tag-count-qw">0</span></span>
+                    <span><strong>ID (DWord):</strong> <span id="tia-tag-count-id">0</span></span>
+                    <span><strong>QD (DWord):</strong> <span id="tia-tag-count-qd">0</span></span>
+                    <span><strong>Other/internal:</strong> <span id="tia-tag-count-other">0</span></span>
+                </div>
 
             </div>
 
@@ -429,6 +466,21 @@
 
                     <div class="details-content">
 
+                        <div class="tia-inventory-toolbar">
+                            <label for="tia-plc-dbs-sort">
+                                Sort:
+                            </label>
+
+                            <select id="tia-plc-dbs-sort">
+                                <option value="name-asc">
+                                    Name A → Z
+                                </option>
+                                <option value="name-desc">
+                                    Name Z → A
+                                </option>
+                            </select>
+                        </div>
+
                         <div class="table-wrapper tia-inventory-table-wrapper">
 
                             <table class="management-table">
@@ -468,6 +520,21 @@
                     </summary>
 
                     <div class="details-content">
+
+                        <div class="tia-inventory-toolbar">
+                            <label for="tia-plc-udts-sort">
+                                Sort:
+                            </label>
+
+                            <select id="tia-plc-udts-sort">
+                                <option value="name-asc">
+                                    Name A → Z
+                                </option>
+                                <option value="name-desc">
+                                    Name Z → A
+                                </option>
+                            </select>
+                        </div>
 
                         <div class="table-wrapper tia-inventory-table-wrapper">
 
