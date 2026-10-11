@@ -51,4 +51,4 @@ def test_default_adapter_listing_remains_backward_compatible(monkeypatch):
     )
     assert response.status_code == 200, response.text
     assert {item["kind"] for item in response.json()} == {"OB", "FC", "FB", "DB"}
-    assert calls == [("list-program-blocks", "123", "PLC_1", "CPU_1", "all")]
+    assert calls == [("list-program-blocks", "123", "PLC_1", "CPU_1")]
