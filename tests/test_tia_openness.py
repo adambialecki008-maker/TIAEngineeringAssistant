@@ -67,6 +67,10 @@ def test_tia_project_context_is_parsed(
                 "1631719|0|174144|"
             ),
             (
+                "PLC_RESOURCE_ATTR|Station_1|PLC_1|"
+                "DeviceItem|CodeWorkMemory|768000"
+            ),
+            (
                 "HMI|Panel_1|HMI_1|"
                 "System:Device.HMI|"
                 "OrderNumber:6AV2...|"
@@ -162,6 +166,20 @@ def test_tia_project_context_is_parsed(
 
                         "retain_memory_bytes":
                             None,
+                    },
+                ],
+
+
+                "resource_attributes": [
+                    {
+                        "source":
+                            "DeviceItem",
+
+                        "name":
+                            "CodeWorkMemory",
+
+                        "value":
+                            "768000",
                     },
                 ],
             },
@@ -298,6 +316,10 @@ def test_existing_project_plcs_are_parsed(
                 0,
 
             "resource_rows":
+                [],
+
+
+            "resource_attributes":
                 [],
         }
     ]
