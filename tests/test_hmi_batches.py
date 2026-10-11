@@ -1,0 +1,213 @@
+"""Integration tests for sequential, checkpointed HMI batch imports."""
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from openpyxl import Workbook, load_workbook
+
+from engine.main import app
+from engine.tia import hmi_batches as batches
+from engine.tia import hmi_review as review
+import engine.tia_openness as tia_openness
+
+
+client = TestClient(app)
+REQUEST = {
+    "process_id": 13940,
+    "device_name": "HMI_RT_1",
+    "hmi_name": "HMI_RT_1",
+    "view_path_root": "HMI_00_Main",
+    "source_culture": "en-US",
+    "target_culture": "pl-PL",
+    "ollama_model": "qwen2.5:3b",
+    "batch_size": 1,
+    "total_to_translate": 2,
+}
+
+
+def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None):
+    monkeypatch.setattr(batches, "JOB_DIR", tmp_path)
+    monkeypatch.setattr(
+        batches, "resolve_ollama_model",
+        lambda _requested: "qwen2.5:3b",
+    )
+    batches._ACTIVE_JOBS.clear()
+    review._REVIEWS.clear()
+    live = {"main-1": "Text", "main-2": "Text", "other-1": "Original"}
+    commands = []
+    imports = []
+
+    def export_file(path):
+        wb = Workbook()
+        sheet = wb.active
+        sheet.title = "User Texts"
+        sheet.append([
+            "Category", "ViewPath", "Internal ID", "Substitutions",
+            "en-US*", "pl-PL", 'ref="0"',
+        ])
+        for row_id, root, source in [
+            ("main-1", "HMI_00_Main", "Zgniatarka"),
+            ("main-2", "HMI_00_Main", "Za zaworem"),
+            ("other-1", "Another_HMI", "Unrelated"),
+        ]:
+            sheet.append([
+                "<HMI screen>", f"Project\\{root}\\Screens\\Main\\{row_id}",
+                row_id, "", source, live[row_id], "",
+            ])
+        other = wb.create_sheet("System Texts")
+        other.append([
+            "Category", "ViewPath", "Internal ID", "Substitutions",
+            "en-US*", "pl-PL", 'ref="0"',
+        ])
+        wb.save(path)
+        wb.close()
+
+    def adapter(*args):
+        commands.append(args[0])
+        if args[0] == "export-project-texts":
+            export_file(Path(args[-1]))
+            return ["PROJECT_TEXTS_EXPORTED|" + args[-1]]
+        if args[0] == "add-project-language":
+            return ["LANGUAGE_ADDED|pl-PL"]
+        if args[0] == "import-project-texts":
+            if fail_on_import and len(imports) + 1 == fail_on_import:
+                return ["PROJECT_TEXTS_IMPORTED|Failed|test import failed"]
+            wb = load_workbook(args[2])
+            vals = [
+                (row[2], row[5])
+                for row in list(wb["User Texts"].values)[1:]
+            ]
+            # Existing text values are retained for all sibling rows,
+            # including those belonging to a later batch.
+            imports.append(vals)
+            for row_id, target in vals:
+                live[row_id] = target
+            wb.close()
+            return [
+                "PROJECT_TEXTS_IMPORTED|Success|test-import.log",
+                "PROJECT_SAVED|SampleProject",
+            ]
+        raise AssertionError(args)
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: "Przetłumaczone " + source for source in texts
+        },
+    )
+    return live, commands, imports
+
+
+def test_two_batches_import_each_to_tia_and_save_checkpoint(monkeypatch, tmp_path):
+    live, commands, imports = setup_batch_mock(monkeypatch, tmp_path)
+
+    started = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json=REQUEST,
+    )
+    assert started.status_code == 200, started.text
+    job = started.json()
+    assert job["total_unique"] == 2
+    assert job["completed_unique"] == 0
+    assert job["status"] == "ready"
+    job_id = job["job_id"]
+
+    first = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert first.status_code == 200, first.text
+    first_result = first.json()
+    assert first_result["completed_unique"] == 1
+    assert first_result["completed_rows"] == 1
+    assert first_result["last_verified_batch"]["verified_rows"] == 1
+    assert first_result["status"] == "ready"
+    assert len(imports) == 1
+    assert live["main-1"] == "Przetłumaczone Zgniatarka"
+    assert live["main-2"] == "Text"
+    assert live["other-1"] == "Original"
+
+    # New endpoint instance reads checkpoint from disk, not just memory.
+    assert (tmp_path / f"{job_id}.json").exists()
+    checkpoint = client.get(f"/api/v1/tia/hmis/batch-translations/{job_id}")
+    assert checkpoint.json()["completed_unique"] == 1
+
+    second = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert second.status_code == 200, second.text
+    second_result = second.json()
+    assert second_result["completed_unique"] == 2
+    assert second_result["completed_rows"] == 2
+    assert second_result["status"] == "completed"
+    assert len(imports) == 2
+    assert live["main-1"] == "Przetłumaczone Zgniatarka"
+    assert live["main-2"] == "Przetłumaczone Za zaworem"
+    assert live["other-1"] == "Original"
+    assert commands.count("import-project-texts") == 2
+    assert commands.count("export-project-texts") == 7
+
+
+def test_failed_batch_stops_without_advancing_verified_cursor(monkeypatch, tmp_path):
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, fail_on_import=2
+    )
+    start = client.post(
+        "/api/v1/tia/hmis/batch-translations/start", json=REQUEST,
+    ).json()
+    job_id = start["job_id"]
+    first = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert first.status_code == 200
+    second = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert second.status_code == 502
+    job = client.get(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}",
+    ).json()
+    assert job["status"] == "error"
+    assert job["completed_unique"] == 1
+    assert job["completed_rows"] == 1
+    assert len(imports) == 1
+    assert live["main-1"] == "Przetłumaczone Zgniatarka"
+    assert live["main-2"] == "Text"
+    again = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert again.status_code == 409
+    assert commands.count("import-project-texts") == 2
+
+
+def test_pause_then_resume_skips_verified_batches(monkeypatch, tmp_path):
+    live, _, imports = setup_batch_mock(monkeypatch, tmp_path)
+    start = client.post(
+        "/api/v1/tia/hmis/batch-translations/start", json=REQUEST,
+    ).json()
+    job_id = start["job_id"]
+    first = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert first.json()["completed_unique"] == 1
+    paused = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/pause",
+    )
+    assert paused.status_code == 200
+    assert paused.json()["status"] == "paused"
+    resumed = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert resumed.status_code == 200, resumed.text
+    assert resumed.json()["status"] == "completed"
+    assert resumed.json()["completed_unique"] == 2
+    assert len(imports) == 2
+
+
+def test_explicit_view_path_root_required(monkeypatch, tmp_path):
+    setup_batch_mock(monkeypatch, tmp_path)
+    response = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "view_path_root": None},
+    )
+    assert response.status_code == 422
+    assert not list(tmp_path.glob("*.json"))
