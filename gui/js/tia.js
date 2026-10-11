@@ -95,6 +95,11 @@ export function initTiaUi(
     const hmiBatchPauseButton = document.getElementById("tia-hmi-batch-pause");
     const hmiBatchStatus = document.getElementById("tia-hmi-batch-status");
     const hmiScanSummary = document.getElementById("tia-hmi-scan-summary");
+    const hmiScanButton = document.getElementById("tia-hmi-scan-button");
+    const hmiUseScanTotalButton =
+        document.getElementById("tia-hmi-use-scan-total");
+    const hmiScanInstruction =
+        document.getElementById("tia-hmi-scan-instruction");
 
     const hmiOllamaModelSelect = document.getElementById(
         "tia-hmi-ollama-model"
@@ -1096,10 +1101,15 @@ export function initTiaUi(
         latestHmiScan = null;
         if (hmiScanSummary) {
             hmiScanSummary.textContent =
-                "Run Preview texts to count rows and unique source texts in this HMI.";
+                "Not scanned yet. Select the HMI, languages and ViewPath root, "
+                + "then click Scan HMI / Count texts.";
         }
         if (hmiBatchTotalInput) {
             hmiBatchTotalInput.placeholder = "Scan HMI to see total";
+        }
+        if (hmiScanInstruction) {
+            hmiScanInstruction.textContent =
+                "After scanning, the total appears below.";
         }
         hmiPreviewResults?.classList.add("hidden");
         lastHmiPreviewRows = [];
@@ -1142,6 +1152,15 @@ export function initTiaUi(
         }
         if (hmiPreviewButton) {
             hmiPreviewButton.disabled = busy || !selection;
+        }
+        if (hmiScanButton) {
+            hmiScanButton.disabled = busy || !selection;
+        }
+        if (hmiUseScanTotalButton) {
+            hmiUseScanTotalButton.disabled =
+                busy || !isVerified || !latestHmiScan
+                || latestHmiScan.eligible < 1
+                || latestHmiScan.eligible > 100000;
         }
         if (hmiImportReviewedButton) {
             hmiImportReviewedButton.disabled =
@@ -1486,6 +1505,14 @@ export function initTiaUi(
         invalidateHmiPreview();
         hmiPreviewInProgress = true;
         updateHmiTranslateButtonState();
+        if (hmiScanSummary) {
+            hmiScanSummary.textContent =
+                "Scanning TIA project texts for the selected HMI...";
+        }
+        if (hmiScanInstruction) {
+            hmiScanInstruction.textContent =
+                "Export in progress — TIA is read-only during this scan.";
+        }
         setHmiTranslationStatus("Exporting Project texts for read-only preview...");
         const previewKey = hmiTranslationKey(selection);
         try {
@@ -1503,17 +1530,25 @@ export function initTiaUi(
             };
             if (hmiScanSummary) {
                 hmiScanSummary.textContent =
-                    "HMI scan: " + latestHmiScan.rows + " text rows, "
-                    + latestHmiScan.unique + " unique source texts, "
-                    + latestHmiScan.eligible + " unique texts eligible for the batch job. "
-                    + latestHmiScan.missingRows + " rows ("
-                    + latestHmiScan.missingUnique + " unique) have an empty or "
-                    + "'Text' target. This is a diagnostic estimate, not a "
-                    + "verified count of untranslated strings.";
+                    "Scan complete — selected HMI: "
+                    + latestHmiScan.rows + " total text rows; "
+                    + latestHmiScan.unique + " distinct source texts; "
+                    + latestHmiScan.eligible
+                    + " eligible unique texts (usable Total to translate). "
+                    + latestHmiScan.missingRows + " rows / "
+                    + latestHmiScan.missingUnique
+                    + " unique texts have an empty or 'Text' target. "
+                    + "Missing-target counts are estimates, not confirmed "
+                    + "untranslated-text counts.";
             }
             if (hmiBatchTotalInput) {
                 hmiBatchTotalInput.placeholder =
-                    "All eligible: " + latestHmiScan.eligible;
+                    "Scanned total: " + latestHmiScan.eligible;
+            }
+            if (hmiScanInstruction) {
+                hmiScanInstruction.textContent =
+                    "Read-only scan finished. Use scanned total to fill the field, "
+                    + "or enter a smaller limit.";
             }
             renderHmiPreviewRows();
 
@@ -1560,6 +1595,12 @@ export function initTiaUi(
                 );
                 return true;
             } else {
+                if (hmiScanSummary) {
+                    hmiScanSummary.textContent =
+                        "Scan returned 0 texts for the current ViewPath root. "
+                        + "Choose the correct root above (e.g. HMI_00_Main) "
+                        + "and click Scan HMI / Count texts again.";
+                }
                 setHmiTranslationStatus(
                     "No matching HMI rows. Select the correct exported ViewPath root "
                     + "above, then click Preview texts again.", "error"
@@ -1567,6 +1608,10 @@ export function initTiaUi(
                 return false;
             }
         } catch (error) {
+            if (hmiScanSummary) {
+                hmiScanSummary.textContent =
+                    "Scan failed: " + error.message;
+            }
             setHmiTranslationStatus(error.message, "error");
             return false;
         } finally {
@@ -7303,6 +7348,23 @@ export function initTiaUi(
     }
     hmiBatchSizeInput?.addEventListener("input", discardHmiReview);
     hmiBatchTotalInput?.addEventListener("input", discardHmiReview);
+
+    hmiScanButton?.addEventListener(
+        "click", () => { void previewSelectedHmi(); }
+    );
+    hmiUseScanTotalButton?.addEventListener("click", () => {
+        if (!latestHmiScan || !latestHmiScan.eligible
+            || latestHmiScan.eligible > 100000
+            || hmiTranslationKey(hmiTranslationSelection())
+                !== verifiedHmiPreviewKey) {
+            return;
+        }
+        if (hmiBatchTotalInput) {
+            hmiBatchTotalInput.value = String(latestHmiScan.eligible);
+            discardHmiReview();
+            updateHmiTranslateButtonState();
+        }
+    });
 
     hmiBatchStartButton?.addEventListener(
         "click", () => { void startHmiBatchImport(); }
