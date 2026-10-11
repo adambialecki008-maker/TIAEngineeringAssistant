@@ -93,6 +93,17 @@ class PlcTagInfo(BaseModel):
     logical_address: str
 
 
+class PlcProgramBlockInfo(BaseModel):
+    group_path: str
+    name: str
+    kind: str
+    number: int | None = None
+    programming_language: str = ""
+    is_consistent: bool | None = None
+    load_memory_bytes: int = 0
+    work_memory_bytes: int = 0
+
+
 class PlcDataBlockInfo(BaseModel):
     group_path: str
     name: str
