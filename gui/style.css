@@ -1213,3 +1213,23 @@ td {
     background: #141a20;
     color: #d6dfe6;
 }
+
+
+/* PLC resource utilization rows */
+
+.plc-resource-free-row td {
+    background: #182028;
+    color: #c7d2da;
+}
+
+.plc-resource-free-percent-row td {
+    background: #151a20;
+    color: #8fd0a2;
+    font-weight: 600;
+    text-align: center;
+}
+
+.plc-resource-percent-row td {
+    color: #f0c27b;
+    font-weight: 600;
+}
