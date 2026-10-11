@@ -1107,6 +1107,18 @@ export function initTiaUi(
         discardHmiReview();
     }
 
+    function manualHmiPrepareCount() {
+        const size = Number(hmiBatchSizeInput?.value);
+        const totalRaw = hmiBatchTotalInput?.value?.trim() || "";
+        const total = totalRaw ? Number(totalRaw) : null;
+        if (!Number.isInteger(size) || size < 1 || size > 200
+            || (total !== null &&
+                (!Number.isInteger(total) || total < 1 || total > 100000))) {
+            return null;
+        }
+        return Math.min(size, total ?? size);
+    }
+
     function updateHmiTranslateButtonState() {
         const selection = hmiTranslationSelection();
         const key = hmiTranslationKey(selection);
@@ -1114,8 +1126,18 @@ export function initTiaUi(
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting;
         if (hmiTranslateButton) {
+            const count = manualHmiPrepareCount();
+            hmiTranslateButton.textContent = count
+                ? "Prepare " + count + " text(s) for review"
+                : "Prepare one batch (review)";
             hmiTranslateButton.disabled =
-                busy || !isVerified || !hmiOllamaModelSelect?.value;
+                busy || !isVerified || !hmiOllamaModelSelect?.value
+                || !count || count > 50;
+            hmiTranslateButton.title = count > 50
+                ? "Manual review allows at most 50 unique texts. "
+                    + "Reduce Batch size or Total to translate."
+                : "Translate up to " + (count || 0)
+                    + " unique source texts without importing into TIA.";
         }
         if (hmiPreviewButton) {
             hmiPreviewButton.disabled = busy || !selection;
@@ -1794,19 +1816,14 @@ export function initTiaUi(
             return;
         }
 
-        const batchSize = Number(hmiBatchSizeInput?.value);
-        if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 200) {
+        // Manual Prepare always uses one bounded fragment. A specified total
+        // also caps the fragment (e.g. batch=15, total=1 prepares one text).
+        const prepareCount = manualHmiPrepareCount();
+        if (!prepareCount || prepareCount > 50) {
             setHmiTranslationStatus(
-                "Enter Batch size between 1 and 200 unique texts.", "error"
-            );
-            return;
-        }
-        // Manual review is deliberately limited; never submit max_rows=null.
-        // Total to translate applies only to the automatic multi-batch job.
-        if (batchSize > 50) {
-            setHmiTranslationStatus(
-                "Manual review supports at most 50 texts per batch. "
-                + "Reduce Batch size or use automatic import.", "error"
+                "Enter valid Batch size/Total to translate. "
+                + "Manual review supports 1–50 unique texts per preparation.",
+                "error"
             );
             return;
         }
@@ -1859,7 +1876,7 @@ export function initTiaUi(
             pollTranslationProgress, 1500
         );
         setHmiTranslationStatus(
-            "Preparing at most " + batchSize
+            "Preparing at most " + prepareCount
             + " unique texts for review. Nothing will be imported to TIA..."
         );
 
@@ -1868,7 +1885,7 @@ export function initTiaUi(
                 "/api/v1/tia/hmis/prepare-translations",
                 {
                     ...selection,
-                    max_rows: batchSize,
+                    max_rows: prepareCount,
                     progress_id: progressId,
                 }
             );
@@ -7283,7 +7300,8 @@ export function initTiaUi(
     if (hmiPreviewFilter) {
         hmiPreviewFilter.addEventListener("change", renderHmiPreviewRows);
     }
-    hmiBatchSizeInput?.addEventListener("change", discardHmiReview);
+    hmiBatchSizeInput?.addEventListener("input", discardHmiReview);
+    hmiBatchTotalInput?.addEventListener("input", discardHmiReview);
 
     hmiBatchStartButton?.addEventListener(
         "click", () => { void startHmiBatchImport(); }
