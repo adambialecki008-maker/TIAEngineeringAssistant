@@ -56,3 +56,54 @@ the backend; do not restart during an active import or preparation.
 The extended TIA export/import timeout is separate:
 `TIA_PROJECT_TEXT_TIMEOUT_SECONDS` defaults to 900 seconds. It does not
 limit total Ollama translation duration.
+
+## Automatic batch import into TIA (opt-in)
+
+The **Batch translate + import to TIA** panel is separate from the manual
+**Prepare -> Review -> Import** workflow. Use this mode only after a successful
+pilot and after taking a TIA project backup. A single explicit start
+confirmation authorizes automatic per-batch imports; individual translations
+are not manually approved in this mode.
+
+- **Batch size**: number of **unique source text strings** (1-200) to translate
+  and import to the selected HMI in one TIA transaction; default 50.
+  Ollama itself still splits these strings into smaller API requests
+  (`OLLAMA_TRANSLATION_BATCH_SIZE`, default 15).
+- **Total to translate**: optional maximum unique strings for this job.
+  Example batch size 50 and total 500 means up to 10 import transactions.
+  Blank total means all matched unique strings.
+- Every batch runs: export current TIA project texts, translate that batch in
+  Ollama, validate translations, export TIA again to check stale source/target
+  values, import the selected HMI's texts, then re-export and verify them.
+  **Only a successful verification advances the checkpoint**.
+- All occurrences of a selected source string in the same HMI are translated
+  together. Other HMI devices are excluded. Unselected rows belonging to the
+  chosen HMI retain their current translations.
+- The job cursor, parameters and candidate source texts are saved locally
+  to `.local/hmi_translation_jobs/<job_id>.json`, excluded from Git.
+  Verified batches are not retried after a normal pause or page refresh.
+- **Pause after this batch** never interrupts an import in progress. You can
+  **Resume saved job** after reopening the GUI and reselecting the same
+  project/HMI/root/languages. If the previous batch failed or execution was
+  interrupted during import, stop and check actual TIA project texts first;
+  retry requires explicit confirmation because a partial import is possible.
+- Do not modify the TIA project from another application during batch import.
+  Import/verification failures stop the job immediately.
+
+The job is driven by the open GUI through sequential API calls. A page reload
+will prevent starting subsequent batches, although any current server-side
+request may finish. To resume, reopen the same HMI, restore the same
+source/target/root, and click **Resume saved job**.
+
+**Important**: the automatically saved checkpoint applies to this new batch
+job, not to pilot translations imported previously using the manual workflow.
+Those earlier texts may be included again when starting a new job. The job is
+constructed from the current TIA export, so each part preserves the latest
+target values of previous verified parts. If the goal is to exclude already
+translated strings from a preexisting pilot, inspect their selection before
+starting a new job.
+
+Tests:
+```powershell
+python -m pytest tests/test_hmi_batches.py tests/test_hmi_review.py tests/test_hmi_translation_api.py -q
+```
