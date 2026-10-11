@@ -92,7 +92,7 @@ def test_preview_handles_read_only_sheet_with_unknown_dimensions(monkeypatch):
             for item, data in members:
                 if item.filename == "xl/worksheets/sheet1.xml":
                     data, count = re.subn(
-                        rb"<dimension\\b[^>]*/>", b"", data, count=1
+                        rb"<dimension\b[^>]*/>", b"", data, count=1
                     )
                     assert count == 1
                 destination.writestr(item, data)
