@@ -22,6 +22,9 @@ The HMI translation workflow uses the **local Ollama HTTP API** instead of OpenA
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 # Optional default; must match an installed model listed by Ollama:
 # OLLAMA_TRANSLATION_MODEL=your-installed-model:tag
+# Optional: larger batches can reduce Ollama overhead, but may affect
+# output reliability on small local models (1-50, default 15).
+# OLLAMA_TRANSLATION_BATCH_SIZE=25
 ```
 
 No configured model is required when you select one from the GUI. Models are discovered through `GET /api/tags` and requested through `POST /api/chat` with `stream: false`, `format` JSON Schema and `temperature: 0`.
@@ -37,3 +40,19 @@ python -m pytest tests/test_hmi_translation_api.py tests/test_hmi_review.py test
 ```
 
 The unit tests mock the Ollama HTTP responses; a running Ollama instance or TIA Portal is not needed to run these tests.
+
+## Large HMI projects and translation progress
+
+During **Prepare translations**, the GUI polls the progress endpoint and shows
+whether TIA is exporting the XLSX or Ollama is translating batches. The
+counter reports **unique source text strings**, not all XLSX rows.
+The model processes batches sequentially, so a full project can take a long
+time depending on the local GPU/CPU and installed model. If the selected
+model consistently returns valid JSON, `OLLAMA_TRANSLATION_BATCH_SIZE=25`
+(or 30) can reduce the number of requests; if translation results become
+unreliable, reduce it back to 15. Configuration changes require restarting
+the backend; do not restart during an active import or preparation.
+
+The extended TIA export/import timeout is separate:
+`TIA_PROJECT_TEXT_TIMEOUT_SECONDS` defaults to 900 seconds. It does not
+limit total Ollama translation duration.
