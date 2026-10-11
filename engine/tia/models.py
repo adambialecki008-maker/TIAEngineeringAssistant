@@ -13,6 +13,12 @@ class PlcResourceRow(BaseModel):
     retain_memory_bytes: int | None = None
 
 
+class PlcResourceAttribute(BaseModel):
+    source: str
+    name: str
+    value: str
+
+
 class ProjectPlc(BaseModel):
     device_name: str
     plc_name: str
@@ -24,6 +30,11 @@ class ProjectPlc(BaseModel):
     udt_count: int = 0
     tag_count: int = 0
     resource_rows: list[PlcResourceRow] = Field(
+        default_factory=list
+    )
+
+
+    resource_attributes: list[PlcResourceAttribute] = Field(
         default_factory=list
     )
 
