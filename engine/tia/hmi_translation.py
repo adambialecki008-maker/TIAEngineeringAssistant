@@ -12,6 +12,8 @@ from openpyxl import load_workbook
 from engine.tia.adapter import read_project_saved
 from engine.tia.compat import run_adapter
 from engine.tia.models import (
+    HmiProjectTextPreviewRow,
+    HmiProjectTextsPreviewResponse,
     TranslateHmiTextsRequest,
     TranslateHmiTextsResponse,
 )
@@ -347,6 +349,110 @@ def _translate_texts(
         )
 
     return translated
+
+
+def _preview_workbook(workbook, request):
+    rows = []
+    references = []
+    reference_set = set()
+    total = 0
+    matched = 0
+    headers = ("", "")
+    sheets_found = 0
+
+    for worksheet in workbook.worksheets:
+        columns = _project_text_columns(worksheet)
+        if columns is None:
+            continue
+
+        sheets_found += 1
+        header_row, source_col, target_col, category_col, reference_col = columns
+        if not headers[0]:
+            headers = (
+                str(worksheet.cell(header_row, source_col).value or ""),
+                str(worksheet.cell(header_row, target_col).value or ""),
+            )
+
+        for index in range(header_row + 1, worksheet.max_row + 1):
+            source = worksheet.cell(index, source_col).value
+            reference = str(worksheet.cell(index, reference_col).value or "").strip()
+            if reference and reference not in reference_set:
+                reference_set.add(reference)
+                if len(references) < 50:
+                    references.append(reference)
+            if source is None or not str(source).strip():
+                continue
+
+            total += 1
+            matches = _reference_matches_hmi(
+                reference, request.device_name, request.hmi_name
+            )
+            if matches:
+                matched += 1
+
+            # Show matched examples first without suppressing unmatched diagnostics.
+            if len(rows) < 100 or matches:
+                rows.append(
+                    HmiProjectTextPreviewRow(
+                        sheet=worksheet.title,
+                        row=index,
+                        source_text=str(source),
+                        target_text=str(worksheet.cell(index, target_col).value or ""),
+                        category=str(worksheet.cell(index, category_col).value or ""),
+                        reference=reference,
+                        matches_hmi=matches,
+                    )
+                )
+
+    rows = [row for row in rows if row.matches_hmi][:50] + [
+        row for row in rows if not row.matches_hmi
+    ][:50]
+    return HmiProjectTextsPreviewResponse(
+        hmi_name=request.hmi_name,
+        device_name=request.device_name,
+        source_culture=request.source_culture,
+        target_culture=request.target_culture,
+        source_column_header=headers[0],
+        target_column_header=headers[1],
+        worksheets_found=sheets_found,
+        total_text_rows=total,
+        matched_text_rows=matched,
+        reference_examples=references,
+        sample_rows=rows,
+    )
+
+
+@router.post(
+    "/hmis/preview-texts",
+    response_model=HmiProjectTextsPreviewResponse,
+)
+def preview_hmi_texts(request: TranslateHmiTextsRequest):
+    if request.source_culture.casefold() == request.target_culture.casefold():
+        raise HTTPException(400, "Source and target slots must differ.")
+
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as handle:
+            temporary_path = Path(handle.name)
+
+        run_adapter(
+            "export-project-texts",
+            str(request.process_id),
+            request.source_culture.strip(),
+            request.target_culture.strip(),
+            str(temporary_path),
+        )
+        if not temporary_path.exists() or temporary_path.stat().st_size == 0:
+            raise HTTPException(502, "TIA Portal did not create the project-text XLSX file.")
+
+        workbook = load_workbook(temporary_path, read_only=True, data_only=True)
+        try:
+            return _preview_workbook(workbook, request)
+        finally:
+            workbook.close()
+    finally:
+        if temporary_path and temporary_path.exists():
+            temporary_path.unlink(missing_ok=True)
 
 
 @router.post(
