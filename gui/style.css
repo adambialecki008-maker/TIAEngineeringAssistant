@@ -638,6 +638,53 @@ summary {
     overflow: auto;
 }
 
+/* PLC program blocks: fit all nine columns in the available card width.
+   Only Group and Name need flexible space; metadata columns stay compact. */
+.tia-program-blocks-wrapper {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.tia-program-blocks-table {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.tia-program-blocks-table th,
+.tia-program-blocks-table td {
+    padding: 9px 6px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.tia-program-blocks-table th:nth-child(n+3),
+.tia-program-blocks-table td:nth-child(n+3) {
+    font-size: 12px;
+}
+
+.tia-program-blocks-table td:nth-child(3),
+.tia-program-blocks-table td:nth-child(4),
+.tia-program-blocks-table td:nth-child(5),
+.tia-program-blocks-table td:nth-child(6) {
+    white-space: nowrap;
+}
+
+.tia-program-blocks-table td.actions-cell {
+    display: table-cell;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.tia-program-blocks-table td.actions-cell button {
+    min-height: 32px;
+    max-width: 100%;
+    padding: 5px 7px;
+    font-size: 12px;
+}
+
+
 .table-sort-button {
     width: 100%;
     padding: 0;
