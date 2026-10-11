@@ -54,3 +54,50 @@ def test_corrupted_polish_proposal_shows_safe_recovery():
 def test_existing_polish_source_cannot_be_silently_corrupted():
     with pytest.raises(HTTPException):
         validate_hmi_translation("(Hydrauliczna)", "({Hydrauliczna})")
+
+
+def test_numbered_polish_instruction_can_have_spelling_and_diacritics_corrected():
+    """'1.Naciagnij' is prose after numbered-list marker, not a PLC tag."""
+    source = (
+        "1.Naciagnij linke \n"
+        "do tej pozycji \n"
+        "(koncowka w obrebie\n zielonego wskaznika)"
+    )
+    translated = (
+        "1.Naciągnij linkę\n"
+        "do tej pozycji\n"
+        "(końcówka w obrębie\nzielonego wskaźnika)"
+    )
+    validate_hmi_translation(source, translated)
+
+
+@pytest.mark.parametrize("bad", [
+    "2.Naciągnij linkę",
+    "1)Naciągnij linkę",
+    "Naciągnij linkę",
+])
+def test_numbered_hmi_instruction_must_keep_step_prefix(bad):
+    with pytest.raises(HTTPException) as error:
+        validate_hmi_translation("1.Naciagnij linke", bad)
+    assert "numbered instruction prefix" in error.value.detail
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("212BP2 Za zaworem", "212BP3 Za zaworem"),
+    ("M10.0 = GOTOWOSC", "M10.1 = GOTOWOSC"),
+    ("DB1.DBX2.0 Czujnik", "DB1.DBX2.1 Czujnik"),
+    ("I0.0 Czujnik", "I0.1 Czujnik"),
+    ("QW128 Wyjscie", "QW129 Wyjście"),
+    ("DB1.DBX2.0 i M10.0", "DB1.DBX2.0 i M10.1"),
+])
+def test_actual_plc_addresses_must_still_be_protected(source, translated):
+    with pytest.raises(HTTPException) as error:
+        validate_hmi_translation(source, translated)
+    assert "HMI/PLC identifier" in error.value.detail
+
+
+def test_numbered_steps_and_real_plc_addresses_can_coexist():
+    validate_hmi_translation(
+        "1.Sprawdz M10.0\n2.Nacisnij start",
+        "1.Sprawdź M10.0\n2.Naciśnij start",
+    )
