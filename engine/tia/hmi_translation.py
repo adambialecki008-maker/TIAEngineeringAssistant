@@ -1,16 +1,15 @@
-import json
-import os
 from pathlib import Path
 import tempfile
-from urllib import error as urllib_error
-from urllib import request as urllib_request
 
-from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from openpyxl import load_workbook
 
 from engine.tia.adapter import read_project_saved
 from engine.tia.compat import run_adapter
+from engine.tia.ollama_translation import (
+    resolve_ollama_model,
+    translate_ollama_texts,
+)
 from engine.tia.models import (
     HmiTranslationExample,
     HmiProjectTextPreviewRow,
@@ -20,9 +19,6 @@ from engine.tia.models import (
     TranslateHmiTextsRequest,
     TranslateHmiTextsResponse,
 )
-
-
-load_dotenv()
 
 
 router = APIRouter()
@@ -179,255 +175,13 @@ def _reference_matches_hmi(
 
 
 
-def _output_text(response_data) -> str:
-    for item in response_data.get("output", []):
-        if item.get("type") != "message":
-            continue
-
-        for content in item.get("content", []):
-            if content.get("type") != "output_text":
-                continue
-
-            text = content.get("text")
-
-            if isinstance(text, str):
-                return text
-
-    raise RuntimeError(
-        "Translation model returned no text output."
-    )
-
-
-def _clean_json_text(value: str) -> str:
-    text = value.strip()
-
-    if text.startswith("```"):
-        lines = text.splitlines()
-
-        if lines:
-            lines = lines[1:]
-
-        if (
-            lines
-            and lines[-1].strip().startswith("```")
-        ):
-            lines = lines[:-1]
-
-        text = "\n".join(lines).strip()
-
-    return text
-
-
-def _translate_batch(
-    texts: list[str],
-    target_culture: str,
-) -> dict[str, str]:
-    api_key = os.getenv(
-        "OPENAI_API_KEY",
-        "",
-    ).strip()
-
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "OPENAI_API_KEY is not configured. "
-                "Set it in the environment or .env before using automatic HMI translation."
-            ),
-        )
-
-    model = os.getenv(
-        "OPENAI_TRANSLATION_MODEL",
-        "gpt-6-luna",
-    ).strip()
-
-    items = {
-        str(index): text
-        for index, text in enumerate(texts)
-    }
-
-    payload = {
-        "model": model,
-        "store": False,
-        "instructions": (
-            "Translate industrial HMI user-interface texts. "
-            "The source-language metadata from TIA Portal may be wrong, "
-            "so detect the actual source language from each text itself. "
-            f"Translate every item to BCP-47 target language {target_culture}. "
-            "If an item is already in the target language, keep its wording. "
-            "Preserve PLC/HMI identifiers, placeholders, formatting tokens, "
-            "numbers, units, punctuation and line breaks. "
-            "Return JSON only: an object whose keys are the original item IDs "
-            "and whose values are the translated strings. "
-            "Do not add explanations."
-        ),
-        "input": json.dumps(
-            items,
-            ensure_ascii=False,
-        ),
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": "hmi_text_translations",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        key: {"type": "string"} for key in items
-                    },
-                    "required": list(items),
-                    "additionalProperties": False,
-                },
-            },
-        },
-    }
-
-    # This low-cost model supports 'none' reasoning and deterministic JSON.
-    if model == "gpt-6-luna":
-        payload["reasoning"] = {"effort": "none"}
-
-    http_request = urllib_request.Request(
-        "https://api.openai.com/v1/responses",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": "Bearer " + api_key,
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
-    try:
-        with urllib_request.urlopen(
-            http_request,
-            timeout=120,
-        ) as response:
-            response_data = json.loads(
-                response.read().decode("utf-8")
-            )
-
-    except urllib_error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        try:
-            error_info = json.loads(raw).get("error") or {}
-        except (ValueError, AttributeError):
-            error_info = {}
-        code = str(error_info.get("code") or "")
-        message = str(error_info.get("message") or raw)[:500]
-        status = exc.code
-
-        if status == 401:
-            explanation = "API key rejected. Check OPENAI_API_KEY in .env."
-        elif status == 429 and code == "insufficient_quota":
-            explanation = (
-                "OpenAI API billing/quota exhausted. "
-                "ChatGPT Plus does not include API credits."
-            )
-        elif status == 429:
-            explanation = "OpenAI API rate limit reached."
-        elif status in (403, 404):
-            explanation = (
-                "The API project does not have access to model "
-                + model + ", or the model ID is invalid."
-            )
-        else:
-            explanation = "OpenAI API rejected the translation request."
-
-        raise HTTPException(
-            status_code=status if 400 <= status < 500 else 502,
-            detail=(
-                explanation + " HTTP " + str(status)
-                + (" (" + code + ")" if code else "")
-                + ": " + message
-            ),
-        ) from exc
-
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "OpenAI translation request failed: "
-                + str(exc)
-            ),
-        ) from exc
-
-    if response_data.get("status") not in (None, "completed"):
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "OpenAI model " + model
-                + " did not finish translation: "
-                + str(response_data.get("status")) + ". "
-                + str(response_data.get("incomplete_details") or "")
-            ),
-        )
-    try:
-        raw_text = _clean_json_text(_output_text(response_data))
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "OpenAI model " + model
-                + " returned no translated text. "
-                "Check API response status and model configuration."
-            ),
-        ) from exc
-
-    try:
-        translated = json.loads(raw_text)
-
-    except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "Translation model returned invalid JSON."
-            ),
-        ) from exc
-
-    if not isinstance(translated, dict):
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "Translation model returned an unexpected response."
-            ),
-        )
-
-    result = {}
-
-    for index, source_text in enumerate(texts):
-        key = str(index)
-        target_text = translated.get(key)
-
-        if not isinstance(target_text, str):
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "Translation model omitted item "
-                    + key
-                    + "."
-                ),
-            )
-
-        result[source_text] = target_text
-
-    return result
-
-
 def _translate_texts(
     texts: list[str],
     target_culture: str,
+    model_name: str | None = None,
 ) -> dict[str, str]:
-    translated = {}
-
-    for start in range(0, len(texts), 50):
-        batch = texts[start:start + 50]
-        translated.update(
-            _translate_batch(
-                batch,
-                target_culture,
-            )
-        )
-
-    return translated
+    """Translate exclusively through the local Ollama server."""
+    return translate_ollama_texts(texts, target_culture, model_name)
 
 
 def _preview_workbook(workbook, request):
@@ -610,15 +364,8 @@ def translate_hmi_texts(
             ),
         )
 
-    # Do not activate a new project language when no API key is configured.
-    if not os.getenv("OPENAI_API_KEY", "").strip():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "OPENAI_API_KEY is not configured. "
-                "No project language was added and no translation was started."
-            ),
-        )
+    # Resolve local model before changing any TIA project languages.
+    model = resolve_ollama_model(request.ollama_model)
 
     run_adapter(
         "add-project-language",
@@ -816,6 +563,7 @@ def translate_hmi_texts(
         translations = _translate_texts(
             unique_texts,
             target_culture,
+            model,
         )
 
         translated_examples = []
