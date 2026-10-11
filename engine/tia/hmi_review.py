@@ -288,6 +288,19 @@ def import_reviewed_hmi_translations(request: ImportReviewRequest):
                     )
                 keep[sheet.title] = set()
 
+                # Siemens imports multilingual texts with their parent
+                # object. Retain all rows belonging to the selected HMI,
+                # even in a 10-text pilot, while leaving their existing
+                # target values untouched unless explicitly reviewed.
+                path_col = columns[0][4]
+                for index in range(header + 1, sheet.max_row + 1):
+                    ref = _text(sheet.cell(index, path_col).value)
+                    if _reference_matches_hmi(
+                        ref, requested.device_name, requested.hmi_name,
+                        requested.view_path_root
+                    ):
+                        keep[sheet.title].add(index)
+
             for row in _matching_rows(workbook, requested):
                 key = row["key"]
                 prepared_row = prepared.get(key)
@@ -318,8 +331,9 @@ def import_reviewed_hmi_translations(request: ImportReviewRequest):
                     + " translated rows could not be matched."
                 )
 
-            # Keep the original worksheet/header/ID format. Import rows only
-            # for this HMI; never translate or reimport unrelated HMI rows.
+            # Keep entire selected HMI's original worksheet structure,
+            # row IDs and parent references; exclude unrelated HMI devices.
+            # Only individually reviewed target cells are changed.
             for sheet in workbook.worksheets:
                 columns = _source_target_columns(sheet, source, target)
                 if columns is None:
