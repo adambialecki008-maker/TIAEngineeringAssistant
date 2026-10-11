@@ -54,6 +54,27 @@ export function initTiaUi(
         );
 
 
+    const readStructuresButton =
+        document.getElementById(
+            "tia-read-structures-button"
+        );
+
+    const plcStructuresStatus =
+        document.getElementById(
+            "tia-plc-structures-status"
+        );
+
+    const plcDbsBody =
+        document.getElementById(
+            "tia-plc-dbs-body"
+        );
+
+    const plcUdtsBody =
+        document.getElementById(
+            "tia-plc-udts-body"
+        );
+
+
     const loadModelsButton =
         document.getElementById(
             "tia-load-models-button"
@@ -281,6 +302,12 @@ export function initTiaUi(
             readTagsButton.disabled =
                 !target;
         }
+
+
+        if (readStructuresButton) {
+            readStructuresButton.disabled =
+                !target;
+        }
     }
 
 
@@ -314,6 +341,14 @@ export function initTiaUi(
             `Active PLC: ${plc.plc_name}. Tags not loaded yet.`
         );
 
+        resetPlcStructures(
+            "Click Read DB / UDT to load structures from the Active PLC."
+        );
+
+        setPlcStructuresStatus(
+            `Active PLC: ${plc.plc_name}. DB / UDT inventory not loaded yet.`
+        );
+
 
         setStatus(
             `Active PLC set to ${plc.plc_name} `
@@ -339,6 +374,14 @@ export function initTiaUi(
         );
 
         setPlcTagsStatus(
+            "Select an Active PLC first."
+        );
+
+        resetPlcStructures(
+            "Select an Active PLC first."
+        );
+
+        setPlcStructuresStatus(
             "Select an Active PLC first."
         );
     }
@@ -762,6 +805,332 @@ export function initTiaUi(
 
         } finally {
             readTagsButton.disabled =
+                !projectConfig.tia_target;
+        }
+    }
+
+
+    function setPlcStructuresStatus(
+        message,
+        type = "normal"
+    ) {
+        if (!plcStructuresStatus) {
+            return;
+        }
+
+
+        plcStructuresStatus.textContent =
+            message;
+
+        plcStructuresStatus.classList.toggle(
+            "error",
+            type === "error"
+        );
+
+        plcStructuresStatus.classList.toggle(
+            "success",
+            type === "success"
+        );
+    }
+
+
+    function renderEmptyStructureTable(
+        body,
+        message,
+        columns
+    ) {
+        if (!body) {
+            return;
+        }
+
+
+        body.replaceChildren();
+
+
+        const row =
+            document.createElement(
+                "tr"
+            );
+
+        const cell =
+            document.createElement(
+                "td"
+            );
+
+        cell.colSpan =
+            columns;
+
+        cell.className =
+            "empty-table-cell";
+
+        cell.textContent =
+            message;
+
+
+        row.appendChild(
+            cell
+        );
+
+        body.appendChild(
+            row
+        );
+    }
+
+
+    function renderPlcStructures(
+        structures
+    ) {
+        const dataBlocks =
+            structures.data_blocks
+            ??
+            [];
+
+        const udts =
+            structures.udts
+            ??
+            [];
+
+
+        if (plcDbsBody) {
+            plcDbsBody.replaceChildren();
+
+
+            if (dataBlocks.length === 0) {
+                renderEmptyStructureTable(
+                    plcDbsBody,
+                    "No Data Blocks found.",
+                    5
+                );
+
+            } else {
+                for (
+                    const item
+                    of dataBlocks
+                ) {
+                    const row =
+                        document.createElement(
+                            "tr"
+                        );
+
+
+                    for (
+                        const value
+                        of [
+                            item.group_path
+                            || "(root)",
+
+                            item.name,
+
+                            String(
+                                item.number
+                            ),
+
+                            item.block_kind,
+
+                            item.is_consistent
+                                ? "Yes"
+                                : "No",
+                        ]
+                    ) {
+                        const cell =
+                            document.createElement(
+                                "td"
+                            );
+
+                        cell.textContent =
+                            value;
+
+                        row.appendChild(
+                            cell
+                        );
+                    }
+
+
+                    plcDbsBody.appendChild(
+                        row
+                    );
+                }
+            }
+        }
+
+
+        if (plcUdtsBody) {
+            plcUdtsBody.replaceChildren();
+
+
+            if (udts.length === 0) {
+                renderEmptyStructureTable(
+                    plcUdtsBody,
+                    "No UDTs found.",
+                    4
+                );
+
+            } else {
+                for (
+                    const item
+                    of udts
+                ) {
+                    const row =
+                        document.createElement(
+                            "tr"
+                        );
+
+
+                    for (
+                        const value
+                        of [
+                            item.group_path
+                            || "(root)",
+
+                            item.name,
+
+                            item.type_kind,
+
+                            item.is_consistent
+                                ? "Yes"
+                                : "No",
+                        ]
+                    ) {
+                        const cell =
+                            document.createElement(
+                                "td"
+                            );
+
+                        cell.textContent =
+                            value;
+
+                        row.appendChild(
+                            cell
+                        );
+                    }
+
+
+                    plcUdtsBody.appendChild(
+                        row
+                    );
+                }
+            }
+        }
+    }
+
+
+    function resetPlcStructures(
+        message =
+            "No DB / UDT inventory loaded."
+    ) {
+        renderEmptyStructureTable(
+            plcDbsBody,
+            message,
+            5
+        );
+
+        renderEmptyStructureTable(
+            plcUdtsBody,
+            message,
+            4
+        );
+    }
+
+
+    async function readPlcStructures() {
+        const processId =
+            selectedProcessId();
+
+        const target =
+            projectConfig.tia_target;
+
+
+        if (!processId) {
+            setPlcStructuresStatus(
+                "Select a TIA process first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (!target) {
+            setPlcStructuresStatus(
+                "Select an Active PLC first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        readStructuresButton.disabled =
+            true;
+
+        resetPlcStructures(
+            "Reading DB / UDT inventory from TIA Portal..."
+        );
+
+        setPlcStructuresStatus(
+            `Reading DBs and UDTs from ${target.plc_name}...`
+        );
+
+
+        try {
+            const query =
+                new URLSearchParams({
+                    process_id:
+                        String(
+                            processId
+                        ),
+
+                    device_name:
+                        target.device_name,
+
+                    plc_name:
+                        target.plc_name,
+                });
+
+
+            const structures =
+                await getJson(
+                    "/api/v1/tia/plc-structures?"
+                    +
+                    query.toString()
+                );
+
+
+            renderPlcStructures(
+                structures
+            );
+
+
+            const dbCount =
+                structures.data_blocks
+                    ?.length
+                ??
+                0;
+
+            const udtCount =
+                structures.udts
+                    ?.length
+                ??
+                0;
+
+
+            setPlcStructuresStatus(
+                `${dbCount} DB(s), ${udtCount} UDT(s) read from ${target.plc_name}.`,
+                "success"
+            );
+
+        } catch (error) {
+            resetPlcStructures(
+                "PLC structure read failed."
+            );
+
+            setPlcStructuresStatus(
+                error.message,
+                "error"
+            );
+
+        } finally {
+            readStructuresButton.disabled =
                 !projectConfig.tia_target;
         }
     }
@@ -1782,6 +2151,14 @@ export function initTiaUi(
     }
 
 
+    if (readStructuresButton) {
+        readStructuresButton.addEventListener(
+            "click",
+            readPlcStructures
+        );
+    }
+
+
     processSelect.addEventListener(
         "change",
         async () => {
@@ -1797,6 +2174,14 @@ export function initTiaUi(
 
             setPlcTagsStatus(
                 "PLC tags not loaded."
+            );
+
+            resetPlcStructures(
+                "Select an Active PLC and click Read DB / UDT."
+            );
+
+            setPlcStructuresStatus(
+                "DB / UDT inventory not loaded."
             );
 
 
@@ -1855,6 +2240,18 @@ export function initTiaUi(
     setPlcTagsStatus(
         projectConfig.tia_target
             ? "PLC tags not loaded."
+            : "Select an Active PLC first."
+    );
+
+    resetPlcStructures(
+        projectConfig.tia_target
+            ? "Click Read DB / UDT to load structures from the Active PLC."
+            : "Select an Active PLC first."
+    );
+
+    setPlcStructuresStatus(
+        projectConfig.tia_target
+            ? "DB / UDT inventory not loaded."
             : "Select an Active PLC first."
     );
 
