@@ -348,3 +348,26 @@ def test_pilot_limits_number_of_unique_rows(monkeypatch):
     assert len(imported) == 1
     assert len(translated) == 1
     assert "HMI_00_Main" in imported[0][1]
+
+
+def test_missing_api_key_does_not_add_target_language(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    def adapter(*args):
+        raise AssertionError("No TIA project mutations should occur")
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+
+    response = client.post(
+        "/api/v1/tia/hmis/translate-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "HMI_00_Main",
+            "hmi_name": "HMI_RT_1",
+            "view_path_root": "HMI_00_Main",
+            "source_culture": "en-US",
+            "target_culture": "pl-PL",
+        },
+    )
+    assert response.status_code == 503
+    assert "OPENAI_API_KEY" in response.json()["detail"]
