@@ -1,7 +1,9 @@
 from pathlib import Path
+import re
+from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 import engine.tia_openness as tia_openness
 from engine.main import app
@@ -72,3 +74,51 @@ def test_preview_rejects_same_language_without_export(monkeypatch):
         },
     )
     assert response.status_code == 400
+
+
+def test_preview_handles_read_only_sheet_with_unknown_dimensions(monkeypatch):
+    def adapter(*args):
+        assert args[0] == "export-project-texts"
+        path = Path(args[-1])
+        _write_sample_export(path)
+
+        # Simulate an XLSX exported without worksheet dimension metadata.
+        with ZipFile(path, "r") as source:
+            members = [
+                (item, source.read(item.filename))
+                for item in source.infolist()
+            ]
+        with ZipFile(path, "w") as destination:
+            for item, data in members:
+                if item.filename == "xl/worksheets/sheet1.xml":
+                    data, count = re.subn(
+                        rb"<dimension\\b[^>]*/>", b"", data, count=1
+                    )
+                    assert count == 1
+                destination.writestr(item, data)
+
+        workbook = load_workbook(path, read_only=True)
+        try:
+            assert workbook.active.max_row is None
+        finally:
+            workbook.close()
+        return ["PROJECT_TEXTS_EXPORTED|" + str(path)]
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+
+    response = client.post(
+        "/api/v1/tia/hmis/preview-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "HMI_RT_1",
+            "hmi_name": "HMI_RT_1",
+            "source_culture": "en-US",
+            "target_culture": "pl-PL",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_text_rows"] == 3
+    assert data["matched_text_rows"] == 1
+    assert data["sample_rows"][0]["source_text"] == "Zmiana"
