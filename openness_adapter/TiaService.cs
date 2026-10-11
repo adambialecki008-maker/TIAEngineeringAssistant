@@ -788,6 +788,231 @@ namespace TiaOpennessAdapter
         }
 
 
+        public static int ExportPlcStructure(
+            int processId,
+            string deviceName,
+            string plcName,
+            string structureKind,
+            string groupPath,
+            string structureName,
+            string outputFilePath
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    structureName
+                )
+                ||
+                string.IsNullOrWhiteSpace(
+                    outputFilePath
+                )
+            )
+            {
+                Console.Error.WriteLine(
+                    "STRUCTURE_EXPORT_ARGUMENT_REQUIRED"
+                );
+
+                return 3;
+            }
+
+
+            string normalizedKind =
+                (
+                    structureKind
+                    ??
+                    ""
+                )
+                .Trim()
+                .ToLowerInvariant();
+
+
+            if (
+                normalizedKind != "db"
+                &&
+                normalizedKind != "udt"
+            )
+            {
+                Console.Error.WriteLine(
+                    "UNSUPPORTED_STRUCTURE_KIND|" +
+                    SanitizeOutput(
+                        structureKind
+                    )
+                );
+
+                return 3;
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                PlcTarget target =
+                    FindPlcTarget(
+                        project,
+                        deviceName,
+                        plcName
+                    );
+
+
+                if (target == null)
+                {
+                    Console.Error.WriteLine(
+                        "PLC_NOT_FOUND|" +
+                        SanitizeOutput(
+                            deviceName
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            plcName
+                        )
+                    );
+
+                    return 7;
+                }
+
+
+                FileInfo outputFile =
+                    new FileInfo(
+                        outputFilePath
+                    );
+
+
+                if (
+                    outputFile.Directory
+                    != null
+                    &&
+                    !outputFile.Directory.Exists
+                )
+                {
+                    outputFile
+                        .Directory
+                        .Create();
+                }
+
+
+                if (outputFile.Exists)
+                {
+                    outputFile.Delete();
+                }
+
+
+                if (normalizedKind == "db")
+                {
+                    DataBlock dataBlock =
+                        FindDataBlock(
+                            target.Software,
+                            groupPath,
+                            structureName
+                        );
+
+
+                    if (dataBlock == null)
+                    {
+                        Console.Error.WriteLine(
+                            "PLC_STRUCTURE_NOT_FOUND|db|" +
+                            SanitizeOutput(
+                                groupPath
+                            ) +
+                            "|" +
+                            SanitizeOutput(
+                                structureName
+                            )
+                        );
+
+                        return 7;
+                    }
+
+
+                    dataBlock.Export(
+                        outputFile,
+                        ExportOptions.WithDefaults
+                    );
+
+                } else {
+                    PlcType plcType =
+                        FindPlcType(
+                            target.Software,
+                            groupPath,
+                            structureName
+                        );
+
+
+                    if (plcType == null)
+                    {
+                        Console.Error.WriteLine(
+                            "PLC_STRUCTURE_NOT_FOUND|udt|" +
+                            SanitizeOutput(
+                                groupPath
+                            ) +
+                            "|" +
+                            SanitizeOutput(
+                                structureName
+                            )
+                        );
+
+                        return 7;
+                    }
+
+
+                    plcType.Export(
+                        outputFile,
+                        ExportOptions.WithDefaults
+                    );
+                }
+
+
+                Console.WriteLine(
+                    "STRUCTURE_EXPORTED|" +
+                    normalizedKind +
+                    "|" +
+                    SanitizeOutput(
+                        groupPath
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        structureName
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        outputFile.FullName
+                    )
+                );
+            }
+
+
+            return 0;
+        }
+
+
         public static int CreatePlcTags(
             int processId,
             string deviceName,
@@ -2573,6 +2798,248 @@ namespace TiaOpennessAdapter
 
 
             return definitions;
+        }
+
+
+        private static string NormalizeGroupPath(
+            string groupPath
+        )
+        {
+            return (
+                groupPath
+                ??
+                ""
+            )
+            .Trim()
+            .Trim('/');
+        }
+
+
+        private static DataBlock FindDataBlock(
+            PlcSoftware software,
+            string groupPath,
+            string name
+        )
+        {
+            string targetPath =
+                NormalizeGroupPath(
+                    groupPath
+                );
+
+
+            if (targetPath.Length == 0)
+            {
+                return software
+                    .BlockGroup
+                    .Blocks
+                    .OfType<DataBlock>()
+                    .FirstOrDefault(
+                        block =>
+                            string.Equals(
+                                block.Name,
+                                name,
+                                StringComparison
+                                    .OrdinalIgnoreCase
+                            )
+                    );
+            }
+
+
+            foreach (
+                PlcBlockUserGroup group
+                in software
+                    .BlockGroup
+                    .Groups
+            )
+            {
+                DataBlock result =
+                    FindDataBlock(
+                        group,
+                        group.Name,
+                        targetPath,
+                        name
+                    );
+
+
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+
+
+            return null;
+        }
+
+
+        private static DataBlock FindDataBlock(
+            PlcBlockUserGroup group,
+            string currentPath,
+            string targetPath,
+            string name
+        )
+        {
+            if (
+                string.Equals(
+                    currentPath,
+                    targetPath,
+                    StringComparison
+                        .OrdinalIgnoreCase
+                )
+            )
+            {
+                return group
+                    .Blocks
+                    .OfType<DataBlock>()
+                    .FirstOrDefault(
+                        block =>
+                            string.Equals(
+                                block.Name,
+                                name,
+                                StringComparison
+                                    .OrdinalIgnoreCase
+                            )
+                    );
+            }
+
+
+            foreach (
+                PlcBlockUserGroup child
+                in group.Groups
+            )
+            {
+                DataBlock result =
+                    FindDataBlock(
+                        child,
+                        currentPath +
+                        "/" +
+                        child.Name,
+                        targetPath,
+                        name
+                    );
+
+
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+
+
+            return null;
+        }
+
+
+        private static PlcType FindPlcType(
+            PlcSoftware software,
+            string groupPath,
+            string name
+        )
+        {
+            string targetPath =
+                NormalizeGroupPath(
+                    groupPath
+                );
+
+
+            if (targetPath.Length == 0)
+            {
+                return software
+                    .TypeGroup
+                    .Types
+                    .FirstOrDefault(
+                        type =>
+                            string.Equals(
+                                type.Name,
+                                name,
+                                StringComparison
+                                    .OrdinalIgnoreCase
+                            )
+                    );
+            }
+
+
+            foreach (
+                PlcTypeUserGroup group
+                in software
+                    .TypeGroup
+                    .Groups
+            )
+            {
+                PlcType result =
+                    FindPlcType(
+                        group,
+                        group.Name,
+                        targetPath,
+                        name
+                    );
+
+
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+
+
+            return null;
+        }
+
+
+        private static PlcType FindPlcType(
+            PlcTypeUserGroup group,
+            string currentPath,
+            string targetPath,
+            string name
+        )
+        {
+            if (
+                string.Equals(
+                    currentPath,
+                    targetPath,
+                    StringComparison
+                        .OrdinalIgnoreCase
+                )
+            )
+            {
+                return group
+                    .Types
+                    .FirstOrDefault(
+                        type =>
+                            string.Equals(
+                                type.Name,
+                                name,
+                                StringComparison
+                                    .OrdinalIgnoreCase
+                            )
+                    );
+            }
+
+
+            foreach (
+                PlcTypeUserGroup child
+                in group.Groups
+            )
+            {
+                PlcType result =
+                    FindPlcType(
+                        child,
+                        currentPath +
+                        "/" +
+                        child.Name,
+                        targetPath,
+                        name
+                    );
+
+
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+
+
+            return null;
         }
 
 
