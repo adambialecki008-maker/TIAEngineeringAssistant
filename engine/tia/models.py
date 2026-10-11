@@ -245,3 +245,38 @@ class AddProjectLanguageResponse(BaseModel):
     status: str
     culture: str
     project_saved: str | None = None
+
+
+
+class TranslateHmiTextsRequest(BaseModel):
+    process_id: int = Field(
+        ge=1
+    )
+    device_name: str = Field(
+        min_length=1,
+        max_length=128,
+    )
+    hmi_name: str = Field(
+        min_length=1,
+        max_length=128,
+    )
+    source_culture: str = Field(
+        min_length=2,
+        max_length=32,
+    )
+    target_culture: str = Field(
+        min_length=2,
+        max_length=32,
+    )
+
+
+class TranslateHmiTextsResponse(BaseModel):
+    status: str
+    hmi_name: str
+    source_culture: str
+    target_culture: str
+    translated_rows: int
+    unique_texts: int
+    import_state: str = ""
+    import_log: str = ""
+    project_saved: str | None = None
