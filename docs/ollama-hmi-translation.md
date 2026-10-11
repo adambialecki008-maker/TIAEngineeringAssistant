@@ -24,7 +24,7 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 # OLLAMA_TRANSLATION_MODEL=your-installed-model:tag
 # Optional: larger batches can reduce Ollama overhead, but may affect
 # output reliability on small local models (1-50, default 15).
-# OLLAMA_TRANSLATION_BATCH_SIZE=25
+# OLLAMA_TRANSLATION_BATCH_SIZE=1
 ```
 
 No configured model is required when you select one from the GUI. Models are discovered through `GET /api/tags` and requested through `POST /api/chat` with `stream: false`, `format` JSON Schema and `temperature: 0`.
@@ -50,7 +50,7 @@ The model processes batches sequentially, so a full project can take a long
 time depending on the local GPU/CPU and installed model. If the selected
 model consistently returns valid JSON, `OLLAMA_TRANSLATION_BATCH_SIZE=25`
 (or 30) can reduce the number of requests; if translation results become
-unreliable, reduce it back to 15. Configuration changes require restarting
+unreliable or time out, reduce it back to 1. Configuration changes require restarting
 the backend; do not restart during an active import or preparation.
 
 The extended TIA export/import timeout is separate:
@@ -68,7 +68,7 @@ are not manually approved in this mode.
 - **Batch size**: number of **unique source text strings** (1-200) to translate
   and import to the selected HMI in one TIA transaction; default 50.
   Ollama itself still splits these strings into smaller API requests
-  (`OLLAMA_TRANSLATION_BATCH_SIZE`, default 15).
+  (`OLLAMA_TRANSLATION_BATCH_SIZE`, default 1).
 - **Total to translate**: optional maximum unique strings for this job.
   Example batch size 50 and total 500 means up to 10 import transactions.
   Blank total means all matched unique strings.
@@ -107,3 +107,32 @@ Tests:
 ```powershell
 python -m pytest tests/test_hmi_batches.py tests/test_hmi_review.py tests/test_hmi_translation_api.py -q
 ```
+
+
+## Scan counts and manual Prepare batch limit
+
+**Preview texts** now scans the entire selected HMI export (not just the 50
+displayed sample rows) and reports:
+
+- Total matching HMI text rows, including duplicates.
+- All unique source text values.
+- Eligible unique source texts containing letters (same candidate rule as
+  automatic batch job).
+- Rows and unique values whose target is empty or the literal `Text`.
+  This is a diagnostic signal, **not proof that other rows are translated**:
+  a source may already be Polish even when stored under `en-US*`.
+
+The former **Pilot / All** dropdown has been removed. **Batch size** is shared
+by the manual **Prepare one batch (review)** workflow and the separate automatic
+import workflow. Manual Prepare accepts **1 to 50 unique texts**, and cannot
+request all matched texts at once. It never imports automatically; click
+**Import reviewed texts** separately after reviewing the output. Manual
+Prepare currently samples the first N unique source values on each run;
+for progressive processing across the entire HMI use the automatic
+checkpointed import workflow.
+
+**Total to translate** applies **only to the automatic job**. Leave it blank
+to process all eligible unique source texts, or enter an explicit smaller
+number. This value is **not** the number of HMI XLSX rows; repeated strings
+can correspond to many different HMI elements. Confirm the counted values
+from Preview texts before starting any TIA import.
