@@ -181,6 +181,9 @@ def test_preview_real_tia_v21_layout_and_explicit_view_path_root(monkeypatch):
     response = client.post("/api/v1/tia/hmis/preview-texts", json=body)
     assert response.status_code == 200
     assert response.json()["matched_text_rows"] == 2
+    assert response.json()["matched_unique_texts"] == 2
+    assert response.json()["matched_eligible_unique_texts"] == 2
+    assert response.json()["matched_missing_target_rows"] == 0
 
 
 def test_translate_imports_only_selected_hmi_and_renames_target_header(
@@ -384,3 +387,56 @@ def test_unavailable_ollama_model_does_not_add_target_language(monkeypatch):
     )
     assert response.status_code == 503
     assert "Ollama" in response.json()["detail"]
+
+
+def test_preview_scans_full_hmi_and_counts_missing_targets_not_only_samples(
+    monkeypatch,
+):
+    def adapter(*args):
+        assert args[0] == "export-project-texts"
+        path = Path(args[-1])
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "User Texts"
+        sheet.append([
+            "Category", "ViewPath", "Internal ID", "Substitutions",
+            "en-US*", "pl-PL", 'ref="0"',
+        ])
+        for index in range(75):
+            # First source repeats 60 times. Both sources should count once.
+            source = "Za zaworem" if index < 60 else "Alarm aktywny"
+            target = "Text" if index < 60 else None
+            sheet.append([
+                "<HMI screen>",
+                "Project\\HMI_00_Main\\Screens\\Main\\Label_" + str(index),
+                "id-" + str(index), "", source, target, "",
+            ])
+        sheet.append([
+            "<HMI screen>", "Project\\Other_HMI\\Screens\\Main\\Text",
+            "other-id", "", "Another", "Text", "",
+        ])
+        workbook.save(path)
+        workbook.close()
+        return ["PROJECT_TEXTS_EXPORTED|" + str(path)]
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    response = client.post(
+        "/api/v1/tia/hmis/preview-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "HMI_RT_1",
+            "hmi_name": "HMI_RT_1",
+            "view_path_root": "HMI_00_Main",
+            "source_culture": "en-US",
+            "target_culture": "pl-PL",
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["matched_text_rows"] == 75
+    assert data["total_text_rows"] == 76
+    assert data["matched_unique_texts"] == 2
+    assert data["matched_eligible_unique_texts"] == 2
+    assert data["matched_missing_target_rows"] == 75
+    assert data["matched_missing_target_unique_texts"] == 2
+    assert len([row for row in data["sample_rows"] if row["matches_hmi"]]) == 50
