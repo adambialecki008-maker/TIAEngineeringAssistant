@@ -1162,3 +1162,54 @@ td {
     background: #285b78;
     color: #ffffff;
 }
+
+
+/* TIA resource table rows */
+
+.plc-resource-total-row td {
+    font-weight: 600;
+}
+
+.plc-resource-percent-row td {
+    color: #93a0ab;
+    text-align: center;
+}
+
+.plc-resource-details-row td {
+    color: #b8c3cc;
+    font-weight: 600;
+    text-align: left;
+}
+
+.plc-resource-attributes {
+    margin-top: 10px;
+}
+
+.plc-resource-attributes summary {
+    font-size: 12px;
+    color: #8fb8d0;
+}
+
+.plc-resource-attribute-table {
+    width: 100%;
+    margin-top: 8px;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.plc-resource-attribute-table th,
+.plc-resource-attribute-table td {
+    padding: 6px 8px;
+    border: 1px solid #313b45;
+    white-space: nowrap;
+}
+
+.plc-resource-attribute-table th {
+    background: #1d252d;
+    color: #b9c5cf;
+}
+
+.plc-resource-attribute-table td {
+    background: #141a20;
+    color: #d6dfe6;
+}
