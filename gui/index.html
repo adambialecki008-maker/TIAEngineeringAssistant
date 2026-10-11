@@ -458,6 +458,20 @@
                     </div>
 
 
+                    <div class="field-group">
+                        <label for="tia-hmi-view-path-root">
+                            Exported ViewPath device/root:
+                        </label>
+                        <select id="tia-hmi-view-path-root">
+                            <option value="">Automatic match (inventory device/HMI name)</option>
+                        </select>
+                        <p class="hint">
+                            If TIA uses a different ViewPath root than the HMI inventory,
+                            use Preview texts to discover it and select the correct device here.
+                            Only that root will be translated.
+                        </p>
+                    </div>
+
                     <div class="action-row hmi-translation-actions">
 
                         <button
@@ -489,7 +503,7 @@
                             </table>
                         </div>
                         <details>
-                            <summary>Reference diagnostics (first 50 unique values)</summary>
+                            <summary>ViewPath / XLSX diagnostics</summary>
                             <pre id="tia-hmi-preview-references" class="hmi-preview-references"></pre>
                         </details>
                     </div>
