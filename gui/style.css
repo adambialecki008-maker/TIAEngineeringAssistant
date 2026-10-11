@@ -638,6 +638,17 @@ summary {
     overflow: auto;
 }
 
+/* Inspect is displayed above the inventories; keep its heading in view
+   even with an application header and long lists below. */
+#tia-plc-program-block-detail {
+    scroll-margin-top: 24px;
+    margin-bottom: 16px;
+    border-color: #4b7792;
+}
+#tia-plc-program-block-detail:not(.hidden) {
+    box-shadow: 0 0 0 1px rgba(100, 155, 188, 0.16);
+}
+
 /* PLC program blocks: fit all nine columns in the available card width.
    Only Group and Name need flexible space; metadata columns stay compact. */
 .tia-program-blocks-wrapper {
