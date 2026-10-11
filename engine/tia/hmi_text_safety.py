@@ -33,7 +33,8 @@ def _reject_unsafe_proposal(source: str, translated: str, problem: str) -> None:
             + "in the target language (for example Polish -> pl-PL), "
             + "select Text handling: 'Copy original Polish labels into "
             + "missing target cells (no AI)', then scan/prepare again. "
-            + "Otherwise correct the translation in a manual review."
+            + "For text in another language, select a suitable model and "
+            + "prepare a new, corrected proposal for review before importing."
         ),
     )
 
