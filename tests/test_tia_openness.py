@@ -1,7 +1,12 @@
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 
 import engine.tia_openness as tia_openness
 from engine.main import app
+from engine.tia.hmi_translation import (
+    _project_text_columns,
+    _reference_matches_hmi,
+)
 
 
 client = TestClient(app)
@@ -1239,3 +1244,62 @@ def test_add_project_language_response(
         "culture": "de-DE",
         "project_saved": "OpennessTests",
     }
+
+
+
+def test_hmi_project_text_reference_filter():
+    assert _reference_matches_hmi(
+        (
+            "OpennnesTest_Torowisko\\"
+            "HM_Conveyors [KTP...]\\"
+            "Screen_1"
+        ),
+        "HM_Conveyors",
+        "HM_Conveyors",
+    )
+
+    assert not _reference_matches_hmi(
+        (
+            "OpennnesTest_Torowisko\\"
+            "HM_Bridge [KTP...]\\"
+            "Screen_1"
+        ),
+        "HM_Conveyors",
+        "HM_Conveyors",
+    )
+
+
+def test_project_text_columns_are_detected():
+    workbook = Workbook()
+    worksheet = workbook.active
+
+    worksheet.append(
+        [
+            "English (United States)",
+            "Polish (Poland)",
+            "Category",
+            "Reference",
+        ]
+    )
+
+    worksheet.append(
+        [
+            "Zmiana",
+            "",
+            "HM screen",
+            (
+                "OpennnesTest_Torowisko\\"
+                "HM_Conveyors [KTP...]"
+            ),
+        ]
+    )
+
+    assert _project_text_columns(
+        worksheet
+    ) == (
+        1,
+        1,
+        2,
+        3,
+        4,
+    )
