@@ -181,3 +181,24 @@ def test_prepare_rejects_placeholder_for_nonplaceholder_source(monkeypatch):
     )
     assert response.status_code == 502
     assert "placeholder" in response.json()["detail"]
+
+
+def test_pilot_preserves_unreviewed_sibling_texts_in_same_hmi(monkeypatch):
+    _live, _commands, imported = _setup(monkeypatch)
+    pilot_request = {**REQUEST, "max_rows": 1}
+    prepared = client.post(
+        "/api/v1/tia/hmis/prepare-translations",
+        json=pilot_request,
+    ).json()
+    assert prepared["selected_rows"] == 1
+    response = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": prepared["review_id"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["verified_rows"] == 1
+    # Parent-object/sibling rows are preserved, but never retranslated.
+    assert imported == [
+        ("main-1", "212BP2 Za zaworem"),
+        ("main-2", "Zgniatarka"),
+    ]
