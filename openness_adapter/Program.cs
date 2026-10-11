@@ -71,6 +71,10 @@ namespace TiaOpennessAdapter
                         return ListStructures(args);
 
 
+                    case "list-program-blocks":
+                        return ListProgramBlocks(args);
+
+
                     case "export-structure":
                         return ExportStructure(args);
 
@@ -254,6 +258,37 @@ namespace TiaOpennessAdapter
 
 
             return TiaService.ListPlcStructures(
+                processId,
+                args[2],
+                args[3]
+            );
+        }
+
+
+        private static int ListProgramBlocks(
+            string[] args
+        )
+        {
+            if (args.Length < 4)
+            {
+                Console.Error.WriteLine(
+                    "PID, device name and PLC name are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ListPlcProgramBlocks(
                 processId,
                 args[2],
                 args[3]
@@ -537,6 +572,10 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  list-structures <PID> <DEVICE_NAME> <PLC_NAME>"
+            );
+
+            Console.WriteLine(
+                "  list-program-blocks <PID> <DEVICE_NAME> <PLC_NAME>"
             );
 
             Console.WriteLine(
