@@ -253,6 +253,14 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
             404, "No source text found for the selected HMI ViewPath root."
         )
 
+    # Manual Prepare always operates on a bounded reviewable batch.
+    # The multi-batch auto-import route has its own explicit total limit.
+    if request.max_rows is None or request.max_rows > 50:
+        raise HTTPException(
+            422,
+            "Prepare one batch requires max_rows from 1 to 50. "
+            "Use the batch import workflow for a larger total.",
+        )
     if request.max_rows is not None:
         chosen = []
         seen = set()
