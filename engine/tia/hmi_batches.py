@@ -18,6 +18,9 @@ from pydantic import BaseModel, Field
 
 from engine.tia.adapter import PROJECT_ROOT
 from engine.tia.models import TranslateHmiTextsRequest
+from engine.tia.hmi_text_safety import (
+    needs_target_fill, validate_hmi_translation,
+)
 from engine.tia.ollama_translation import resolve_ollama_model
 from engine.tia import hmi_review as review
 
@@ -132,14 +135,21 @@ def start_hmi_batch_job(request: StartBatchJobRequest):
         raise HTTPException(
             422, "Choose the verified exported HMI ViewPath root before starting batch import."
         )
-    model = resolve_ollama_model(request.ollama_model)
+    model = (
+        "source-copy" if request.translation_strategy == "copy"
+        else resolve_ollama_model(request.ollama_model)
+    )
     rows = _matching_source_rows(request)
     all_unique = list(dict.fromkeys(
         row["source"] for row in rows
-        if any(ch.isalpha() for ch in row["source"])
+        if needs_target_fill(row["source"], row["current_target"])
     ))
     if not all_unique:
-        raise HTTPException(422, "No translatable texts found for this HMI.")
+        raise HTTPException(
+            422,
+            "No empty/placeholder target texts in this HMI; "
+            "already populated translations will not be overwritten.",
+        )
 
     limit = request.total_to_translate
     selected = all_unique[:limit] if limit else all_unique
@@ -263,7 +273,11 @@ def _perform_one_batch(job: dict) -> dict:
     )
     rows = _matching_source_rows(requested)
     selected_set = set(selected)
-    matching = [row for row in rows if row["source"] in selected_set]
+    matching = [
+        row for row in rows
+        if row["source"] in selected_set
+        and needs_target_fill(row["source"], row["current_target"])
+    ]
     observed = {row["source"] for row in matching}
     if observed != selected_set:
         raise HTTPException(
@@ -280,18 +294,19 @@ def _perform_one_batch(job: dict) -> dict:
             len(job["candidates"]),
         )
 
-    translations = review._translate_texts(
-        selected, requested.target_culture, job["model"],
-        progress=progress,
-    )
+    if requested.translation_strategy == "copy":
+        # Polish texts in the exported en-US* source column should be copied
+        # verbatim, not paraphrased by a language model.
+        translations = {source: source for source in selected}
+        progress(len(selected), len(selected))
+    else:
+        translations = review._translate_texts(
+            selected, requested.target_culture, job["model"],
+            progress=progress,
+        )
     for row in matching:
         proposed = translations.get(row["source"])
-        if not isinstance(proposed, str) or not proposed.strip():
-            raise HTTPException(502, "Ollama returned missing/empty translation.")
-        if proposed.strip().casefold() == "text" and row["source"].strip().casefold() != "text":
-            raise HTTPException(
-                502, "Ollama returned placeholder Text for " + row["source"][:80]
-            )
+        validate_hmi_translation(row["source"], proposed)
         row["proposal"] = proposed
 
     review._record_progress(
