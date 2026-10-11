@@ -461,6 +461,14 @@
                     <div class="action-row hmi-translation-actions">
 
                         <button
+                            id="tia-hmi-preview-button"
+                            type="button"
+                            class="secondary-button"
+                        >
+                            Preview texts
+                        </button>
+
+                        <button
                             id="tia-hmi-translate-button"
                             type="button"
                             class="primary-button"
@@ -471,6 +479,20 @@
 
                     </div>
 
+
+                    <div id="tia-hmi-preview-results" class="hidden">
+                        <p id="tia-hmi-preview-summary" class="hint"></p>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead><tr><th>Match</th><th>Source text</th><th>Category</th><th>Reference</th></tr></thead>
+                                <tbody id="tia-hmi-preview-rows"></tbody>
+                            </table>
+                        </div>
+                        <details>
+                            <summary>Reference diagnostics (first 50 unique values)</summary>
+                            <pre id="tia-hmi-preview-references" class="hmi-preview-references"></pre>
+                        </details>
+                    </div>
 
                     <p
                         id="tia-hmi-translation-status"
