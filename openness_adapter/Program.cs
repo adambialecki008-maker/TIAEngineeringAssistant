@@ -63,6 +63,14 @@ namespace TiaOpennessAdapter
                         return AddProjectLanguage(args);
 
 
+                    case "export-project-texts":
+                        return ExportProjectTexts(args);
+
+
+                    case "import-project-texts":
+                        return ImportProjectTexts(args);
+
+
                     case "list-plcs":
                         return ListPlcs(args);
 
@@ -211,6 +219,84 @@ namespace TiaOpennessAdapter
             return TiaService.AddProjectLanguage(
                 processId,
                 args[2]
+            );
+        }
+
+
+        private static int ExportProjectTexts(
+            string[] args
+        )
+        {
+            if (args.Length < 5)
+            {
+                Console.Error.WriteLine(
+                    "PID, source culture, target culture and output file are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ExportProjectTexts(
+                processId,
+                args[2],
+                args[3],
+                args[4]
+            );
+        }
+
+
+        private static int ImportProjectTexts(
+            string[] args
+        )
+        {
+            if (args.Length < 4)
+            {
+                Console.Error.WriteLine(
+                    "PID, input file and update-source flag are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            if (
+                !bool.TryParse(
+                    args[3],
+                    out bool updateSourceLanguage
+                )
+            )
+            {
+                Console.Error.WriteLine(
+                    "Update-source flag must be true or false."
+                );
+
+                return 1;
+            }
+
+
+            return TiaService.ImportProjectTexts(
+                processId,
+                args[2],
+                updateSourceLanguage
             );
         }
 
@@ -659,6 +745,14 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  add-project-language <PID> <CULTURE>"
+            );
+
+            Console.WriteLine(
+                "  export-project-texts <PID> <SOURCE_CULTURE> <TARGET_CULTURE> <OUTPUT_FILE>"
+            );
+
+            Console.WriteLine(
+                "  import-project-texts <PID> <INPUT_FILE> <UPDATE_SOURCE:true|false>"
             );
 
             Console.WriteLine(
