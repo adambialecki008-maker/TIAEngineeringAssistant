@@ -470,6 +470,13 @@ export function initTiaUi(
 
         renderExistingPlcs();
 
+        loadedPlcTags = [];
+
+        loadedPlcStructures = {
+            data_blocks: [],
+            udts: [],
+        };
+
         renderEmptyPlcTags(
             "Select an Active PLC first."
         );
@@ -858,7 +865,7 @@ export function initTiaUi(
 
         for (
             const tag
-            of orderedTags
+            of tags
         ) {
             if (
                 isSafetyTag(
@@ -1064,7 +1071,7 @@ export function initTiaUi(
 
         for (
             const tag
-            of tags
+            of orderedTags
         ) {
             const row =
                 document.createElement(
@@ -2686,6 +2693,13 @@ export function initTiaUi(
             resetModels();
 
             existingPlcs = [];
+
+            loadedPlcTags = [];
+
+            loadedPlcStructures = {
+                data_blocks: [],
+                udts: [],
+            };
 
             renderExistingPlcs();
 
