@@ -863,6 +863,207 @@ export function initTiaUi(
     }
 
 
+    function normalizeResourceAttributeName(
+        value
+    ) {
+        return String(
+            value
+            ??
+            ""
+        )
+        .toLowerCase()
+        .replace(
+            /[^a-z0-9]/g,
+            ""
+        );
+    }
+
+
+    function resourceAttributeNumber(
+        attributes,
+        requiredTokens,
+        mode = "total"
+    ) {
+        const matches = [];
+
+
+        for (
+            const attribute
+            of attributes
+        ) {
+            const name =
+                normalizeResourceAttributeName(
+                    attribute.name
+                );
+
+            const hasAllTokens =
+                requiredTokens.every(
+                    token =>
+                        name.includes(
+                            token
+                        )
+                );
+
+
+            if (!hasAllTokens) {
+                continue;
+            }
+
+
+            const isUsedAttribute =
+                name.includes(
+                    "used"
+                )
+                ||
+                name.includes(
+                    "usage"
+                )
+                ||
+                name.includes(
+                    "occupied"
+                );
+
+
+            if (
+                mode === "used"
+                &&
+                !isUsedAttribute
+            ) {
+                continue;
+            }
+
+
+            if (
+                mode === "total"
+                &&
+                isUsedAttribute
+            ) {
+                continue;
+            }
+
+
+            const raw =
+                String(
+                    attribute.value
+                    ??
+                    ""
+                );
+
+            const digits =
+                raw.replace(
+                    /[^0-9-]/g,
+                    ""
+                );
+
+
+            if (!digits) {
+                continue;
+            }
+
+
+            const number =
+                Number(
+                    digits
+                );
+
+
+            if (
+                !Number.isFinite(
+                    number
+                )
+                ||
+                number < 0
+            ) {
+                continue;
+            }
+
+
+            matches.push(
+                number
+            );
+        }
+
+
+        if (matches.length === 0) {
+            return null;
+        }
+
+
+        return Math.max(
+            ...matches
+        );
+    }
+
+
+    function formatResourcePercent(
+        used,
+        total,
+        free = false
+    ) {
+        if (
+            used == null
+            ||
+            total == null
+            ||
+            total <= 0
+        ) {
+            return "—";
+        }
+
+
+        const usedPercent =
+            Math.max(
+                0,
+                Math.min(
+                    100,
+                    used
+                    /
+                    total
+                    *
+                    100
+                )
+            );
+
+        const value =
+            free
+                ? 100 - usedPercent
+                : usedPercent;
+
+
+        return (
+            value.toLocaleString(
+                undefined,
+                {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 1,
+                }
+            )
+            +
+            " %"
+        );
+    }
+
+
+    function freeResourceBytes(
+        used,
+        total
+    ) {
+        if (
+            used == null
+            ||
+            total == null
+        ) {
+            return null;
+        }
+
+
+        return Math.max(
+            0,
+            total - used
+        );
+    }
+
+
     function renderExistingPlcs() {
         existingPlcsBody.replaceChildren();
 
@@ -1167,6 +1368,117 @@ export function initTiaUi(
                 );
 
 
+            const totalValues = {
+                load:
+                    resourceAttributeNumber(
+                        resourceAttributes,
+                        [
+                            "load",
+                            "memory",
+                        ]
+                    ),
+
+                code:
+                    resourceAttributeNumber(
+                        resourceAttributes,
+                        [
+                            "code",
+                            "work",
+                            "memory",
+                        ]
+                    ),
+
+                data:
+                    resourceAttributeNumber(
+                        resourceAttributes,
+                        [
+                            "data",
+                            "work",
+                            "memory",
+                        ]
+                    ),
+
+                retain:
+                    resourceAttributeNumber(
+                        resourceAttributes,
+                        [
+                            "retain",
+                            "memory",
+                        ]
+                    ),
+            };
+
+
+            const usedValues = {
+                load:
+                    used
+                        ? used.load_memory_bytes
+                        : null,
+
+                code:
+                    used
+                        ? used.code_work_memory_bytes
+                        : null,
+
+                data:
+                    used
+                        ? used.data_work_memory_bytes
+                        : null,
+
+                retain:
+                    (
+                        used
+                        &&
+                        used.retain_memory_bytes
+                        != null
+                    )
+                        ? used.retain_memory_bytes
+                        : resourceAttributeNumber(
+                            resourceAttributes,
+                            [
+                                "retain",
+                                "memory",
+                            ],
+                            "used"
+                        ),
+            };
+
+
+            const freeValues = {
+                load:
+                    freeResourceBytes(
+                        usedValues.load,
+                        totalValues.load
+                    ),
+
+                code:
+                    freeResourceBytes(
+                        usedValues.code,
+                        totalValues.code
+                    ),
+
+                data:
+                    freeResourceBytes(
+                        usedValues.data,
+                        totalValues.data
+                    ),
+
+                retain:
+                    freeResourceBytes(
+                        usedValues.retain,
+                        totalValues.retain
+                    ),
+            };
+
+
+            const memoryKeys = [
+                "load",
+                "code",
+                "data",
+                "retain",
+            ];
+
+
             const appendResourceRow =
                 (
                     label,
@@ -1213,60 +1525,74 @@ export function initTiaUi(
 
 
             appendResourceRow(
-                "",
-                [
-                    "—",
-                    "—",
-                    "—",
-                    "—",
-                ],
-                "plc-resource-percent-row"
-            );
-
-            appendResourceRow(
                 "Total:",
-                [
-                    "—",
-                    "—",
-                    "—",
-                    "—",
-                ],
+                memoryKeys.map(
+                    key =>
+                        totalValues[key]
+                        == null
+                            ? "—"
+                            : formatMemoryBytes(
+                                totalValues[key]
+                            )
+                ),
                 "plc-resource-total-row"
             );
 
+
             appendResourceRow(
                 "Used:",
-                [
-                    used
-                        ? formatMemoryBytes(
-                            used.load_memory_bytes
-                        )
-                        : "—",
-
-                    used
-                        ? formatMemoryBytes(
-                            used.code_work_memory_bytes
-                        )
-                        : "—",
-
-                    used
-                        ? formatMemoryBytes(
-                            used.data_work_memory_bytes
-                        )
-                        : "—",
-
-                    (
-                        used
-                        &&
-                        used.retain_memory_bytes
-                        != null
-                    )
-                        ? formatMemoryBytes(
-                            used.retain_memory_bytes
-                        )
-                        : "—",
-                ],
+                memoryKeys.map(
+                    key =>
+                        usedValues[key]
+                        == null
+                            ? "—"
+                            : formatMemoryBytes(
+                                usedValues[key]
+                            )
+                ),
                 "plc-resource-used-row"
+            );
+
+
+            appendResourceRow(
+                "Free:",
+                memoryKeys.map(
+                    key =>
+                        freeValues[key]
+                        == null
+                            ? "—"
+                            : formatMemoryBytes(
+                                freeValues[key]
+                            )
+                ),
+                "plc-resource-free-row"
+            );
+
+
+            appendResourceRow(
+                "Used %:",
+                memoryKeys.map(
+                    key =>
+                        formatResourcePercent(
+                            usedValues[key],
+                            totalValues[key]
+                        )
+                ),
+                "plc-resource-percent-row"
+            );
+
+
+            appendResourceRow(
+                "Free %:",
+                memoryKeys.map(
+                    key =>
+                        formatResourcePercent(
+                            usedValues[key],
+                            totalValues[key],
+                            true
+                        )
+                ),
+                "plc-resource-free-percent-row"
             );
 
 
