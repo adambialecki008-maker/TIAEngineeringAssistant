@@ -83,8 +83,6 @@ export function initTiaUi(
     const hmiBatchProgress = document.getElementById("tia-hmi-batch-progress");
     const hmiBatchProgressText =
         document.getElementById("tia-hmi-batch-progress-text");
-    const hmiTranslationStrategySelect =
-        document.getElementById("tia-hmi-translation-strategy");
     const hmiScanSummary = document.getElementById("tia-hmi-scan-summary");
     const hmiScanButton = document.getElementById("tia-hmi-scan-button");
     const hmiUseScanTotalButton =
@@ -1022,7 +1020,6 @@ export function initTiaUi(
             hmi_name: hmi.hmi_name,
             view_path_root: hmiViewPathRootSelect?.value || null,
             ollama_model: hmiOllamaModelSelect?.value || null,
-            translation_strategy: hmiTranslationStrategySelect?.value || "copy",
             source_culture: sourceCulture,
             target_culture: targetCulture,
         };
@@ -1132,8 +1129,7 @@ export function initTiaUi(
         const isVerified = Boolean(key && key === verifiedHmiPreviewKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting;
-        const hasTranslationEngine = selection?.translation_strategy === "copy"
-            || Boolean(selection?.ollama_model);
+        const hasTranslationEngine = Boolean(selection?.ollama_model);
         if (hmiTranslateButton) {
             const count = manualHmiPrepareCount();
             hmiTranslateButton.textContent = count
@@ -1182,7 +1178,7 @@ export function initTiaUi(
                 } else if (!latestHmiScan?.missingUnique) {
                     hint = "No missing or placeholder target texts found in this HMI.";
                 } else if (!hasTranslationEngine) {
-                    hint = "Select an Ollama model, or choose Copy source (no AI).";
+                    hint = "Select an installed Ollama model above.";
                 } else if (
                     hmiBatchTotalInput?.value?.trim()
                     && (!Number.isInteger(total) || total < 1
@@ -1474,8 +1470,7 @@ export function initTiaUi(
         const key = hmiTranslationKey(selection);
         if (!selection || key !== verifiedHmiPreviewKey
             || !selection.view_path_root
-            || (selection.translation_strategy !== "copy"
-                && !selection.ollama_model)) {
+            || !selection.ollama_model) {
             setHmiBatchStatus(
                 "Select an explicit HMI ViewPath root and click Scan HMI / Count texts first.",
                 true
@@ -1499,9 +1494,8 @@ export function initTiaUi(
         }
         if (!confirm(
             "START AUTOMATIC TIA IMPORT?\n\n"
-            + "Strategy: "
-            + (selection.translation_strategy === "copy"
-                ? "copy source texts exactly (no Ollama)." : "translate with Ollama.")
+            + "Translation via selected Ollama model: "
+            + selection.ollama_model
             + "\nBatch size: " + size + " unique texts. Total: "
             + (total ?? latestHmiScan?.missingUnique ?? "all eligible")
             + ". Final batch will be smaller when needed."
@@ -7193,10 +7187,6 @@ export function initTiaUi(
         renderHmiBatchPlan();
     });
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
-    hmiTranslationStrategySelect?.addEventListener("change", () => {
-        invalidateHmiPreview();
-        renderHmiBatchPlan();
-    });
 
     hmiScanButton?.addEventListener(
         "click", () => { void previewSelectedHmi(); }
