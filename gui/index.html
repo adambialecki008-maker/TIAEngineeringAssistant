@@ -942,12 +942,12 @@
                 <div class="card-header">
                     <div>
                         <h3>
-                            PLC program and data blocks
+                            PLC program
                         </h3>
 
                         <p class="hint">
-                            Inspect program blocks (OB / FC / FB) and data blocks (DB)
-                            in separate lists. Read-only TIA Openness access.
+                            Inspect program blocks (OB / FC / FB) from the Active PLC.
+                            Read-only access. Data Blocks and UDTs are listed below.
                         </p>
                     </div>
 
@@ -956,7 +956,7 @@
                         type="button"
                         disabled
                     >
-                        Read PLC blocks
+                        Read PLC program
                     </button>
                 </div>
 
@@ -1090,52 +1090,6 @@
                 </details>
 
 
-                <details class="tia-inventory-details">
-                    <summary id="tia-plc-data-blocks-summary">
-                        Data blocks (DB)
-                    </summary>
-                    <div class="details-content">
-                        <p class="hint">
-                            Data blocks are loaded together with program blocks.
-                            Inspect reads the DB structure, not executable block code.
-                        </p>
-                        <div class="table-wrapper tia-inventory-table-wrapper tia-program-blocks-wrapper">
-                            <table class="management-table tia-program-blocks-table">
-                                <colgroup>
-                                    <col style="width: 19%">
-                                    <col style="width: 33%">
-                                    <col style="width: 5%">
-                                    <col style="width: 6%">
-                                    <col style="width: 7%">
-                                    <col style="width: 8%">
-                                    <col style="width: 8%">
-                                    <col style="width: 8%">
-                                    <col style="width: 6%">
-                                </colgroup>
-                                <thead>
-                                    <tr>
-                                        <th>Group</th>
-                                        <th>Name</th>
-                                        <th>Type</th>
-                                        <th>Number</th>
-                                        <th>Language</th>
-                                        <th>Consistent</th>
-                                        <th>Load memory</th>
-                                        <th>Work memory</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tia-plc-data-blocks-body">
-                                    <tr>
-                                        <td colspan="9" class="empty-table-cell">
-                                            No data blocks loaded.
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </details>
 
 
             </div>
