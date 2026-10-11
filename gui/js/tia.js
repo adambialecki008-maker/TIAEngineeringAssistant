@@ -249,6 +249,26 @@ export function initTiaUi(
             "project-active-plc"
         );
 
+    const overviewProjectNameElement =
+        document.getElementById(
+            "overview-project-name"
+        );
+
+    const overviewDeviceNameElement =
+        document.getElementById(
+            "overview-device-name"
+        );
+
+    const overviewPlcFamilyElement =
+        document.getElementById(
+            "overview-plc-family"
+        );
+
+    const tiaProjectNameElement =
+        document.getElementById(
+            "tia-project-name"
+        );
+
     const headerActivePlcElement =
         document.getElementById(
             "active-plc-summary"
@@ -261,6 +281,8 @@ export function initTiaUi(
 
 
     let existingPlcs = [];
+
+    let currentProjectName = "";
 
 
     let loadedPlcTags = [];
@@ -354,6 +376,8 @@ export function initTiaUi(
 
         suggestCreateNames();
 
+        updateTargetSummary();
+
         setStatus(
             "PLC family changed. Load Hardware Catalog models again."
         );
@@ -393,14 +417,18 @@ export function initTiaUi(
         const target =
             projectConfig.tia_target;
 
+        const family =
+            getPlcFamily();
+
 
         let text =
             "Active PLC: not selected";
 
+        let overviewPlcText =
+            "Not selected";
 
-        let projectText =
-            "No PLC selected.";
-
+        let overviewDeviceText =
+            "Not selected";
 
         let previewText =
             "Target PLC: not selected";
@@ -412,8 +440,11 @@ export function initTiaUi(
                 +
                 `(${target.device_name})`;
 
-            projectText =
-                `${target.plc_name} on ${target.device_name}`;
+            overviewPlcText =
+                target.plc_name;
+
+            overviewDeviceText =
+                target.device_name;
 
             previewText =
                 `Target PLC: ${target.plc_name} `
@@ -429,10 +460,37 @@ export function initTiaUi(
             text;
 
         projectActivePlcElement.textContent =
-            projectText;
+            overviewPlcText;
 
         previewTargetPlcElement.textContent =
             previewText;
+
+
+        if (overviewDeviceNameElement) {
+            overviewDeviceNameElement.textContent =
+                overviewDeviceText;
+        }
+
+        if (overviewPlcFamilyElement) {
+            overviewPlcFamilyElement.textContent =
+                family
+                ||
+                "Not selected";
+        }
+
+        if (overviewProjectNameElement) {
+            overviewProjectNameElement.textContent =
+                currentProjectName
+                ||
+                "Not connected";
+        }
+
+        if (tiaProjectNameElement) {
+            tiaProjectNameElement.textContent =
+                currentProjectName
+                ||
+                "Not connected";
+        }
 
 
         if (readTagsButton) {
@@ -446,7 +504,6 @@ export function initTiaUi(
                 !target;
         }
     }
-
 
     function selectTarget(
         plc
@@ -2679,6 +2736,10 @@ export function initTiaUi(
         if (!processId) {
             existingPlcs = [];
 
+            currentProjectName = "";
+
+            updateTargetSummary();
+
             renderEmptyPlcs(
                 "Select a TIA process first."
             );
@@ -2705,12 +2766,34 @@ export function initTiaUi(
                 });
 
 
+            const [
+                projectInfo,
+                plcs,
+            ] =
+                await Promise.all([
+                    getJson(
+                        "/api/v1/tia/project-info?"
+                        +
+                        query.toString()
+                    ),
+
+                    getJson(
+                        "/api/v1/tia/plcs?"
+                        +
+                        query.toString()
+                    ),
+                ]);
+
+
+            currentProjectName =
+                projectInfo.project_name
+                ||
+                "";
+
             existingPlcs =
-                await getJson(
-                    "/api/v1/tia/plcs?"
-                    +
-                    query.toString()
-                );
+                plcs;
+
+            updateTargetSummary();
 
 
             const savedTarget =
@@ -2744,6 +2827,10 @@ export function initTiaUi(
 
         } catch (error) {
             existingPlcs = [];
+
+            currentProjectName = "";
+
+            updateTargetSummary();
 
             renderEmptyPlcs(
                 "PLC discovery failed."
@@ -3594,6 +3681,10 @@ export function initTiaUi(
             resetModels();
 
             existingPlcs = [];
+
+            currentProjectName = "";
+
+            updateTargetSummary();
 
             loadedPlcTags = [];
 
