@@ -26,13 +26,16 @@ router = APIRouter()
 
 
 def _project_text_columns(worksheet):
-    limit = min(worksheet.max_row, 50)
-
-    for row_index in range(1, limit + 1):
+    # Read-only XLSX exports may not have worksheet dimensions.
+    # Iterate over actual rows rather than relying on max_row.
+    for row_index, row in enumerate(
+        worksheet.iter_rows(min_row=1, max_row=50, values_only=True),
+        start=1,
+    ):
         values = {
-            str(cell.value).strip().casefold(): cell.column
-            for cell in worksheet[row_index]
-            if cell.value is not None
+            str(value).strip().casefold(): column
+            for column, value in enumerate(row, start=1)
+            if value is not None
         }
 
         category_column = values.get("category")
@@ -352,7 +355,8 @@ def _translate_texts(
 
 
 def _preview_workbook(workbook, request):
-    rows = []
+    matched_rows = []
+    unmatched_rows = []
     references = []
     reference_set = set()
     total = 0
@@ -361,25 +365,52 @@ def _preview_workbook(workbook, request):
     sheets_found = 0
 
     for worksheet in workbook.worksheets:
+        # TIA exports can have missing or inaccurate worksheet dimensions.
+        # ReadOnlyWorksheet.reset_dimensions() allows iter_rows() to scan
+        # the actual XML records even when max_row/max_column are unknown.
+        if hasattr(worksheet, "reset_dimensions"):
+            worksheet.reset_dimensions()
+
         columns = _project_text_columns(worksheet)
         if columns is None:
             continue
 
         sheets_found += 1
         header_row, source_col, target_col, category_col, reference_col = columns
+
         if not headers[0]:
+            header_values = next(
+                worksheet.iter_rows(
+                    min_row=header_row,
+                    max_row=header_row,
+                    values_only=True,
+                ),
+                (),
+            )
             headers = (
-                str(worksheet.cell(header_row, source_col).value or ""),
-                str(worksheet.cell(header_row, target_col).value or ""),
+                str(header_values[source_col - 1] or "")
+                if len(header_values) >= source_col else "",
+                str(header_values[target_col - 1] or "")
+                if len(header_values) >= target_col else "",
             )
 
-        for index in range(header_row + 1, worksheet.max_row + 1):
-            source = worksheet.cell(index, source_col).value
-            reference = str(worksheet.cell(index, reference_col).value or "").strip()
-            if reference and reference not in reference_set:
+        for index, row in enumerate(
+            worksheet.iter_rows(min_row=header_row + 1, values_only=True),
+            start=header_row + 1,
+        ):
+            def value_at(column):
+                return row[column - 1] if len(row) >= column else None
+
+            source = value_at(source_col)
+            reference = str(value_at(reference_col) or "").strip()
+            if (
+                reference
+                and len(references) < 50
+                and reference not in reference_set
+            ):
                 reference_set.add(reference)
-                if len(references) < 50:
-                    references.append(reference)
+                references.append(reference)
+
             if source is None or not str(source).strip():
                 continue
 
@@ -390,27 +421,20 @@ def _preview_workbook(workbook, request):
             if matches:
                 matched += 1
 
-            # Show matched examples first without suppressing unmatched diagnostics.
-            matched_in_preview = sum(row.matches_hmi for row in rows)
-            unmatched_in_preview = len(rows) - matched_in_preview
-            if (matches and matched_in_preview < 50) or (
-                not matches and unmatched_in_preview < 50
-            ):
-                rows.append(
+            preview_rows = matched_rows if matches else unmatched_rows
+            if len(preview_rows) < 50:
+                preview_rows.append(
                     HmiProjectTextPreviewRow(
                         sheet=worksheet.title,
                         row=index,
                         source_text=str(source),
-                        target_text=str(worksheet.cell(index, target_col).value or ""),
-                        category=str(worksheet.cell(index, category_col).value or ""),
+                        target_text=str(value_at(target_col) or ""),
+                        category=str(value_at(category_col) or ""),
                         reference=reference,
                         matches_hmi=matches,
                     )
                 )
 
-    rows = [row for row in rows if row.matches_hmi][:50] + [
-        row for row in rows if not row.matches_hmi
-    ][:50]
     return HmiProjectTextsPreviewResponse(
         hmi_name=request.hmi_name,
         device_name=request.device_name,
@@ -422,7 +446,7 @@ def _preview_workbook(workbook, request):
         total_text_rows=total,
         matched_text_rows=matched,
         reference_examples=references,
-        sample_rows=rows,
+        sample_rows=matched_rows + unmatched_rows,
     )
 
 
