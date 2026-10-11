@@ -17,6 +17,9 @@ from engine.tia.plc_management import (
 from engine.tia.project import (
     router as project_router,
 )
+from engine.tia.program import (
+    router as program_router,
+)
 from engine.tia.structures import (
     router as structures_router,
 )
@@ -38,6 +41,7 @@ router = APIRouter(
 
 for subrouter in (
     project_router,
+    program_router,
     structures_router,
     tags_router,
     hardware_router,
