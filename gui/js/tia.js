@@ -60,6 +60,64 @@ export function initTiaUi(
         );
 
 
+    const plcTagsSort =
+        document.getElementById(
+            "tia-plc-tags-sort"
+        );
+
+    const plcTagsBreakdown =
+        document.getElementById(
+            "tia-plc-tags-breakdown"
+        );
+
+    const tagCountElements = {
+        total:
+            document.getElementById(
+                "tia-tag-count-total"
+            ),
+
+        inputs:
+            document.getElementById(
+                "tia-tag-count-inputs"
+            ),
+
+        outputs:
+            document.getElementById(
+                "tia-tag-count-outputs"
+            ),
+
+        safety:
+            document.getElementById(
+                "tia-tag-count-safety"
+            ),
+
+        iw:
+            document.getElementById(
+                "tia-tag-count-iw"
+            ),
+
+        qw:
+            document.getElementById(
+                "tia-tag-count-qw"
+            ),
+
+        id:
+            document.getElementById(
+                "tia-tag-count-id"
+            ),
+
+        qd:
+            document.getElementById(
+                "tia-tag-count-qd"
+            ),
+
+        other:
+            document.getElementById(
+                "tia-tag-count-other"
+            ),
+    };
+
+
     const readStructuresButton =
         document.getElementById(
             "tia-read-structures-button"
@@ -89,6 +147,17 @@ export function initTiaUi(
     const plcUdtsSummary =
         document.getElementById(
             "tia-plc-udts-summary"
+        );
+
+
+    const plcDbsSort =
+        document.getElementById(
+            "tia-plc-dbs-sort"
+        );
+
+    const plcUdtsSort =
+        document.getElementById(
+            "tia-plc-udts-sort"
         );
 
 
@@ -154,6 +223,14 @@ export function initTiaUi(
 
 
     let existingPlcs = [];
+
+
+    let loadedPlcTags = [];
+
+    let loadedPlcStructures = {
+        data_blocks: [],
+        udts: [],
+    };
 
 
     function setStatus(
@@ -349,6 +426,13 @@ export function initTiaUi(
         updateTargetSummary();
 
         renderExistingPlcs();
+
+        loadedPlcTags = [];
+
+        loadedPlcStructures = {
+            data_blocks: [],
+            udts: [],
+        };
 
         renderEmptyPlcTags(
             "Click Read PLC tags to load tags from the Active PLC."
@@ -611,6 +695,284 @@ export function initTiaUi(
     }
 
 
+    const naturalCollator =
+        new Intl.Collator(
+            undefined,
+            {
+                numeric: true,
+                sensitivity: "base",
+            }
+        );
+
+
+    function compareText(
+        left,
+        right
+    ) {
+        return naturalCollator.compare(
+            String(
+                left
+                ??
+                ""
+            ),
+            String(
+                right
+                ??
+                ""
+            )
+        );
+    }
+
+
+    function sortedPlcTags(
+        tags
+    ) {
+        const result =
+            [...tags];
+
+        const mode =
+            plcTagsSort?.value
+            ??
+            "name-asc";
+
+
+        result.sort(
+            (left, right) => {
+                if (
+                    mode
+                    ===
+                    "address-asc"
+                    ||
+                    mode
+                    ===
+                    "address-desc"
+                ) {
+                    const direction =
+                        mode === "address-desc"
+                            ? -1
+                            : 1;
+
+                    const addressResult =
+                        compareText(
+                            left.logical_address,
+                            right.logical_address
+                        );
+
+                    if (addressResult !== 0) {
+                        return (
+                            addressResult
+                            *
+                            direction
+                        );
+                    }
+
+                    return compareText(
+                        left.name,
+                        right.name
+                    );
+                }
+
+
+                const direction =
+                    mode === "name-desc"
+                        ? -1
+                        : 1;
+
+                const nameResult =
+                    compareText(
+                        left.name,
+                        right.name
+                    );
+
+                if (nameResult !== 0) {
+                    return (
+                        nameResult
+                        *
+                        direction
+                    );
+                }
+
+                return compareText(
+                    left.table_path,
+                    right.table_path
+                );
+            }
+        );
+
+
+        return result;
+    }
+
+
+    function isSafetyTag(
+        tag
+    ) {
+        const text =
+            `${tag.table_path ?? ""} ${tag.name ?? ""}`;
+
+
+        return (
+            /(^|[\s/_-])(safety|failsafe|safe)([\s/_-]|$)/i.test(
+                text
+            )
+            ||
+            /(^|[\s/_-])f[_-]/i.test(
+                text
+            )
+        );
+    }
+
+
+    function classifyPlcTags(
+        tags
+    ) {
+        const counts = {
+            total:
+                tags.length,
+
+            inputs:
+                0,
+
+            outputs:
+                0,
+
+            safety:
+                0,
+
+            iw:
+                0,
+
+            qw:
+                0,
+
+            id:
+                0,
+
+            qd:
+                0,
+
+            other:
+                0,
+        };
+
+
+        for (
+            const tag
+            of orderedTags
+        ) {
+            if (
+                isSafetyTag(
+                    tag
+                )
+            ) {
+                counts.safety +=
+                    1;
+
+                continue;
+            }
+
+
+            const address =
+                String(
+                    tag.logical_address
+                    ??
+                    ""
+                )
+                .replace(
+                    /\s+/g,
+                    ""
+                )
+                .toUpperCase();
+
+
+            if (/^%IW\d+$/.test(address)) {
+                counts.iw += 1;
+
+            } else if (
+                /^%QW\d+$/.test(
+                    address
+                )
+            ) {
+                counts.qw += 1;
+
+            } else if (
+                /^%ID\d+$/.test(
+                    address
+                )
+            ) {
+                counts.id += 1;
+
+            } else if (
+                /^%QD\d+$/.test(
+                    address
+                )
+            ) {
+                counts.qd += 1;
+
+            } else if (
+                /^%I(?:B)?\d+(?:\.\d+)?$/.test(
+                    address
+                )
+            ) {
+                counts.inputs += 1;
+
+            } else if (
+                /^%Q(?:B)?\d+(?:\.\d+)?$/.test(
+                    address
+                )
+            ) {
+                counts.outputs += 1;
+
+            } else {
+                counts.other += 1;
+            }
+        }
+
+
+        return counts;
+    }
+
+
+    function renderPlcTagSummary(
+        tags
+    ) {
+        if (!plcTagsBreakdown) {
+            return;
+        }
+
+
+        const counts =
+            classifyPlcTags(
+                tags
+            );
+
+
+        for (
+            const [
+                key,
+                element,
+            ]
+            of Object.entries(
+                tagCountElements
+            )
+        ) {
+            if (element) {
+                element.textContent =
+                    String(
+                        counts[key]
+                        ??
+                        0
+                    );
+            }
+        }
+
+
+        plcTagsBreakdown.classList.remove(
+            "hidden"
+        );
+    }
+
+
     function renderEmptyPlcTags(
         message
     ) {
@@ -622,6 +984,12 @@ export function initTiaUi(
         if (plcTagsSummary) {
             plcTagsSummary.textContent =
                 "PLC tags list";
+        }
+
+        if (plcTagsBreakdown) {
+            plcTagsBreakdown.classList.add(
+                "hidden"
+            );
         }
 
 
@@ -666,11 +1034,21 @@ export function initTiaUi(
         }
 
 
+        const orderedTags =
+            sortedPlcTags(
+                tags
+            );
+
+
         if (plcTagsSummary) {
             plcTagsSummary.textContent =
                 `PLC tags list (${tags.length})`;
         }
 
+
+        renderPlcTagSummary(
+            tags
+        );
 
         plcTagsBody.replaceChildren();
 
@@ -813,8 +1191,12 @@ export function initTiaUi(
                 );
 
 
+            loadedPlcTags =
+                tags;
+
+
             renderPlcTags(
-                tags
+                loadedPlcTags
             );
 
             setPlcTagsStatus(
@@ -906,6 +1288,41 @@ export function initTiaUi(
     }
 
 
+    function sortedByName(
+        items,
+        mode
+    ) {
+        const direction =
+            mode === "name-desc"
+                ? -1
+                : 1;
+
+
+        return [...items].sort(
+            (left, right) => {
+                const nameResult =
+                    compareText(
+                        left.name,
+                        right.name
+                    );
+
+                if (nameResult !== 0) {
+                    return (
+                        nameResult
+                        *
+                        direction
+                    );
+                }
+
+                return compareText(
+                    left.group_path,
+                    right.group_path
+                );
+            }
+        );
+    }
+
+
     function renderPlcStructures(
         structures
     ) {
@@ -918,6 +1335,22 @@ export function initTiaUi(
             structures.udts
             ??
             [];
+
+        const orderedDataBlocks =
+            sortedByName(
+                dataBlocks,
+                plcDbsSort?.value
+                ??
+                "name-asc"
+            );
+
+        const orderedUdts =
+            sortedByName(
+                udts,
+                plcUdtsSort?.value
+                ??
+                "name-asc"
+            );
 
 
         if (plcDbsSummary) {
@@ -945,7 +1378,7 @@ export function initTiaUi(
             } else {
                 for (
                     const item
-                    of dataBlocks
+                    of orderedDataBlocks
                 ) {
                     const row =
                         document.createElement(
@@ -1008,7 +1441,7 @@ export function initTiaUi(
             } else {
                 for (
                     const item
-                    of udts
+                    of orderedUdts
                 ) {
                     const row =
                         document.createElement(
@@ -1147,8 +1580,12 @@ export function initTiaUi(
                 );
 
 
+            loadedPlcStructures =
+                structures;
+
+
             renderPlcStructures(
-                structures
+                loadedPlcStructures
             );
 
 
@@ -2206,6 +2643,39 @@ export function initTiaUi(
         readStructuresButton.addEventListener(
             "click",
             readPlcStructures
+        );
+    }
+
+
+    if (plcTagsSort) {
+        plcTagsSort.addEventListener(
+            "change",
+            () =>
+                renderPlcTags(
+                    loadedPlcTags
+                )
+        );
+    }
+
+
+    if (plcDbsSort) {
+        plcDbsSort.addEventListener(
+            "change",
+            () =>
+                renderPlcStructures(
+                    loadedPlcStructures
+                )
+        );
+    }
+
+
+    if (plcUdtsSort) {
+        plcUdtsSort.addEventListener(
+            "change",
+            () =>
+                renderPlcStructures(
+                    loadedPlcStructures
+                )
         );
     }
 
