@@ -1428,7 +1428,13 @@ export function initTiaUi(
                 if (job.status === "completed" || job.status === "paused") {
                     break;
                 }
-                if (job.status !== "ready") {
+                if (job.status !== "ready" || !hmiBatchAutoRepeat?.checked) {
+                    if (job.status === "ready") {
+                        setHmiBatchStatus(
+                            "One batch imported and verified. Auto-continue is OFF. "
+                            + "Click Resume saved job for the next batch."
+                        );
+                    }
                     break;
                 }
             }
@@ -1450,7 +1456,9 @@ export function initTiaUi(
         const selection = hmiTranslationSelection();
         const key = hmiTranslationKey(selection);
         if (!selection || key !== verifiedHmiPreviewKey
-            || !selection.view_path_root || !selection.ollama_model) {
+            || !selection.view_path_root
+            || (selection.translation_strategy !== "copy"
+                && !selection.ollama_model)) {
             setHmiBatchStatus(
                 "Select an explicit HMI ViewPath root and run Preview texts first.",
                 true
@@ -1464,29 +1472,34 @@ export function initTiaUi(
             || (total !== null &&
                 (!Number.isInteger(total) || total < 1 || total > 100000))
             || (latestHmiScan && total !== null
-                && total > latestHmiScan.eligible)) {
+                && total > latestHmiScan.missingUnique)) {
             setHmiBatchStatus(
                 "Batch size must be 1–200; total must be empty or "
-                + "between 1 and the eligible unique-text count from the scan.",
+                + "between 1 and the missing-target unique-text count from the scan.",
                 true
             );
             return;
         }
         if (!confirm(
             "START AUTOMATIC TIA IMPORT?\n\n"
-            + "The selected HMI will be translated by local Ollama in batches "
-            + "of " + size + " unique texts"
-            + (total ? ", up to " + total + " total." : ", for ALL unique texts.")
-            + "\n\nEach batch is imported into TIA WITHOUT individual "
-            + "translation approval and verified by re-export before the next. "
-            + "A project backup and successful pilot are strongly recommended. "
-            + "Do not edit this TIA project during the job."
+            + "Strategy: "
+            + (selection.translation_strategy === "copy"
+                ? "copy source texts exactly (no Ollama)." : "translate with Ollama.")
+            + "\nBatch size: " + size + " unique texts. Total: "
+            + (total ?? latestHmiScan?.missingUnique ?? "all eligible")
+            + ". Final batch will be smaller when needed."
+            + "\nAutomatic continuation: "
+            + (hmiBatchAutoRepeat?.checked ? "ON" : "OFF (one batch only)")
+            + "\n\nOnly missing or 'Text' targets are filled. "
+            + "Each batch is imported and VERIFIED in TIA before the next. "
+            + "Back up the project and do not edit it during import."
         )) {
             return;
         }
         hmiBatchStarting = true;
         updateHmiTranslateButtonState();
         setHmiBatchStatus("Initializing batch job from TIA project texts...");
+        renderHmiBatchProgress(0, total ?? latestHmiScan?.missingUnique ?? 0);
         try {
             const job = await postJson(
                 "/api/v1/tia/hmis/batch-translations/start",
@@ -7415,8 +7428,19 @@ export function initTiaUi(
     if (hmiPreviewFilter) {
         hmiPreviewFilter.addEventListener("change", renderHmiPreviewRows);
     }
-    hmiBatchSizeInput?.addEventListener("input", discardHmiReview);
-    hmiBatchTotalInput?.addEventListener("input", discardHmiReview);
+    hmiBatchSizeInput?.addEventListener("input", () => {
+        discardHmiReview();
+        renderHmiBatchPlan();
+    });
+    hmiBatchTotalInput?.addEventListener("input", () => {
+        discardHmiReview();
+        renderHmiBatchPlan();
+    });
+    hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
+    hmiTranslationStrategySelect?.addEventListener("change", () => {
+        invalidateHmiPreview();
+        renderHmiBatchPlan();
+    });
 
     hmiScanButton?.addEventListener(
         "click", () => { void previewSelectedHmi(); }
@@ -7478,6 +7502,8 @@ export function initTiaUi(
 
 
     updateTargetSummary();
+    renderHmiBatchProgress(0, 0);
+    renderHmiBatchPlan();
 
     renderPlcTagSortHeaders();
 
