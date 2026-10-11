@@ -310,6 +310,7 @@ class HmiProjectTextsPreviewResponse(BaseModel):
     worksheet_count: int
     sheet_diagnostics: list[HmiProjectTextSheetDiagnostic]
     view_path_roots: list[HmiProjectTextRoot]
+    matched_view_path_roots: list[HmiProjectTextRoot] = Field(default_factory=list)
     total_text_rows: int
     matched_text_rows: int
     matched_unique_texts: int
