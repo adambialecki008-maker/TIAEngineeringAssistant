@@ -280,6 +280,13 @@ class HmiProjectTextPreviewRow(BaseModel):
     matches_hmi: bool
 
 
+class HmiProjectTextSheetDiagnostic(BaseModel):
+    sheet_name: str
+    declared_rows: int | None = None
+    declared_columns: int | None = None
+    sample_rows: list[str]
+
+
 class HmiProjectTextsPreviewResponse(BaseModel):
     hmi_name: str
     device_name: str
@@ -288,6 +295,8 @@ class HmiProjectTextsPreviewResponse(BaseModel):
     source_column_header: str
     target_column_header: str
     worksheets_found: int
+    worksheet_count: int
+    sheet_diagnostics: list[HmiProjectTextSheetDiagnostic]
     total_text_rows: int
     matched_text_rows: int
     reference_examples: list[str]
