@@ -79,6 +79,10 @@ namespace TiaOpennessAdapter
                         return ExportStructure(args);
 
 
+                    case "export-program-block":
+                        return ExportProgramBlock(args);
+
+
                     case "create-tags":
                         return CreateTags(args);
 
@@ -327,6 +331,40 @@ namespace TiaOpennessAdapter
                 args[5],
                 args[6],
                 args[7]
+            );
+        }
+
+
+        private static int ExportProgramBlock(
+            string[] args
+        )
+        {
+            if (args.Length < 7)
+            {
+                Console.Error.WriteLine(
+                    "PID, device name, PLC name, group path, block name and output file are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ExportPlcProgramBlock(
+                processId,
+                args[2],
+                args[3],
+                args[4],
+                args[5],
+                args[6]
             );
         }
 
@@ -580,6 +618,10 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  export-structure <PID> <DEVICE_NAME> <PLC_NAME> <db|udt> <GROUP_PATH> <NAME> <OUTPUT_FILE>"
+            );
+
+            Console.WriteLine(
+                "  export-program-block <PID> <DEVICE_NAME> <PLC_NAME> <GROUP_PATH> <BLOCK_NAME> <OUTPUT_FILE>"
             );
 
             Console.WriteLine(
