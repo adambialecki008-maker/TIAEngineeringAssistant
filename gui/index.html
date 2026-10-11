@@ -371,7 +371,7 @@
 
                         <p class="hint">
                             HMI / WinCC software objects detected in the currently open TIA project.
-                            This view is read-only.
+                            Translate project texts for one selected HMI at a time.
                         </p>
                     </div>
                 </div>
@@ -389,13 +389,14 @@
                                 <th>HMI</th>
                                 <th>Type</th>
                                 <th>Software</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
 
                         <tbody id="tia-existing-hmis-body">
                             <tr>
                                 <td
-                                    colspan="4"
+                                    colspan="5"
                                     class="empty-table-cell"
                                 >
                                     Select a TIA process and refresh project context.
@@ -403,6 +404,80 @@
                             </tr>
                         </tbody>
                     </table>
+
+                </div>
+
+
+                <div
+                    id="tia-hmi-translation-panel"
+                    class="hmi-translation-panel hidden"
+                >
+
+                    <div class="card-header compact-card-header">
+                        <div>
+                            <h4>
+                                Translate texts — <span id="tia-hmi-translation-title">HMI</span>
+                            </h4>
+
+                            <p class="hint">
+                                Only rows whose Project texts Reference points to this HMI are changed.
+                                TIA source slot means the language column that currently contains the texts.
+                                The actual language is detected from the text content, even if the TIA column label is wrong.
+                            </p>
+                        </div>
+                    </div>
+
+
+                    <div class="form-grid hmi-translation-grid">
+
+                        <div class="field-group">
+                            <label for="tia-hmi-source-language">
+                                TIA source slot:
+                            </label>
+
+                            <select id="tia-hmi-source-language">
+                                <option value="">
+                                    Select source slot
+                                </option>
+                            </select>
+                        </div>
+
+
+                        <div class="field-group">
+                            <label for="tia-hmi-target-language">
+                                Target language:
+                            </label>
+
+                            <select id="tia-hmi-target-language">
+                                <option value="">
+                                    Select target language
+                                </option>
+                            </select>
+                        </div>
+
+                    </div>
+
+
+                    <div class="action-row hmi-translation-actions">
+
+                        <button
+                            id="tia-hmi-translate-button"
+                            type="button"
+                            class="primary-button"
+                            disabled
+                        >
+                            Translate & import
+                        </button>
+
+                    </div>
+
+
+                    <p
+                        id="tia-hmi-translation-status"
+                        class="status-box"
+                    >
+                        Select source slot and target language.
+                    </p>
 
                 </div>
 
