@@ -1345,7 +1345,7 @@ export function initTiaUi(
             const confirmed = confirm(
                 "Translate and import ALL matched rows for "
                 + (selection.view_path_root || selection.hmi_name)
-                + "?\\n\\nThis may require many billable API calls. "
+                + "?\n\nThis may require many billable API calls. "
                 + "Verify a 10-text pilot in TIA Portal first."
             );
             if (!confirmed) {
@@ -1394,7 +1394,18 @@ export function initTiaUi(
                 + (importOk
                     ? "Reopen Project texts in TIA and verify the target column."
                     : "Check the import log: " + (result.import_log || "not returned"));
-            setHmiTranslationStatus(message, importOk ? "success" : "error");
+            const examples = (result.translated_examples || []).slice(0, 5);
+            const exampleText = examples.length
+                ? "\nSample imported rows:\n"
+                    + examples.map(item =>
+                        item.source_text + " → " + item.target_text
+                        + "\n" + item.view_path
+                    ).join("\n")
+                : "";
+            setHmiTranslationStatus(
+                message + exampleText,
+                importOk ? "success" : "error"
+            );
 
         } catch (error) {
             setHmiTranslationStatus(error.message, "error");
