@@ -997,6 +997,11 @@ export function initTiaUi(
                 ??
                 [];
 
+            const resourceAttributes =
+                plc.resource_attributes
+                ??
+                [];
+
 
             const counters =
                 document.createElement(
@@ -1085,120 +1090,107 @@ export function initTiaUi(
             );
 
 
-            if (resourceRows.length > 0) {
-                const wrapper =
-                    document.createElement(
-                        "div"
-                    );
-
-                wrapper.className =
-                    "plc-resource-table-wrapper";
-
-
-                const table =
-                    document.createElement(
-                        "table"
-                    );
-
-                table.className =
-                    "plc-resource-table";
-
-
-                const head =
-                    document.createElement(
-                        "thead"
-                    );
-
-                const headRow =
-                    document.createElement(
-                        "tr"
-                    );
-
-
-                for (
-                    const label
-                    of [
-                        "Objects",
-                        "Load memory",
-                        "Code work-memory",
-                        "Data work-memory",
-                        "Retain memory",
-                    ]
-                ) {
-                    const cell =
-                        document.createElement(
-                            "th"
-                        );
-
-                    cell.textContent =
-                        label;
-
-                    headRow.appendChild(
-                        cell
-                    );
-                }
-
-
-                head.appendChild(
-                    headRow
+            const wrapper =
+                document.createElement(
+                    "div"
                 );
 
-                table.appendChild(
-                    head
+            wrapper.className =
+                "plc-resource-table-wrapper";
+
+
+            const table =
+                document.createElement(
+                    "table"
+                );
+
+            table.className =
+                "plc-resource-table";
+
+
+            const head =
+                document.createElement(
+                    "thead"
+                );
+
+            const headRow =
+                document.createElement(
+                    "tr"
                 );
 
 
-                const body =
+            for (
+                const label
+                of [
+                    "Objects",
+                    "Load memory",
+                    "Code work-memory",
+                    "Data work-memory",
+                    "Retain memory",
+                ]
+            ) {
+                const cell =
                     document.createElement(
-                        "tbody"
+                        "th"
                     );
 
+                cell.textContent =
+                    label;
 
-                for (
-                    const resource
-                    of resourceRows
-                ) {
+                headRow.appendChild(
+                    cell
+                );
+            }
+
+
+            head.appendChild(
+                headRow
+            );
+
+            table.appendChild(
+                head
+            );
+
+
+            const body =
+                document.createElement(
+                    "tbody"
+                );
+
+
+            const used =
+                resourceRows.find(
+                    resource =>
+                        resource.object_type
+                        ===
+                        "Used"
+                );
+
+
+            const appendResourceRow =
+                (
+                    label,
+                    values,
+                    className = ""
+                ) => {
                     const row =
                         document.createElement(
                             "tr"
                         );
 
 
-                    if (
-                        resource.object_type
-                        ===
-                        "Used"
-                    ) {
+                    if (className) {
                         row.className =
-                            "plc-resource-used-row";
+                            className;
                     }
-
-
-                    const values = [
-                        resource.object_type,
-                        formatMemoryBytes(
-                            resource.load_memory_bytes
-                        ),
-                        formatMemoryBytes(
-                            resource.code_work_memory_bytes
-                        ),
-                        formatMemoryBytes(
-                            resource.data_work_memory_bytes
-                        ),
-                        (
-                            resource.retain_memory_bytes
-                            == null
-                                ? "—"
-                                : formatMemoryBytes(
-                                    resource.retain_memory_bytes
-                                )
-                        ),
-                    ];
 
 
                     for (
                         const value
-                        of values
+                        of [
+                            label,
+                            ...values,
+                        ]
                     ) {
                         const cell =
                             document.createElement(
@@ -1217,22 +1209,160 @@ export function initTiaUi(
                     body.appendChild(
                         row
                     );
+                };
+
+
+            appendResourceRow(
+                "",
+                [
+                    "—",
+                    "—",
+                    "—",
+                    "—",
+                ],
+                "plc-resource-percent-row"
+            );
+
+            appendResourceRow(
+                "Total:",
+                [
+                    "—",
+                    "—",
+                    "—",
+                    "—",
+                ],
+                "plc-resource-total-row"
+            );
+
+            appendResourceRow(
+                "Used:",
+                [
+                    used
+                        ? formatMemoryBytes(
+                            used.load_memory_bytes
+                        )
+                        : "—",
+
+                    used
+                        ? formatMemoryBytes(
+                            used.code_work_memory_bytes
+                        )
+                        : "—",
+
+                    used
+                        ? formatMemoryBytes(
+                            used.data_work_memory_bytes
+                        )
+                        : "—",
+
+                    (
+                        used
+                        &&
+                        used.retain_memory_bytes
+                        != null
+                    )
+                        ? formatMemoryBytes(
+                            used.retain_memory_bytes
+                        )
+                        : "—",
+                ],
+                "plc-resource-used-row"
+            );
+
+
+            const detailsRow =
+                document.createElement(
+                    "tr"
+                );
+
+            detailsRow.className =
+                "plc-resource-details-row";
+
+
+            const detailsCell =
+                document.createElement(
+                    "td"
+                );
+
+            detailsCell.colSpan =
+                5;
+
+            detailsCell.textContent =
+                "Details";
+
+
+            detailsRow.appendChild(
+                detailsCell
+            );
+
+            body.appendChild(
+                detailsRow
+            );
+
+
+            for (
+                const kind
+                of [
+                    "OB",
+                    "FC",
+                    "FB",
+                    "DB",
+                    "Other",
+                ]
+            ) {
+                const resource =
+                    resourceRows.find(
+                        item =>
+                            item.object_type
+                            ===
+                            kind
+                    );
+
+
+                if (!resource) {
+                    continue;
                 }
 
 
-                table.appendChild(
-                    body
+                appendResourceRow(
+                    kind,
+                    [
+                        formatMemoryBytes(
+                            resource.load_memory_bytes
+                        ),
+                        formatMemoryBytes(
+                            resource.code_work_memory_bytes
+                        ),
+                        formatMemoryBytes(
+                            resource.data_work_memory_bytes
+                        ),
+                        (
+                            resource.retain_memory_bytes
+                            == null
+                                ? "—"
+                                : formatMemoryBytes(
+                                    resource.retain_memory_bytes
+                                )
+                        ),
+                    ]
                 );
+            }
 
-                wrapper.appendChild(
-                    table
-                );
 
-                resourcesDetails.appendChild(
-                    wrapper
-                );
+            table.appendChild(
+                body
+            );
 
-            } else {
+            wrapper.appendChild(
+                table
+            );
+
+            resourcesDetails.appendChild(
+                wrapper
+            );
+
+
+            if (resourceRows.length === 0) {
                 const empty =
                     document.createElement(
                         "p"
@@ -1242,10 +1372,141 @@ export function initTiaUi(
                     "plc-resource-note";
 
                 empty.textContent =
-                    "No compiled PLC memory resource data available.";
+                    "No PLC memory rows were returned by the running Openness adapter. Restart the launcher after pulling so the C# adapter is rebuilt.";
 
                 resourcesDetails.appendChild(
                     empty
+                );
+            }
+
+
+            if (resourceAttributes.length > 0) {
+                const attributesDetails =
+                    document.createElement(
+                        "details"
+                    );
+
+                attributesDetails.className =
+                    "plc-resource-attributes";
+
+
+                const attributesSummary =
+                    document.createElement(
+                        "summary"
+                    );
+
+                attributesSummary.textContent =
+                    `Detected CPU resource attributes (${resourceAttributes.length})`;
+
+
+                const attributesTable =
+                    document.createElement(
+                        "table"
+                    );
+
+                attributesTable.className =
+                    "plc-resource-attribute-table";
+
+
+                const attributesHead =
+                    document.createElement(
+                        "thead"
+                    );
+
+                const attributesHeadRow =
+                    document.createElement(
+                        "tr"
+                    );
+
+
+                for (
+                    const label
+                    of [
+                        "Source",
+                        "Attribute",
+                        "Value",
+                    ]
+                ) {
+                    const cell =
+                        document.createElement(
+                            "th"
+                        );
+
+                    cell.textContent =
+                        label;
+
+                    attributesHeadRow.appendChild(
+                        cell
+                    );
+                }
+
+
+                attributesHead.appendChild(
+                    attributesHeadRow
+                );
+
+                attributesTable.appendChild(
+                    attributesHead
+                );
+
+
+                const attributesBody =
+                    document.createElement(
+                        "tbody"
+                    );
+
+
+                for (
+                    const attribute
+                    of resourceAttributes
+                ) {
+                    const row =
+                        document.createElement(
+                            "tr"
+                        );
+
+
+                    for (
+                        const value
+                        of [
+                            attribute.source,
+                            attribute.name,
+                            attribute.value,
+                        ]
+                    ) {
+                        const cell =
+                            document.createElement(
+                                "td"
+                            );
+
+                        cell.textContent =
+                            value
+                            ||
+                            "—";
+
+                        row.appendChild(
+                            cell
+                        );
+                    }
+
+
+                    attributesBody.appendChild(
+                        row
+                    );
+                }
+
+
+                attributesTable.appendChild(
+                    attributesBody
+                );
+
+                attributesDetails.append(
+                    attributesSummary,
+                    attributesTable
+                );
+
+                resourcesDetails.appendChild(
+                    attributesDetails
                 );
             }
 
@@ -1259,7 +1520,7 @@ export function initTiaUi(
                 "plc-resource-note";
 
             resourcesNote.textContent =
-                "Values are calculated from compiled block LoadMemoryLength and WorkMemoryLength. Retain memory and CPU total capacities are not exposed by this read path.";
+                "Used/detail memory comes from compiled PlcBlock LoadMemoryLength and WorkMemoryLength. Total and retain values stay unavailable until the CPU exposes matching public Openness attributes.";
 
             resourcesDetails.appendChild(
                 resourcesNote
