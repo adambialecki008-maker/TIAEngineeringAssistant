@@ -1560,9 +1560,58 @@ export function initTiaUi(
         }
     }
 
+    // The project-language refresh rebuilds both select elements.
+    // Preserve the selected HMI/source/target/model after an import, so that
+    // the next Preview/Prepare does not require a browser reload.
+    function restoreHmiTranslationAfterImport(selection) {
+        if (!selection || !selectedHmiForTranslation
+            || selectedProcessId() !== selection.process_id
+            || selectedHmiForTranslation.device_name !== selection.device_name
+            || selectedHmiForTranslation.hmi_name !== selection.hmi_name) {
+            return false;
+        }
+
+        const restoreOption = (select, value, label) => {
+            if (!select || !value) {
+                return;
+            }
+            if (![...select.options].some(option => option.value === value)) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = label || value;
+                select.appendChild(option);
+            }
+            select.value = value;
+        };
+
+        restoreOption(
+            hmiSourceLanguageSelect, selection.source_culture,
+            selection.source_culture
+        );
+        // Rebuild the target list for the restored source culture.
+        populateHmiTranslationLanguages();
+        restoreOption(
+            hmiTargetLanguageSelect, selection.target_culture,
+            selection.target_culture
+        );
+        restoreOption(
+            hmiViewPathRootSelect, selection.view_path_root,
+            selection.view_path_root
+        );
+        restoreOption(
+            hmiOllamaModelSelect, selection.ollama_model,
+            selection.ollama_model
+        );
+        updateHmiTranslateButtonState();
+        return hmiTranslationKey(hmiTranslationSelection())
+            === hmiTranslationKey(selection);
+    }
+
+
     async function importReviewedHmiTexts() {
         const review = preparedHmiReview;
-        const key = hmiTranslationKey(hmiTranslationSelection());
+        const selectionBeforeImport = hmiTranslationSelection();
+        const key = hmiTranslationKey(selectionBeforeImport);
         if (!review || review.selectionKey !== key
             || verifiedHmiPreviewKey !== key) {
             setHmiTranslationStatus(
@@ -1602,7 +1651,30 @@ export function initTiaUi(
                 count === result.imported_rows ? "success" : "error"
             );
             await refreshProjectLanguages();
-            invalidateHmiPreview();
+            const restored = restoreHmiTranslationAfterImport(
+                selectionBeforeImport
+            );
+            if (restored) {
+                // A completed import changes the XLSX values. Re-preview the
+                // updated TIA project before preparing the remaining texts.
+                // This preserves the verified HMI root and target language.
+                await previewSelectedHmi();
+                setHmiTranslationStatus(
+                    "TIA import verified: " + count + " row(s). "
+                    + "Selection restored and project texts refreshed. "
+                    + "Choose All matched texts (if desired), then Prepare translations. "
+                    + (result.import_log ? "Log: " + result.import_log : ""),
+                    "success"
+                );
+            } else {
+                invalidateHmiPreview();
+                setHmiTranslationStatus(
+                    "TIA import verified: " + count + " row(s), but the HMI "
+                    + "selection changed. Reselect the source/target language "
+                    + "and click Preview texts before continuing.",
+                    "success"
+                );
+            }
         } catch (error) {
             setHmiTranslationStatus(
                 error.message + " Prepare a new translation review before retrying.",
