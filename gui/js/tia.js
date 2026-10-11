@@ -782,6 +782,32 @@ export function initTiaUi(
     }
 
 
+    function formatMemoryBytes(
+        value
+    ) {
+        const number =
+            Number(
+                value
+            );
+
+
+        if (
+            !Number.isFinite(
+                number
+            )
+        ) {
+            return "—";
+        }
+
+
+        return (
+            number.toLocaleString()
+            +
+            " B"
+        );
+    }
+
+
     function renderExistingPlcs() {
         existingPlcsBody.replaceChildren();
 
@@ -911,105 +937,175 @@ export function initTiaUi(
                 "View resources";
 
 
-            const resourcesGrid =
-                document.createElement(
-                    "div"
-                );
-
-            resourcesGrid.className =
-                "plc-resource-grid";
+            const resourceRows =
+                plc.resource_rows
+                ??
+                [];
 
 
-            const resourceItems = [
-                [
-                    "Blocks",
-                    plc.block_count
-                    ??
-                    0,
-                ],
-
-                [
-                    "DB",
-                    plc.data_block_count
-                    ??
-                    0,
-                ],
-
-                [
-                    "UDT",
-                    plc.udt_count
-                    ??
-                    0,
-                ],
-
-                [
-                    "Tags",
-                    plc.tag_count
-                    ??
-                    0,
-                ],
-
-                [
-                    "Cycle",
-                    "—",
-                ],
-
-                [
-                    "Live memory",
-                    "—",
-                ],
-            ];
-
-
-            for (
-                const [
-                    label,
-                    value,
-                ]
-                of resourceItems
-            ) {
-                const item =
+            if (resourceRows.length > 0) {
+                const wrapper =
                     document.createElement(
                         "div"
                     );
 
-                item.className =
-                    "plc-resource-item";
+                wrapper.className =
+                    "plc-resource-table-wrapper";
 
 
-                const labelElement =
+                const table =
                     document.createElement(
-                        "span"
+                        "table"
                     );
 
-                labelElement.className =
-                    "plc-resource-label";
-
-                labelElement.textContent =
-                    label;
+                table.className =
+                    "plc-resource-table";
 
 
-                const valueElement =
+                const head =
                     document.createElement(
-                        "strong"
+                        "thead"
                     );
 
-                valueElement.className =
-                    "plc-resource-value";
-
-                valueElement.textContent =
-                    String(
-                        value
+                const headRow =
+                    document.createElement(
+                        "tr"
                     );
 
 
-                item.append(
-                    labelElement,
-                    valueElement
+                for (
+                    const label
+                    of [
+                        "Objects",
+                        "Load memory",
+                        "Code work-memory",
+                        "Data work-memory",
+                        "Retain memory",
+                    ]
+                ) {
+                    const cell =
+                        document.createElement(
+                            "th"
+                        );
+
+                    cell.textContent =
+                        label;
+
+                    headRow.appendChild(
+                        cell
+                    );
+                }
+
+
+                head.appendChild(
+                    headRow
                 );
 
-                resourcesGrid.appendChild(
-                    item
+                table.appendChild(
+                    head
+                );
+
+
+                const body =
+                    document.createElement(
+                        "tbody"
+                    );
+
+
+                for (
+                    const resource
+                    of resourceRows
+                ) {
+                    const row =
+                        document.createElement(
+                            "tr"
+                        );
+
+
+                    if (
+                        resource.object_type
+                        ===
+                        "Used"
+                    ) {
+                        row.className =
+                            "plc-resource-used-row";
+                    }
+
+
+                    const values = [
+                        resource.object_type,
+                        formatMemoryBytes(
+                            resource.load_memory_bytes
+                        ),
+                        formatMemoryBytes(
+                            resource.code_work_memory_bytes
+                        ),
+                        formatMemoryBytes(
+                            resource.data_work_memory_bytes
+                        ),
+                        (
+                            resource.retain_memory_bytes
+                            == null
+                                ? "—"
+                                : formatMemoryBytes(
+                                    resource.retain_memory_bytes
+                                )
+                        ),
+                    ];
+
+
+                    for (
+                        const value
+                        of values
+                    ) {
+                        const cell =
+                            document.createElement(
+                                "td"
+                            );
+
+                        cell.textContent =
+                            value;
+
+                        row.appendChild(
+                            cell
+                        );
+                    }
+
+
+                    body.appendChild(
+                        row
+                    );
+                }
+
+
+                table.appendChild(
+                    body
+                );
+
+                wrapper.appendChild(
+                    table
+                );
+
+                resourcesDetails.append(
+                    resourcesSummary,
+                    wrapper
+                );
+
+            } else {
+                const empty =
+                    document.createElement(
+                        "p"
+                    );
+
+                empty.className =
+                    "plc-resource-note";
+
+                empty.textContent =
+                    "No compiled PLC memory resource data available.";
+
+                resourcesDetails.append(
+                    resourcesSummary,
+                    empty
                 );
             }
 
@@ -1023,12 +1119,9 @@ export function initTiaUi(
                 "plc-resource-note";
 
             resourcesNote.textContent =
-                "Cycle time and live memory require an online runtime diagnostics connection.";
+                "Values are calculated from compiled block LoadMemoryLength and WorkMemoryLength. Retain memory and CPU total capacities are not exposed by this read path.";
 
-
-            resourcesDetails.append(
-                resourcesSummary,
-                resourcesGrid,
+            resourcesDetails.appendChild(
                 resourcesNote
             );
 
