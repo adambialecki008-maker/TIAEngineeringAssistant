@@ -1020,6 +1020,8 @@ export function initTiaUi(
             hmi_name: hmi.hmi_name,
             view_path_root: hmiViewPathRootSelect?.value || null,
             ollama_model: hmiOllamaModelSelect?.value || null,
+            // The GUI always translates; API-only callers may still use "copy".
+            translation_strategy: "ollama",
             source_culture: sourceCulture,
             target_culture: targetCulture,
         };
@@ -1130,6 +1132,15 @@ export function initTiaUi(
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting;
         const hasTranslationEngine = Boolean(selection?.ollama_model);
+        const missingUnique = latestHmiScan?.missingUnique ?? 0;
+        const batchSize = Number(hmiBatchSizeInput?.value);
+        const totalRaw = hmiBatchTotalInput?.value?.trim() || "";
+        const total = totalRaw ? Number(totalRaw) : null;
+        const validBatchSize = Number.isInteger(batchSize)
+            && batchSize >= 1 && batchSize <= 200;
+        const validTotal = total === null || (Number.isInteger(total)
+            && total >= 1 && total <= 100000
+            && (!isVerified || total <= missingUnique));
         if (hmiTranslateButton) {
             const count = manualHmiPrepareCount();
             hmiTranslateButton.textContent = count
@@ -1138,7 +1149,7 @@ export function initTiaUi(
                 : "Prepare one batch (review)";
             hmiTranslateButton.disabled =
                 busy || !isVerified || !hasTranslationEngine
-                || !count || count > 50;
+                || !missingUnique || !validTotal || !count || count > 50;
             hmiTranslateButton.title = count > 50
                 ? "Manual review allows at most 50 unique texts. "
                     + "Reduce Batch size or Total to translate."
@@ -1161,10 +1172,9 @@ export function initTiaUi(
         if (hmiBatchStartButton) {
             const cannotStart = busy || !isVerified
                 || !selection?.view_path_root || !hasTranslationEngine
-                || !latestHmiScan?.missingUnique;
+                || !missingUnique || !validBatchSize || !validTotal;
             hmiBatchStartButton.disabled = cannotStart;
             if (hmiBatchReadiness) {
-                const total = Number(hmiBatchTotalInput?.value);
                 let hint = "";
                 if (!selection) {
                     hint = "Select an HMI and distinct source/target languages.";
@@ -1179,13 +1189,11 @@ export function initTiaUi(
                     hint = "No missing or placeholder target texts found in this HMI.";
                 } else if (!hasTranslationEngine) {
                     hint = "Select an installed Ollama model above.";
-                } else if (
-                    hmiBatchTotalInput?.value?.trim()
-                    && (!Number.isInteger(total) || total < 1
-                        || total > latestHmiScan.missingUnique)
-                ) {
-                    hint = "Total to translate must be between 1 and "
-                        + latestHmiScan.missingUnique + ".";
+                } else if (!validBatchSize) {
+                    hint = "Batch size must be between 1 and 200.";
+                } else if (!validTotal) {
+                    hint = "Total to translate must be blank or between 1 and "
+                        + Math.min(100000, missingUnique) + ".";
                 } else {
                     hint = "Ready: " + latestHmiScan.missingUnique
                         + " unique missing-target texts. Start batch import is enabled.";
@@ -7181,10 +7189,12 @@ export function initTiaUi(
     hmiBatchSizeInput?.addEventListener("input", () => {
         discardHmiReview();
         renderHmiBatchPlan();
+        updateHmiTranslateButtonState();
     });
     hmiBatchTotalInput?.addEventListener("input", () => {
         discardHmiReview();
         renderHmiBatchPlan();
+        updateHmiTranslateButtonState();
     });
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
 
