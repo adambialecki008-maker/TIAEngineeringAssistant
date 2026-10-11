@@ -54,6 +54,12 @@ export function initTiaUi(
         );
 
 
+    const plcTagsSummary =
+        document.getElementById(
+            "tia-plc-tags-summary"
+        );
+
+
     const readStructuresButton =
         document.getElementById(
             "tia-read-structures-button"
@@ -72,6 +78,17 @@ export function initTiaUi(
     const plcUdtsBody =
         document.getElementById(
             "tia-plc-udts-body"
+        );
+
+
+    const plcDbsSummary =
+        document.getElementById(
+            "tia-plc-dbs-summary"
+        );
+
+    const plcUdtsSummary =
+        document.getElementById(
+            "tia-plc-udts-summary"
         );
 
 
@@ -602,6 +619,12 @@ export function initTiaUi(
         }
 
 
+        if (plcTagsSummary) {
+            plcTagsSummary.textContent =
+                "PLC tags list";
+        }
+
+
         plcTagsBody.replaceChildren();
 
 
@@ -640,6 +663,12 @@ export function initTiaUi(
     ) {
         if (!plcTagsBody) {
             return;
+        }
+
+
+        if (plcTagsSummary) {
+            plcTagsSummary.textContent =
+                `PLC tags list (${tags.length})`;
         }
 
 
@@ -891,6 +920,17 @@ export function initTiaUi(
             [];
 
 
+        if (plcDbsSummary) {
+            plcDbsSummary.textContent =
+                `Data Blocks (${dataBlocks.length})`;
+        }
+
+        if (plcUdtsSummary) {
+            plcUdtsSummary.textContent =
+                `UDTs (${udts.length})`;
+        }
+
+
         if (plcDbsBody) {
             plcDbsBody.replaceChildren();
 
@@ -1018,6 +1058,17 @@ export function initTiaUi(
         message =
             "No DB / UDT inventory loaded."
     ) {
+        if (plcDbsSummary) {
+            plcDbsSummary.textContent =
+                "Data Blocks";
+        }
+
+        if (plcUdtsSummary) {
+            plcUdtsSummary.textContent =
+                "UDTs";
+        }
+
+
         renderEmptyStructureTable(
             plcDbsBody,
             message,
