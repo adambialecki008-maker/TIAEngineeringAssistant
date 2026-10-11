@@ -88,6 +88,31 @@ export function initTiaUi(
             "tia-hmi-translate-button"
         );
 
+    const hmiPreviewButton =
+        document.getElementById(
+            "tia-hmi-preview-button"
+        );
+
+    const hmiPreviewResults =
+        document.getElementById(
+            "tia-hmi-preview-results"
+        );
+
+    const hmiPreviewSummary =
+        document.getElementById(
+            "tia-hmi-preview-summary"
+        );
+
+    const hmiPreviewRows =
+        document.getElementById(
+            "tia-hmi-preview-rows"
+        );
+
+    const hmiPreviewReferences =
+        document.getElementById(
+            "tia-hmi-preview-references"
+        );
+
     const hmiTranslationStatus =
         document.getElementById(
             "tia-hmi-translation-status"
@@ -394,6 +419,9 @@ export function initTiaUi(
     let projectLanguages = [];
 
     let selectedHmiForTranslation = null;
+
+    let verifiedHmiPreviewKey = null;
+    let hmiPreviewInProgress = false;
 
     let currentProjectName = "";
 
@@ -934,19 +962,109 @@ export function initTiaUi(
     }
 
 
+    function hmiTranslationSelection() {
+        const hmi = selectedHmiForTranslation;
+        const processId = selectedProcessId();
+        const sourceCulture = hmiSourceLanguageSelect?.value?.trim();
+        const targetCulture = hmiTargetLanguageSelect?.value?.trim();
+        if (!hmi || !processId || !sourceCulture || !targetCulture
+            || sourceCulture === targetCulture) {
+            return null;
+        }
+        return {
+            process_id: processId,
+            device_name: hmi.device_name,
+            hmi_name: hmi.hmi_name,
+            source_culture: sourceCulture,
+            target_culture: targetCulture,
+        };
+    }
+
+    function hmiTranslationKey(selection) {
+        return selection ? JSON.stringify(selection) : null;
+    }
+
+    function invalidateHmiPreview() {
+        verifiedHmiPreviewKey = null;
+        hmiPreviewResults?.classList.add("hidden");
+        hmiPreviewRows?.replaceChildren();
+        updateHmiTranslateButtonState();
+    }
+
     function updateHmiTranslateButtonState() {
-        if (!hmiTranslateButton) {
+        const selection = hmiTranslationSelection();
+        if (hmiTranslateButton) {
+            hmiTranslateButton.disabled = hmiPreviewInProgress
+                || !selection
+                || hmiTranslationKey(selection) !== verifiedHmiPreviewKey;
+        }
+        if (hmiPreviewButton) {
+            hmiPreviewButton.disabled = hmiPreviewInProgress || !selection;
+        }
+    }
+
+    async function previewSelectedHmi() {
+        const selection = hmiTranslationSelection();
+        if (!selection) {
+            setHmiTranslationStatus("Select HMI, source slot and target language.", "error");
             return;
         }
 
-        hmiTranslateButton.disabled =
-            !selectedHmiForTranslation
-            ||
-            !hmiSourceLanguageSelect
-                ?.value
-            ||
-            !hmiTargetLanguageSelect
-                ?.value;
+        invalidateHmiPreview();
+        hmiPreviewInProgress = true;
+        updateHmiTranslateButtonState();
+        setHmiTranslationStatus("Exporting Project texts for read-only preview...");
+        const previewKey = hmiTranslationKey(selection);
+        try {
+            const result = await postJson("/api/v1/tia/hmis/preview-texts", selection);
+            if (hmiTranslationKey(hmiTranslationSelection()) !== previewKey) {
+                return;
+            }
+            hmiPreviewRows?.replaceChildren();
+            for (const item of result.sample_rows || []) {
+                const row = document.createElement("tr");
+                for (const value of [
+                    item.matches_hmi ? "Yes" : "No",
+                    item.source_text, item.category, item.reference,
+                ]) {
+                    const cell = document.createElement("td");
+                    cell.textContent = String(value ?? "");
+                    row.appendChild(cell);
+                }
+                hmiPreviewRows?.appendChild(row);
+            }
+
+            if (hmiPreviewSummary) {
+                hmiPreviewSummary.textContent =
+                    `Source column: ${result.source_column_header || "unknown"}; `
+                    + `target column: ${result.target_column_header || "unknown"}. `
+                    + `${result.matched_text_rows} matched of ${result.total_text_rows} text rows `
+                    + `across ${result.worksheets_found} sheet(s). `
+                    + "Rows below are samples, not the entire export.";
+            }
+            if (hmiPreviewReferences) {
+                hmiPreviewReferences.textContent =
+                    (result.reference_examples || []).join("\n");
+            }
+            hmiPreviewResults?.classList.remove("hidden");
+            if (result.matched_text_rows > 0) {
+                verifiedHmiPreviewKey = previewKey;
+                setHmiTranslationStatus(
+                    `Preview found ${result.matched_text_rows} matching text row(s). `
+                    + "Check the sample references before translating.", "success"
+                );
+            } else {
+                setHmiTranslationStatus(
+                    "No matching HMI text rows. Inspect the Reference diagnostics; "
+                    + "translation remains disabled.", "error"
+                );
+            }
+        } catch (error) {
+            setHmiTranslationStatus(error.message, "error");
+        } finally {
+            hmiPreviewInProgress = false;
+            updateHmiTranslateButtonState();
+        }
     }
 
 
@@ -1104,7 +1222,7 @@ export function initTiaUi(
                 previousTarget;
         }
 
-        updateHmiTranslateButtonState();
+        invalidateHmiPreview();
     }
 
 
@@ -1113,6 +1231,7 @@ export function initTiaUi(
     ) {
         selectedHmiForTranslation =
             hmi;
+        invalidateHmiPreview();
 
         if (hmiTranslationPanel) {
             hmiTranslationPanel.classList.remove(
@@ -1150,6 +1269,7 @@ export function initTiaUi(
     function resetHmiTranslation() {
         selectedHmiForTranslation =
             null;
+        invalidateHmiPreview();
 
         if (hmiTranslationPanel) {
             hmiTranslationPanel.classList.add(
@@ -1170,6 +1290,11 @@ export function initTiaUi(
 
 
     async function translateSelectedHmi() {
+        if (hmiTranslationKey(hmiTranslationSelection()) !== verifiedHmiPreviewKey
+            || !verifiedHmiPreviewKey) {
+            setHmiTranslationStatus("Preview this HMI selection before importing.", "error");
+            return;
+        }
         const processId =
             selectedProcessId();
 
@@ -1237,6 +1362,7 @@ export function initTiaUi(
                 );
 
             await refreshProjectLanguages();
+            invalidateHmiPreview();
 
             setHmiTranslationStatus(
                 "Translated "
@@ -6463,7 +6589,15 @@ export function initTiaUi(
     if (hmiTargetLanguageSelect) {
         hmiTargetLanguageSelect.addEventListener(
             "change",
-            updateHmiTranslateButtonState
+            invalidateHmiPreview
+        );
+    }
+
+
+    if (hmiPreviewButton) {
+        hmiPreviewButton.addEventListener(
+            "click",
+            previewSelectedHmi
         );
     }
 
