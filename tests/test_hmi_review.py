@@ -23,7 +23,7 @@ def _export_file(path: Path, live_targets: dict):
         ("main-1", "Project\\HMI_00_Main\\Screens\\Main\\Text",
          "212BP2 Za zaworem", "Text"),
         ("main-2", "Project\\HMI_00_Main\\Screens\\Status\\Text",
-         "Zgniatarka", "Zgniatarka"),
+         "Zgniatarka", "Text"),
         ("other-1", "Project\\Another_HMI\\Screens\\Main\\Text",
          "Do not translate", "Do not translate"),
     ]
@@ -307,4 +307,40 @@ def test_manual_prepare_uses_requested_batch_size(monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["selected_rows"] == 1
     assert response.json()["unique_texts"] == 1
+    assert commands == ["export-project-texts"]
+
+
+def test_prepare_skips_populated_targets_to_preserve_existing_polish(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    live["main-2"] = "Zgniatarka"  # already correct in TIA
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations",
+        json={**REQUEST, "max_rows": 10},
+    )
+    assert response.status_code == 200, response.text
+    prepared = response.json()
+    assert prepared["unique_texts"] == 1
+    assert prepared["examples"][0]["source_text"] == "212BP2 Za zaworem"
+    saved = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": prepared["review_id"]},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["verified_rows"] == 1
+    assert live["main-2"] == "Zgniatarka"
+    assert "import-project-texts" in commands
+
+
+def test_source_copy_does_not_call_ollama_and_preserves_label(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    def forbidden_ollama(*args, **kwargs):
+        raise AssertionError("Exact source-copy mode should not call Ollama")
+    monkeypatch.setattr(review_module, "_translate_texts", forbidden_ollama)
+    monkeypatch.setattr(review_module, "resolve_ollama_model", forbidden_ollama)
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations",
+        json={**REQUEST, "translation_strategy": "copy", "max_rows": 1},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["examples"][0]["proposed_target"] == "212BP2 Za zaworem"
     assert commands == ["export-project-texts"]
