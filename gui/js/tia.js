@@ -38,6 +38,11 @@ export function initTiaUi(
             "tia-existing-plcs-body"
         );
 
+    const existingHmisBody =
+        document.getElementById(
+            "tia-existing-hmis-body"
+        );
+
     const readTagsButton =
         document.getElementById(
             "tia-read-tags-button"
@@ -281,6 +286,8 @@ export function initTiaUi(
 
 
     let existingPlcs = [];
+
+    let existingHmis = [];
 
     let currentProjectName = "";
 
@@ -594,6 +601,120 @@ export function initTiaUi(
         setPlcStructuresStatus(
             "Select an Active PLC first."
         );
+    }
+
+
+    function renderEmptyHmis(
+        message
+    ) {
+        if (!existingHmisBody) {
+            return;
+        }
+
+
+        existingHmisBody.replaceChildren();
+
+
+        const row =
+            document.createElement(
+                "tr"
+            );
+
+        const cell =
+            document.createElement(
+                "td"
+            );
+
+        cell.colSpan =
+            4;
+
+        cell.className =
+            "empty-table-cell";
+
+        cell.textContent =
+            message;
+
+
+        row.appendChild(
+            cell
+        );
+
+        existingHmisBody.appendChild(
+            row
+        );
+    }
+
+
+    function renderExistingHmis() {
+        if (!existingHmisBody) {
+            return;
+        }
+
+
+        existingHmisBody.replaceChildren();
+
+
+        if (existingHmis.length === 0) {
+            renderEmptyHmis(
+                "No HMI / WinCC software found in the open TIA project."
+            );
+
+            return;
+        }
+
+
+        for (
+            const hmi
+            of existingHmis
+        ) {
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+
+            for (
+                const value
+                of [
+                    hmi.device_name
+                    ||
+                    "—",
+
+                    hmi.hmi_name
+                    ||
+                    "—",
+
+                    hmi.hmi_type_identifier
+                    ||
+                    hmi.device_type_identifier
+                    ||
+                    "—",
+
+                    hmi.software_name
+                    ||
+                    hmi.software_type
+                    ||
+                    "—",
+                ]
+            ) {
+                const cell =
+                    document.createElement(
+                        "td"
+                    );
+
+                cell.textContent =
+                    value;
+
+                row.appendChild(
+                    cell
+                );
+            }
+
+
+            existingHmisBody.appendChild(
+                row
+            );
+        }
     }
 
 
@@ -2817,11 +2938,17 @@ export function initTiaUi(
         if (!processId) {
             existingPlcs = [];
 
+            existingHmis = [];
+
             currentProjectName = "";
 
             updateTargetSummary();
 
             renderEmptyPlcs(
+                "Select a TIA process first."
+            );
+
+            renderEmptyHmis(
                 "Select a TIA process first."
             );
 
@@ -2834,6 +2961,10 @@ export function initTiaUi(
 
         renderEmptyPlcs(
             "Loading PLCs from the open TIA project..."
+        );
+
+        renderEmptyHmis(
+            "Loading HMIs from the open TIA project..."
         );
 
 
@@ -2865,6 +2996,11 @@ export function initTiaUi(
                 ??
                 [];
 
+            existingHmis =
+                context.hmis
+                ??
+                [];
+
             updateTargetSummary();
 
 
@@ -2889,16 +3025,20 @@ export function initTiaUi(
 
             renderExistingPlcs();
 
+            renderExistingHmis();
+
             suggestCreateNames();
 
 
             setStatus(
-                `${existingPlcs.length} PLC(s) found in the open TIA project.`,
+                `${existingPlcs.length} PLC(s), ${existingHmis.length} HMI(s) found in the open TIA project.`,
                 "success"
             );
 
         } catch (error) {
             existingPlcs = [];
+
+            existingHmis = [];
 
             currentProjectName = "";
 
@@ -2906,6 +3046,10 @@ export function initTiaUi(
 
             renderEmptyPlcs(
                 "PLC discovery failed."
+            );
+
+            renderEmptyHmis(
+                "HMI discovery failed."
             );
 
 
@@ -3753,6 +3897,8 @@ export function initTiaUi(
             resetModels();
 
             existingPlcs = [];
+
+            existingHmis = [];
 
             currentProjectName = "";
 
