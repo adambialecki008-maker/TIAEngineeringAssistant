@@ -1525,3 +1525,58 @@ td {
     width: auto;
     margin-top: 8px;
 }
+
+/* Verified TIA import progress is adjacent to the Start button. */
+.hmi-batch-plan {
+    margin: 12px 0;
+    padding: 10px 12px;
+    border: 1px solid #3a5365;
+    border-radius: 6px;
+    background: #122431;
+    color: #dceef9;
+    line-height: 1.55;
+}
+.hmi-batch-repeat-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+.hmi-batch-repeat-label input {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+.hmi-batch-start-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+.hmi-batch-start-row .hmi-translation-actions {
+    flex: 1 1 420px;
+    margin: 0;
+}
+.hmi-batch-progress {
+    min-width: min(100%, 260px);
+    flex: 1 1 280px;
+}
+.hmi-batch-progress-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+    color: #dee8ef;
+    font-size: 13px;
+}
+.hmi-batch-progress progress {
+    display: block;
+    width: 100%;
+    height: 14px;
+    accent-color: #4e9ac0;
+}
+.hmi-batch-progress .hint {
+    margin: 6px 0 0;
+    font-size: 12px;
+}
