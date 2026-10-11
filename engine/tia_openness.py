@@ -10,6 +10,9 @@ from engine.tia.adapter import (
 from engine.tia.hardware import (
     router as hardware_router,
 )
+from engine.tia.hmi_translation import (
+    router as hmi_translation_router,
+)
 from engine.tia.languages import (
     router as languages_router,
 )
@@ -45,6 +48,7 @@ router = APIRouter(
 for subrouter in (
     project_router,
     languages_router,
+    hmi_translation_router,
     program_router,
     structures_router,
     tags_router,
