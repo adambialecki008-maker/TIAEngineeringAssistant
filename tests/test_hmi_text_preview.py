@@ -187,7 +187,10 @@ def test_translate_imports_only_selected_hmi_and_renames_target_header(
     monkeypatch,
 ):
     import engine.tia.hmi_translation as translation
-    monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-used")
+    monkeypatch.setattr(
+        translation, "resolve_ollama_model",
+        lambda requested: "test-local-model:latest",
+    )
 
     commands = []
     imported = []
@@ -221,7 +224,7 @@ def test_translate_imports_only_selected_hmi_and_renames_target_header(
     monkeypatch.setattr(
         translation,
         "_translate_texts",
-        lambda texts, target: {
+        lambda texts, target, model: {
             "Zmiana": "Shift", "Zgniatarka": "Crusher",
         },
     )
@@ -264,7 +267,10 @@ def test_view_path_match_is_limited_to_device_root():
 
 def test_translation_returns_error_when_tia_import_reports_failure(monkeypatch):
     import engine.tia.hmi_translation as translation
-    monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-used")
+    monkeypatch.setattr(
+        translation, "resolve_ollama_model",
+        lambda requested: "test-local-model:latest",
+    )
 
     def adapter(*args):
         if args[0] == "add-project-language":
@@ -283,7 +289,7 @@ def test_translation_returns_error_when_tia_import_reports_failure(monkeypatch):
     monkeypatch.setattr(
         translation,
         "_translate_texts",
-        lambda texts, target: {text: text for text in texts},
+        lambda texts, target, model: {text: text for text in texts},
     )
     response = client.post(
         "/api/v1/tia/hmis/translate-texts",
@@ -304,7 +310,10 @@ def test_translation_returns_error_when_tia_import_reports_failure(monkeypatch):
 
 def test_pilot_limits_number_of_unique_rows(monkeypatch):
     import engine.tia.hmi_translation as translation
-    monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-used")
+    monkeypatch.setattr(
+        translation, "resolve_ollama_model",
+        lambda requested: "test-local-model:latest",
+    )
 
     translated = []
     imported = []
@@ -327,7 +336,7 @@ def test_pilot_limits_number_of_unique_rows(monkeypatch):
     monkeypatch.setattr(
         translation,
         "_translate_texts",
-        lambda texts, target: (
+        lambda texts, target, model: (
             translated.extend(texts) or {text: text for text in texts}
         ),
     )
@@ -350,14 +359,18 @@ def test_pilot_limits_number_of_unique_rows(monkeypatch):
     assert "HMI_00_Main" in imported[0][1]
 
 
-def test_missing_api_key_does_not_add_target_language(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_unavailable_ollama_model_does_not_add_target_language(monkeypatch):
+    import engine.tia.hmi_translation as translation
+
+    def unavailable_model(_requested):
+        from fastapi import HTTPException
+        raise HTTPException(503, "Cannot connect to Ollama")
 
     def adapter(*args):
         raise AssertionError("No TIA project mutations should occur")
 
+    monkeypatch.setattr(translation, "resolve_ollama_model", unavailable_model)
     monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
-
     response = client.post(
         "/api/v1/tia/hmis/translate-texts",
         json={
@@ -370,4 +383,4 @@ def test_missing_api_key_does_not_add_target_language(monkeypatch):
         },
     )
     assert response.status_code == 503
-    assert "OPENAI_API_KEY" in response.json()["detail"]
+    assert "Ollama" in response.json()["detail"]
