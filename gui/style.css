@@ -435,9 +435,16 @@ summary {
 
 .tia-inventory-toolbar {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 12px;
     margin-bottom: 12px;
+}
+
+.tia-inventory-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
 }
 
 .tia-inventory-toolbar select {
@@ -450,19 +457,39 @@ summary {
 }
 
 .tia-tag-summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 18px;
     margin-top: 14px;
-    padding: 12px 14px;
-    border: 1px solid #d2d8de;
-    border-radius: 6px;
-    background: #f6f8fa;
-    font-size: 13px;
 }
 
-.tia-tag-summary span {
+.tia-tag-summary-table {
+    width: 100%;
+    min-width: 760px;
+    border: 1px solid #d2d8de;
+    border-radius: 6px;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.tia-tag-summary-table th,
+.tia-tag-summary-table td {
+    text-align: center;
     white-space: nowrap;
+}
+
+.tia-tag-summary-table th {
+    padding: 9px 12px;
+    background: #f4f6f8;
+    color: #4f5963;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.tia-tag-summary-table td {
+    padding: 11px 12px;
+    background: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
 }
 
 
