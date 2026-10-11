@@ -216,12 +216,14 @@ def test_translation_model_discovery_endpoint(monkeypatch):
         review_module, "resolve_ollama_model",
         lambda available: None if len(available) > 1 else available[0],
     )
+    monkeypatch.setattr(review_module, "translation_batch_size", lambda: 1)
     response = client.get("/api/v1/tia/hmis/translation-models")
     assert response.status_code == 200
     assert response.json() == {
         "provider": "ollama",
         "models": ["gemma3:4b", "qwen2.5:7b"],
         "selected_model": None,
+        "request_batch_size": 1,
     }
 
 
