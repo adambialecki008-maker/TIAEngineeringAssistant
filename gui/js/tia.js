@@ -125,6 +125,13 @@ export function initTiaUi(
             "tia-hmi-preview-rows"
         );
 
+    const hmiPreviewFilter = document.getElementById(
+        "tia-hmi-preview-filter"
+    );
+    const hmiPreviewSampleCount = document.getElementById(
+        "tia-hmi-preview-sample-count"
+    );
+
     const hmiPreviewReferences =
         document.getElementById(
             "tia-hmi-preview-references"
@@ -439,6 +446,7 @@ export function initTiaUi(
 
     let verifiedHmiPreviewKey = null;
     let hmiPreviewInProgress = false;
+    let lastHmiPreviewRows = [];
     let hmiReviewInProgress = false;
     let preparedHmiReview = null;
 
@@ -1004,6 +1012,59 @@ export function initTiaUi(
         return selection ? JSON.stringify(selection) : null;
     }
 
+    function addHmiTextCell(row, value, title = "") {
+        const cell = document.createElement("td");
+        cell.textContent = String(value ?? "");
+        if (title) {
+            cell.title = title;
+        }
+        row.appendChild(cell);
+        return cell;
+    }
+
+    function addHmiDetailsCell(row, viewPath, category, sheet, rowIndex) {
+        const cell = document.createElement("td");
+        const details = document.createElement("details");
+        details.className = "hmi-row-details";
+        const summary = document.createElement("summary");
+        summary.textContent = "Path";
+        details.appendChild(summary);
+        const body = document.createElement("div");
+        body.className = "hmi-row-meta";
+        const label = [category, sheet && ("Sheet: " + sheet),
+            rowIndex && ("Row: " + rowIndex)].filter(Boolean).join(" · ");
+        const metadata = document.createElement("small");
+        metadata.textContent = label;
+        const path = document.createElement("div");
+        path.textContent = String(viewPath ?? "");
+        body.append(metadata, path);
+        details.appendChild(body);
+        cell.appendChild(details);
+        row.appendChild(cell);
+    }
+
+    function renderHmiPreviewRows() {
+        hmiPreviewRows?.replaceChildren();
+        const selected = hmiPreviewFilter?.value || "matched";
+        const matching = selected === "matched";
+        const subset = lastHmiPreviewRows.filter(
+            item => Boolean(item.matches_hmi) === matching
+        );
+        for (const item of subset) {
+            const row = document.createElement("tr");
+            addHmiTextCell(row, item.source_text);
+            addHmiTextCell(row, item.target_text || "— (empty)");
+            addHmiTextCell(row, item.category);
+            addHmiDetailsCell(row, item.reference, item.category,
+                item.sheet, item.row);
+            hmiPreviewRows?.appendChild(row);
+        }
+        if (hmiPreviewSampleCount) {
+            hmiPreviewSampleCount.textContent =
+                subset.length + " displayed sample(s)";
+        }
+    }
+
     function discardHmiReview() {
         preparedHmiReview = null;
         hmiReviewResults?.classList.add("hidden");
@@ -1014,7 +1075,8 @@ export function initTiaUi(
     function invalidateHmiPreview() {
         verifiedHmiPreviewKey = null;
         hmiPreviewResults?.classList.add("hidden");
-        hmiPreviewRows?.replaceChildren();
+        lastHmiPreviewRows = [];
+        renderHmiPreviewRows();
         discardHmiReview();
     }
 
@@ -1052,22 +1114,8 @@ export function initTiaUi(
             if (hmiTranslationKey(hmiTranslationSelection()) !== previewKey) {
                 return;
             }
-            hmiPreviewRows?.replaceChildren();
-            for (const item of result.sample_rows || []) {
-                const row = document.createElement("tr");
-                for (const value of [
-                    item.matches_hmi ? "Yes" : "No",
-                    item.source_text,
-                    item.target_text || "— (empty)",
-                    item.category,
-                    item.reference,
-                ]) {
-                    const cell = document.createElement("td");
-                    cell.textContent = String(value ?? "");
-                    row.appendChild(cell);
-                }
-                hmiPreviewRows?.appendChild(row);
-            }
+            lastHmiPreviewRows = result.sample_rows || [];
+            renderHmiPreviewRows();
 
             if (hmiPreviewSummary) {
                 hmiPreviewSummary.textContent =
@@ -1400,16 +1448,10 @@ export function initTiaUi(
             hmiReviewRows?.replaceChildren();
             for (const item of result.examples || []) {
                 const row = document.createElement("tr");
-                for (const value of [
-                    item.source_text,
-                    item.current_target || "— (empty)",
-                    item.proposed_target,
-                    item.view_path,
-                ]) {
-                    const cell = document.createElement("td");
-                    cell.textContent = String(value || "");
-                    row.appendChild(cell);
-                }
+                addHmiTextCell(row, item.source_text);
+                addHmiTextCell(row, item.current_target || "— (empty)");
+                addHmiTextCell(row, item.proposed_target);
+                addHmiDetailsCell(row, item.view_path, "", item.sheet, null);
                 hmiReviewRows?.appendChild(row);
             }
             if (hmiReviewSummary) {
@@ -6716,6 +6758,10 @@ export function initTiaUi(
             "click",
             importReviewedHmiTexts
         );
+    }
+
+    if (hmiPreviewFilter) {
+        hmiPreviewFilter.addEventListener("change", renderHmiPreviewRows);
     }
     if (hmiTranslationScopeSelect) {
         hmiTranslationScopeSelect.addEventListener(
