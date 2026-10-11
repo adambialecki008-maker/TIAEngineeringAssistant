@@ -942,12 +942,12 @@
                 <div class="card-header">
                     <div>
                         <h3>
-                            PLC program blocks
+                            PLC program and data blocks
                         </h3>
 
                         <p class="hint">
-                            Inspect OB, FC, FB and DB blocks from the Active PLC.
-                            This operation is read-only.
+                            Inspect program blocks (OB / FC / FB) and data blocks (DB)
+                            in separate lists. Read-only TIA Openness access.
                         </p>
                     </div>
 
@@ -956,7 +956,7 @@
                         type="button"
                         disabled
                     >
-                        Read program blocks
+                        Read PLC blocks
                     </button>
                 </div>
 
@@ -969,10 +969,58 @@
                 </p>
 
 
+                <div
+                    id="tia-plc-program-block-detail"
+                    class="tia-structure-detail hidden"
+                    tabindex="-1"
+                    aria-live="polite"
+                >
+
+                    <div class="tia-structure-detail-header">
+                        <h4 id="tia-plc-program-block-detail-title">
+                            PLC block detail
+                        </h4>
+                    </div>
+
+                    <p
+                        id="tia-plc-program-block-detail-status"
+                        class="status-box"
+                    >
+                        Select a block to inspect.
+                    </p>
+
+                    <div
+                        id="tia-plc-program-block-detail-meta"
+                        class="plc-block-detail-meta"
+                    ></div>
+
+                    <div class="table-wrapper tia-structure-member-table-wrapper">
+                        <table class="management-table">
+                            <thead>
+                                <tr>
+                                    <th>Section</th>
+                                    <th>Member</th>
+                                    <th>Data type</th>
+                                    <th>Offset</th>
+                                    <th>Comment</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tia-plc-program-block-detail-body">
+                                <tr>
+                                    <td colspan="5" class="empty-table-cell">
+                                        No block interface loaded.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+
                 <details class="tia-inventory-details">
 
                     <summary id="tia-plc-program-blocks-summary">
-                        Program blocks
+                        Program blocks (OB / FC / FB)
                     </summary>
 
                     <div class="details-content">
@@ -985,12 +1033,11 @@
 
                                 <select id="tia-plc-program-blocks-kind-filter">
                                     <option value="">
-                                        All block types
+                                        All program blocks
                                     </option>
                                     <option value="OB">OB</option>
                                     <option value="FC">FC</option>
                                     <option value="FB">FB</option>
-                                    <option value="DB">DB</option>
                                 </select>
                             </div>
                         </div>
@@ -1043,60 +1090,53 @@
                 </details>
 
 
-                <div
-                    id="tia-plc-program-block-detail"
-                    class="tia-structure-detail hidden"
-                >
-
-                    <div class="tia-structure-detail-header">
-                        <h4 id="tia-plc-program-block-detail-title">
-                            Program block detail
-                        </h4>
+                <details class="tia-inventory-details">
+                    <summary id="tia-plc-data-blocks-summary">
+                        Data blocks (DB)
+                    </summary>
+                    <div class="details-content">
+                        <p class="hint">
+                            Data blocks are loaded together with program blocks.
+                            Inspect reads the DB structure, not executable block code.
+                        </p>
+                        <div class="table-wrapper tia-inventory-table-wrapper tia-program-blocks-wrapper">
+                            <table class="management-table tia-program-blocks-table">
+                                <colgroup>
+                                    <col style="width: 19%">
+                                    <col style="width: 33%">
+                                    <col style="width: 5%">
+                                    <col style="width: 6%">
+                                    <col style="width: 7%">
+                                    <col style="width: 8%">
+                                    <col style="width: 8%">
+                                    <col style="width: 8%">
+                                    <col style="width: 6%">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Group</th>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Number</th>
+                                        <th>Language</th>
+                                        <th>Consistent</th>
+                                        <th>Load memory</th>
+                                        <th>Work memory</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tia-plc-data-blocks-body">
+                                    <tr>
+                                        <td colspan="9" class="empty-table-cell">
+                                            No data blocks loaded.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+                </details>
 
-
-                    <p
-                        id="tia-plc-program-block-detail-status"
-                        class="status-box"
-                    >
-                        Select a program block.
-                    </p>
-
-
-                    <div
-                        id="tia-plc-program-block-detail-meta"
-                        class="plc-block-detail-meta"
-                    ></div>
-
-
-                    <div class="table-wrapper tia-structure-member-table-wrapper">
-
-                        <table class="management-table">
-                            <thead>
-                                <tr>
-                                    <th>Section</th>
-                                    <th>Member</th>
-                                    <th>Data type</th>
-                                    <th>Offset</th>
-                                    <th>Comment</th>
-                                </tr>
-                            </thead>
-
-                            <tbody id="tia-plc-program-block-detail-body">
-                                <tr>
-                                    <td
-                                        colspan="5"
-                                        class="empty-table-cell"
-                                    >
-                                        No block interface loaded.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                    </div>
-
-                </div>
 
             </div>
 
