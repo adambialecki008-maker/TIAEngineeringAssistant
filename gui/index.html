@@ -512,8 +512,8 @@
 
                     <div class="hmi-translation-batch-controls">
                         <h4>HMI text scan and translation scope</h4>
-                        <div class="hmi-scan-help">
-                            <strong>Step 1 — Scan the selected HMI</strong>
+                        <section class="hmi-scan-help hmi-workflow-step">
+                            <h5 class="hmi-step-heading">Step 1 — Scan the selected HMI</h5>
                             <p>
                                 Choose Source / Target languages and the correct
                                 HMI ViewPath root above (for example, HMI_00_Main).
@@ -530,12 +530,13 @@
                                     After scanning, the total appears below.
                                 </span>
                             </div>
-                        </div>
+                        </section>
                         <p id="tia-hmi-scan-summary" class="hmi-scan-result"
                            aria-live="polite">
                             Not scanned yet. Select the HMI, languages and ViewPath root, then click Scan HMI / Count texts.
                         </p>
-                        <strong>Step 2 — Choose how many texts to process</strong>
+                        <section class="hmi-workflow-step hmi-scope-step">
+                            <h5 class="hmi-step-heading">Step 2 — Choose how many texts to process</h5>
                         <div class="form-grid hmi-translation-grid">
                             <div class="field-group">
                                 <label for="tia-hmi-batch-size">Batch size (unique texts)</label>
@@ -560,13 +561,15 @@
                                 </button>
                             </div>
                         </div>
-                        <p class="hint">
-                            Step 3 — Prepare one batch for manual review, or use
-                            Start batch import below to translate, import and verify
-                            each batch automatically.
-                        </p>
+                        </section>
                     </div>
 
+                    <section class="hmi-workflow-step hmi-manual-step">
+                        <h5 class="hmi-step-heading">Step 3 — Prepare and review translations</h5>
+                        <p class="hint">
+                            Prepare one limited batch and inspect the proposed target texts.
+                            Import reviewed texts only after checking the results.
+                        </p>
                     <div class="action-row hmi-translation-actions">
 
                         <button
@@ -593,9 +596,10 @@
                        role="status" aria-live="polite" aria-atomic="true">
                         Select source slot and target language.
                     </p>
+                    </section>
 
-                    <section class="hmi-batch-panel">
-                        <h4>Batch translate + import to TIA</h4>
+                    <section class="hmi-batch-panel hmi-workflow-step">
+                        <h5 class="hmi-step-heading">Step 4 — Automatic batch import into TIA</h5>
                         <p class="hint">
                             Automated mode: Ollama translates one batch, then TIA imports
                             and verifies it before the next batch begins.
