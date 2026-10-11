@@ -8,7 +8,9 @@ using Siemens.Engineering;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.SW;
+using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
+using Siemens.Engineering.SW.Types;
 
 namespace TiaOpennessAdapter
 {
@@ -605,6 +607,178 @@ namespace TiaOpennessAdapter
                 {
                     Console.WriteLine(
                         "NO_PLC_TAGS"
+                    );
+                }
+            }
+
+
+            return 0;
+        }
+
+
+        public static int ListPlcStructures(
+            int processId,
+            string deviceName,
+            string plcName
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                PlcTarget target =
+                    FindPlcTarget(
+                        project,
+                        deviceName,
+                        plcName
+                    );
+
+
+                if (target == null)
+                {
+                    Console.Error.WriteLine(
+                        "PLC_NOT_FOUND|" +
+                        SanitizeOutput(
+                            deviceName
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            plcName
+                        )
+                    );
+
+                    return 7;
+                }
+
+
+                int databaseCount = 0;
+                int typeCount = 0;
+
+
+                foreach (
+                    PlcBlock block
+                    in target
+                        .Software
+                        .BlockGroup
+                        .Blocks
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    if (
+                        block
+                        is DataBlock dataBlock
+                    )
+                    {
+                        WriteDataBlock(
+                            dataBlock,
+                            ""
+                        );
+
+                        databaseCount += 1;
+                    }
+                }
+
+
+                foreach (
+                    PlcBlockUserGroup group
+                    in target
+                        .Software
+                        .BlockGroup
+                        .Groups
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    databaseCount +=
+                        WriteDataBlockGroup(
+                            group,
+                            group.Name
+                        );
+                }
+
+
+                foreach (
+                    PlcType type
+                    in target
+                        .Software
+                        .TypeGroup
+                        .Types
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    WritePlcType(
+                        type,
+                        ""
+                    );
+
+                    typeCount += 1;
+                }
+
+
+                foreach (
+                    PlcTypeUserGroup group
+                    in target
+                        .Software
+                        .TypeGroup
+                        .Groups
+                        .OrderBy(
+                            item => item.Name,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                )
+                {
+                    typeCount +=
+                        WritePlcTypeGroup(
+                            group,
+                            group.Name
+                        );
+                }
+
+
+                if (
+                    databaseCount == 0
+                    &&
+                    typeCount == 0
+                )
+                {
+                    Console.WriteLine(
+                        "NO_PLC_STRUCTURES"
                     );
                 }
             }
@@ -2399,6 +2573,168 @@ namespace TiaOpennessAdapter
 
 
             return definitions;
+        }
+
+
+        private static void WriteDataBlock(
+            DataBlock dataBlock,
+            string groupPath
+        )
+        {
+            Console.WriteLine(
+                "PLC_DB|" +
+                SanitizeOutput(
+                    groupPath
+                ) +
+                "|" +
+                SanitizeOutput(
+                    dataBlock.Name
+                ) +
+                "|" +
+                dataBlock.Number +
+                "|" +
+                SanitizeOutput(
+                    dataBlock
+                        .GetType()
+                        .Name
+                ) +
+                "|" +
+                dataBlock.IsConsistent
+            );
+        }
+
+
+        private static int WriteDataBlockGroup(
+            PlcBlockUserGroup group,
+            string groupPath
+        )
+        {
+            int count = 0;
+
+
+            foreach (
+                PlcBlock block
+                in group
+                    .Blocks
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                if (
+                    block
+                    is DataBlock dataBlock
+                )
+                {
+                    WriteDataBlock(
+                        dataBlock,
+                        groupPath
+                    );
+
+                    count += 1;
+                }
+            }
+
+
+            foreach (
+                PlcBlockUserGroup child
+                in group
+                    .Groups
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                count +=
+                    WriteDataBlockGroup(
+                        child,
+                        groupPath +
+                        "/" +
+                        child.Name
+                    );
+            }
+
+
+            return count;
+        }
+
+
+        private static void WritePlcType(
+            PlcType type,
+            string groupPath
+        )
+        {
+            Console.WriteLine(
+                "PLC_UDT|" +
+                SanitizeOutput(
+                    groupPath
+                ) +
+                "|" +
+                SanitizeOutput(
+                    type.Name
+                ) +
+                "|" +
+                SanitizeOutput(
+                    type
+                        .GetType()
+                        .Name
+                ) +
+                "|" +
+                type.IsConsistent
+            );
+        }
+
+
+        private static int WritePlcTypeGroup(
+            PlcTypeUserGroup group,
+            string groupPath
+        )
+        {
+            int count = 0;
+
+
+            foreach (
+                PlcType type
+                in group
+                    .Types
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                WritePlcType(
+                    type,
+                    groupPath
+                );
+
+                count += 1;
+            }
+
+
+            foreach (
+                PlcTypeUserGroup child
+                in group
+                    .Groups
+                    .OrderBy(
+                        item => item.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+            )
+            {
+                count +=
+                    WritePlcTypeGroup(
+                        child,
+                        groupPath +
+                        "/" +
+                        child.Name
+                    );
+            }
+
+
+            return count;
         }
 
 
