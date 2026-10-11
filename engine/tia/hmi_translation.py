@@ -5,6 +5,7 @@ import tempfile
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from openpyxl import load_workbook
 
@@ -14,6 +15,9 @@ from engine.tia.models import (
     TranslateHmiTextsRequest,
     TranslateHmiTextsResponse,
 )
+
+
+load_dotenv()
 
 
 router = APIRouter()
