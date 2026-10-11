@@ -208,8 +208,6 @@ namespace TiaOpennessAdapter
                     Console.WriteLine(
                         "NO_PLC_FOUND"
                     );
-
-                    return 0;
                 }
 
 
@@ -221,7 +219,16 @@ namespace TiaOpennessAdapter
                     WritePlc(
                         target
                     );
+
+                    WritePlcMetrics(
+                        target
+                    );
                 }
+
+
+                WriteProjectHmis(
+                    project
+                );
             }
 
 
@@ -2003,6 +2010,180 @@ namespace TiaOpennessAdapter
 
 
             return 0;
+        }
+
+
+        private static void WriteProjectHmis(
+            Project project
+        )
+        {
+            HashSet<string> yielded =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase
+                );
+
+
+            foreach (
+                Device device
+                in EnumerateDevices(
+                    project
+                )
+            )
+            {
+                foreach (
+                    DeviceItemPath itemPath
+                    in EnumerateDeviceItems(
+                        device
+                    )
+                )
+                {
+                    DeviceItem item =
+                        itemPath.Item;
+
+                    SoftwareContainer container =
+                        item.GetService<
+                            SoftwareContainer
+                        >();
+
+                    var software =
+                        container?.Software;
+
+
+                    if (
+                        software == null
+                        ||
+                        software
+                        is PlcSoftware
+                    )
+                    {
+                        continue;
+                    }
+
+
+                    string softwareType =
+                        software
+                            .GetType()
+                            .FullName
+                        ??
+                        software
+                            .GetType()
+                            .Name;
+
+                    string softwareTypeLower =
+                        softwareType
+                            .ToLowerInvariant();
+
+
+                    if (
+                        !softwareTypeLower.Contains(
+                            "hmi"
+                        )
+                        &&
+                        !softwareTypeLower.Contains(
+                            "wincc"
+                        )
+                        &&
+                        !softwareTypeLower.Contains(
+                            "unified"
+                        )
+                    )
+                    {
+                        continue;
+                    }
+
+
+                    string key =
+                        device.Name
+                        +
+                        "|"
+                        +
+                        item.Name
+                        +
+                        "|"
+                        +
+                        softwareType;
+
+
+                    if (!yielded.Add(
+                        key
+                    ))
+                    {
+                        continue;
+                    }
+
+
+                    string softwareName =
+                        "";
+
+
+                    try
+                    {
+                        var nameProperty =
+                            software
+                                .GetType()
+                                .GetProperty(
+                                    "Name"
+                                );
+
+
+                        if (
+                            nameProperty
+                            != null
+                        )
+                        {
+                            object nameValue =
+                                nameProperty.GetValue(
+                                    software,
+                                    null
+                                );
+
+
+                            softwareName =
+                                nameValue
+                                != null
+                                    ? nameValue.ToString()
+                                    : "";
+                        }
+                    }
+                    catch
+                    {
+                        softwareName =
+                            "";
+                    }
+
+
+                    Console.WriteLine(
+                        "HMI|" +
+                        SanitizeOutput(
+                            device.Name
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            item.Name
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            device.TypeIdentifier
+                            ??
+                            ""
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            item.TypeIdentifier
+                            ??
+                            ""
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            softwareType
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            softwareName
+                        )
+                    );
+                }
+            }
         }
 
 
