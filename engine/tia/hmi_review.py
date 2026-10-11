@@ -223,6 +223,11 @@ def get_hmi_translation_models():
 def prepare_hmi_translations(request: TranslateHmiTextsRequest):
     if request.source_culture.casefold() == request.target_culture.casefold():
         raise HTTPException(400, "Source and target cultures must differ.")
+    if request.max_rows is None or request.max_rows > 50:
+        raise HTTPException(
+            422, "Prepare one batch requires max_rows from 1 to 50. "
+            "Use the batch import workflow for a larger total.",
+        )
     # Ensure local Ollama and selected model are available before XLSX export.
     model = resolve_ollama_model(request.ollama_model)
 
@@ -253,14 +258,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
             404, "No source text found for the selected HMI ViewPath root."
         )
 
-    # Manual Prepare always operates on a bounded reviewable batch.
-    # The multi-batch auto-import route has its own explicit total limit.
-    if request.max_rows is None or request.max_rows > 50:
-        raise HTTPException(
-            422,
-            "Prepare one batch requires max_rows from 1 to 50. "
-            "Use the batch import workflow for a larger total.",
-        )
+    # Manual preparation selects one representative of each unique source.
     if request.max_rows is not None:
         chosen = []
         seen = set()
