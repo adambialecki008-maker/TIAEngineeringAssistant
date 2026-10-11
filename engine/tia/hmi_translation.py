@@ -198,6 +198,10 @@ def _preview_workbook(workbook, request):
     diagnostics = []
     total = 0
     matched = 0
+    unique_sources = set()
+    eligible_sources = set()
+    missing_target_sources = set()
+    missing_target_rows = 0
     headers = ("", "")
     sheets_found = 0
 
@@ -276,6 +280,18 @@ def _preview_workbook(workbook, request):
             )
             if matches:
                 matched += 1
+                source_text = str(source)
+                unique_sources.add(source_text)
+                # Keep eligibility identical to the batch-job start endpoint.
+                if any(char.isalpha() for char in source_text):
+                    eligible_sources.add(source_text)
+                    target_text = str(cell_value(target_col) or "")
+                    if not target_text.strip() or (
+                        target_text.strip().casefold() == "text"
+                        and source_text.strip().casefold() != "text"
+                    ):
+                        missing_target_rows += 1
+                        missing_target_sources.add(source_text)
 
             dest = matched_rows if matches else unmatched_rows
             if len(dest) < 50:
@@ -307,6 +323,10 @@ def _preview_workbook(workbook, request):
         ],
         total_text_rows=total,
         matched_text_rows=matched,
+        matched_unique_texts=len(unique_sources),
+        matched_eligible_unique_texts=len(eligible_sources),
+        matched_missing_target_rows=missing_target_rows,
+        matched_missing_target_unique_texts=len(missing_target_sources),
         reference_examples=references,
         sample_rows=matched_rows + unmatched_rows,
     )
