@@ -243,3 +243,19 @@ def test_translate_imports_only_selected_hmi_and_renames_target_header(
         "export-project-texts",
         "import-project-texts",
     ]
+
+
+def test_view_path_match_is_limited_to_device_root():
+    from engine.tia.hmi_translation import _reference_matches_hmi
+
+    assert not _reference_matches_hmi(
+        "Project\\UnrelatedDevice\\Screens\\HMI_RT_1\\Text",
+        "HMI_RT_1",
+        "HMI_RT_1",
+    )
+    assert _reference_matches_hmi(
+        "Project\\HMI_00_Main\\Screens\\HMI_RT_1\\Text",
+        "HMI_RT_1",
+        "HMI_RT_1",
+        "HMI_00_Main",
+    )
