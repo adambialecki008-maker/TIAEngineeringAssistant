@@ -166,6 +166,32 @@ export function initTiaUi(
         );
 
 
+    const plcProgramBlockDetail =
+        document.getElementById(
+            "tia-plc-program-block-detail"
+        );
+
+    const plcProgramBlockDetailTitle =
+        document.getElementById(
+            "tia-plc-program-block-detail-title"
+        );
+
+    const plcProgramBlockDetailStatus =
+        document.getElementById(
+            "tia-plc-program-block-detail-status"
+        );
+
+    const plcProgramBlockDetailMeta =
+        document.getElementById(
+            "tia-plc-program-block-detail-meta"
+        );
+
+    const plcProgramBlockDetailBody =
+        document.getElementById(
+            "tia-plc-program-block-detail-body"
+        );
+
+
     const readStructuresButton =
         document.getElementById(
             "tia-read-structures-button"
@@ -3017,6 +3043,8 @@ export function initTiaUi(
         renderEmptyProgramBlocks(
             message
         );
+
+        resetPlcProgramBlockDetail();
     }
 
 
@@ -3138,8 +3166,369 @@ export function initTiaUi(
             }
 
 
+            const actionsCell =
+                document.createElement(
+                    "td"
+                );
+
+            actionsCell.className =
+                "actions-cell";
+
+            actionsCell.appendChild(
+                createActionButton(
+                    "Inspect",
+                    () =>
+                        readPlcProgramBlockDetail(
+                            block
+                        )
+                )
+            );
+
+            row.appendChild(
+                actionsCell
+            );
+
+
             plcProgramBlocksBody.appendChild(
                 row
+            );
+        }
+    }
+
+
+    function setPlcProgramBlockDetailStatus(
+        message,
+        type = "normal"
+    ) {
+        if (!plcProgramBlockDetailStatus) {
+            return;
+        }
+
+
+        plcProgramBlockDetailStatus.textContent =
+            message;
+
+        plcProgramBlockDetailStatus.classList.toggle(
+            "error",
+            type === "error"
+        );
+
+        plcProgramBlockDetailStatus.classList.toggle(
+            "success",
+            type === "success"
+        );
+    }
+
+
+    function resetPlcProgramBlockDetail() {
+        if (plcProgramBlockDetail) {
+            plcProgramBlockDetail.classList.add(
+                "hidden"
+            );
+        }
+
+        if (plcProgramBlockDetailBody) {
+            plcProgramBlockDetailBody.replaceChildren();
+        }
+
+        if (plcProgramBlockDetailMeta) {
+            plcProgramBlockDetailMeta.replaceChildren();
+        }
+
+        setPlcProgramBlockDetailStatus(
+            "Select a program block."
+        );
+    }
+
+
+    function renderPlcProgramBlockDetail(
+        detail
+    ) {
+        if (
+            !plcProgramBlockDetail
+            ||
+            !plcProgramBlockDetailBody
+        ) {
+            return;
+        }
+
+
+        plcProgramBlockDetail.classList.remove(
+            "hidden"
+        );
+
+        plcProgramBlockDetailBody.replaceChildren();
+
+        plcProgramBlockDetailTitle.textContent =
+            `${detail.kind || "Block"} ${detail.name}`;
+
+
+        if (plcProgramBlockDetailMeta) {
+            plcProgramBlockDetailMeta.replaceChildren();
+
+            for (
+                const [
+                    label,
+                    value,
+                ]
+                of [
+                    [
+                        "Group",
+                        detail.group_path
+                        ||
+                        "(root)",
+                    ],
+                    [
+                        "Number",
+                        detail.number == null
+                            ? "—"
+                            : detail.number,
+                    ],
+                    [
+                        "Language",
+                        detail.programming_language
+                        ||
+                        "—",
+                    ],
+                    [
+                        "Consistent",
+                        detail.is_consistent == null
+                            ? "—"
+                            : (
+                                detail.is_consistent
+                                    ? "Yes"
+                                    : "No"
+                            ),
+                    ],
+                    [
+                        "Load memory",
+                        formatMemoryBytes(
+                            detail.load_memory_bytes
+                        ),
+                    ],
+                    [
+                        "Work memory",
+                        formatMemoryBytes(
+                            detail.work_memory_bytes
+                        ),
+                    ],
+                ]
+            ) {
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+                item.className =
+                    "plc-block-detail-meta-item";
+
+                const labelElement =
+                    document.createElement(
+                        "span"
+                    );
+
+                labelElement.textContent =
+                    label;
+
+                const valueElement =
+                    document.createElement(
+                        "strong"
+                    );
+
+                valueElement.textContent =
+                    String(
+                        value
+                    );
+
+                item.append(
+                    labelElement,
+                    valueElement
+                );
+
+                plcProgramBlockDetailMeta.appendChild(
+                    item
+                );
+            }
+        }
+
+
+        const members =
+            detail.members
+            ??
+            [];
+
+
+        if (members.length === 0) {
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+            const cell =
+                document.createElement(
+                    "td"
+                );
+
+            cell.colSpan =
+                5;
+
+            cell.className =
+                "empty-table-cell";
+
+            cell.textContent =
+                "No exported interface members found.";
+
+            row.appendChild(
+                cell
+            );
+
+            plcProgramBlockDetailBody.appendChild(
+                row
+            );
+
+        } else {
+            for (
+                const member
+                of members
+            ) {
+                const row =
+                    document.createElement(
+                        "tr"
+                    );
+
+
+                const values = [
+                    member.section
+                    ||
+                    "—",
+
+                    member.name
+                    ||
+                    "—",
+
+                    member.data_type
+                    ||
+                    "—",
+
+                    member.offset
+                    ||
+                    "—",
+
+                    member.comment
+                    ||
+                    "—",
+                ];
+
+
+                values.forEach(
+                    (value, index) => {
+                        const cell =
+                            document.createElement(
+                                "td"
+                            );
+
+                        cell.textContent =
+                            value;
+
+                        if (index === 1) {
+                            cell.style.paddingLeft =
+                                `${12 + (member.level || 0) * 18}px`;
+
+                            cell.title =
+                                member.path
+                                ||
+                                member.name;
+                        }
+
+                        row.appendChild(
+                            cell
+                        );
+                    }
+                );
+
+
+                plcProgramBlockDetailBody.appendChild(
+                    row
+                );
+            }
+        }
+
+
+        setPlcProgramBlockDetailStatus(
+            `${members.length} interface member(s) loaded.`,
+            "success"
+        );
+    }
+
+
+    async function readPlcProgramBlockDetail(
+        block
+    ) {
+        const processId =
+            selectedProcessId();
+
+        const target =
+            projectConfig.tia_target;
+
+
+        if (
+            !processId
+            ||
+            !target
+        ) {
+            return;
+        }
+
+
+        plcProgramBlockDetail.classList.remove(
+            "hidden"
+        );
+
+        setPlcProgramBlockDetailStatus(
+            `Exporting ${block.name} from TIA Portal...`
+        );
+
+
+        try {
+            const query =
+                new URLSearchParams({
+                    process_id:
+                        String(
+                            processId
+                        ),
+
+                    device_name:
+                        target.device_name,
+
+                    plc_name:
+                        target.plc_name,
+
+                    group_path:
+                        block.group_path
+                        ||
+                        "",
+
+                    name:
+                        block.name,
+                });
+
+
+            const detail =
+                await getJson(
+                    "/api/v1/tia/plc-program-block?"
+                    +
+                    query.toString()
+                );
+
+
+            renderPlcProgramBlockDetail(
+                detail
+            );
+
+        } catch (error) {
+            setPlcProgramBlockDetailStatus(
+                error.message,
+                "error"
             );
         }
     }
