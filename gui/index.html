@@ -415,27 +415,6 @@
                             </div>
 
 
-                            <div class="tia-inventory-filter">
-                                <label for="tia-plc-tags-sort">
-                                    Sort:
-                                </label>
-
-                                <select id="tia-plc-tags-sort">
-                                    <option value="name-asc">
-                                        Name A → Z
-                                    </option>
-                                    <option value="name-desc">
-                                        Name Z → A
-                                    </option>
-                                    <option value="address-asc">
-                                        Address ascending
-                                    </option>
-                                    <option value="address-desc">
-                                        Address descending
-                                    </option>
-                                </select>
-                            </div>
-
                         </div>
 
                         <div class="table-wrapper tia-inventory-table-wrapper">
@@ -443,10 +422,42 @@
                             <table class="management-table">
                                 <thead>
                                     <tr>
-                                        <th>Tag table / group</th>
-                                        <th>Name</th>
-                                        <th>Data type</th>
-                                        <th>Address</th>
+                                        <th>
+                                            <button
+                                                type="button"
+                                                class="table-sort-button"
+                                                data-plc-tag-sort="table"
+                                            >
+                                                Tag table / group
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button
+                                                type="button"
+                                                class="table-sort-button active"
+                                                data-plc-tag-sort="name"
+                                            >
+                                                Name ↑
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button
+                                                type="button"
+                                                class="table-sort-button"
+                                                data-plc-tag-sort="type"
+                                            >
+                                                Data type
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button
+                                                type="button"
+                                                class="table-sort-button"
+                                                data-plc-tag-sort="address"
+                                            >
+                                                Address
+                                            </button>
+                                        </th>
                                     </tr>
                                 </thead>
 
