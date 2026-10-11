@@ -140,6 +140,32 @@ export function initTiaUi(
     };
 
 
+    const readProgramBlocksButton =
+        document.getElementById(
+            "tia-read-program-blocks-button"
+        );
+
+    const plcProgramBlocksStatus =
+        document.getElementById(
+            "tia-plc-program-blocks-status"
+        );
+
+    const plcProgramBlocksSummary =
+        document.getElementById(
+            "tia-plc-program-blocks-summary"
+        );
+
+    const plcProgramBlocksBody =
+        document.getElementById(
+            "tia-plc-program-blocks-body"
+        );
+
+    const plcProgramBlocksKindFilter =
+        document.getElementById(
+            "tia-plc-program-blocks-kind-filter"
+        );
+
+
     const readStructuresButton =
         document.getElementById(
             "tia-read-structures-button"
@@ -298,6 +324,8 @@ export function initTiaUi(
         key: "name",
         direction: "asc",
     };
+
+    let loadedPlcProgramBlocks = [];
 
     let loadedPlcStructures = {
         data_blocks: [],
@@ -506,6 +534,12 @@ export function initTiaUi(
         }
 
 
+        if (readProgramBlocksButton) {
+            readProgramBlocksButton.disabled =
+                !target;
+        }
+
+
         if (readStructuresButton) {
             readStructuresButton.disabled =
                 !target;
@@ -538,6 +572,8 @@ export function initTiaUi(
 
         resetPlcTagFilters();
 
+        loadedPlcProgramBlocks = [];
+
         loadedPlcStructures = {
             data_blocks: [],
             udts: [],
@@ -550,6 +586,15 @@ export function initTiaUi(
         setPlcTagsStatus(
             `Active PLC: ${plc.plc_name}. Tags not loaded yet.`
         );
+
+        resetPlcProgramBlocks(
+            "Click Read program blocks to inspect the Active PLC."
+        );
+
+        setPlcProgramBlocksStatus(
+            `Active PLC: ${plc.plc_name}. Program blocks not loaded yet.`
+        );
+
 
         resetPlcStructures(
             "Click Read DB / UDT to load structures from the Active PLC."
@@ -581,6 +626,8 @@ export function initTiaUi(
 
         loadedPlcTags = [];
 
+        loadedPlcProgramBlocks = [];
+
         loadedPlcStructures = {
             data_blocks: [],
             udts: [],
@@ -591,6 +638,14 @@ export function initTiaUi(
         );
 
         setPlcTagsStatus(
+            "Select an Active PLC first."
+        );
+
+        resetPlcProgramBlocks(
+            "Select an Active PLC first."
+        );
+
+        setPlcProgramBlocksStatus(
             "Select an Active PLC first."
         );
 
@@ -2283,6 +2338,365 @@ export function initTiaUi(
 
         } finally {
             readTagsButton.disabled =
+                !projectConfig.tia_target;
+        }
+    }
+
+
+    function setPlcProgramBlocksStatus(
+        message,
+        type = "normal"
+    ) {
+        if (!plcProgramBlocksStatus) {
+            return;
+        }
+
+
+        plcProgramBlocksStatus.textContent =
+            message;
+
+        plcProgramBlocksStatus.classList.toggle(
+            "error",
+            type === "error"
+        );
+
+        plcProgramBlocksStatus.classList.toggle(
+            "success",
+            type === "success"
+        );
+    }
+
+
+    function renderEmptyProgramBlocks(
+        message
+    ) {
+        if (!plcProgramBlocksBody) {
+            return;
+        }
+
+
+        plcProgramBlocksBody.replaceChildren();
+
+
+        const row =
+            document.createElement(
+                "tr"
+            );
+
+        const cell =
+            document.createElement(
+                "td"
+            );
+
+        cell.colSpan =
+            8;
+
+        cell.className =
+            "empty-table-cell";
+
+        cell.textContent =
+            message;
+
+
+        row.appendChild(
+            cell
+        );
+
+        plcProgramBlocksBody.appendChild(
+            row
+        );
+    }
+
+
+    function resetPlcProgramBlocks(
+        message =
+            "No program block inventory loaded."
+    ) {
+        loadedPlcProgramBlocks = [];
+
+
+        if (plcProgramBlocksSummary) {
+            plcProgramBlocksSummary.textContent =
+                "Program blocks";
+        }
+
+
+        if (plcProgramBlocksKindFilter) {
+            plcProgramBlocksKindFilter.value =
+                "";
+        }
+
+
+        renderEmptyProgramBlocks(
+            message
+        );
+    }
+
+
+    function renderPlcProgramBlocks(
+        blocks
+    ) {
+        if (!plcProgramBlocksBody) {
+            return;
+        }
+
+
+        const kindFilter =
+            plcProgramBlocksKindFilter
+                ?.value
+            ||
+            "";
+
+
+        const visible =
+            blocks.filter(
+                block =>
+                    !kindFilter
+                    ||
+                    block.kind ===
+                        kindFilter
+            );
+
+
+        plcProgramBlocksBody.replaceChildren();
+
+
+        if (plcProgramBlocksSummary) {
+            plcProgramBlocksSummary.textContent =
+                `Program blocks (${visible.length} / ${blocks.length})`;
+        }
+
+
+        if (visible.length === 0) {
+            renderEmptyProgramBlocks(
+                blocks.length === 0
+                    ? "No program blocks found."
+                    : "No program blocks match the selected type."
+            );
+
+            return;
+        }
+
+
+        for (
+            const block
+            of visible
+        ) {
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+
+            const consistentText =
+                block.is_consistent == null
+                    ? "—"
+                    : (
+                        block.is_consistent
+                            ? "Yes"
+                            : "No"
+                    );
+
+
+            const values = [
+                block.group_path
+                ||
+                "(root)",
+
+                block.name
+                ||
+                "—",
+
+                block.kind
+                ||
+                "—",
+
+                block.number == null
+                    ? "—"
+                    : String(
+                        block.number
+                    ),
+
+                block.programming_language
+                ||
+                "—",
+
+                consistentText,
+
+                formatMemoryBytes(
+                    block.load_memory_bytes
+                ),
+
+                formatMemoryBytes(
+                    block.work_memory_bytes
+                ),
+            ];
+
+
+            for (
+                const value
+                of values
+            ) {
+                const cell =
+                    document.createElement(
+                        "td"
+                    );
+
+                cell.textContent =
+                    value;
+
+                row.appendChild(
+                    cell
+                );
+            }
+
+
+            plcProgramBlocksBody.appendChild(
+                row
+            );
+        }
+    }
+
+
+    async function readPlcProgramBlocks() {
+        const processId =
+            selectedProcessId();
+
+        const target =
+            projectConfig.tia_target;
+
+
+        if (!processId) {
+            setPlcProgramBlocksStatus(
+                "Select a TIA process first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (!target) {
+            setPlcProgramBlocksStatus(
+                "Select an Active PLC first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        readProgramBlocksButton.disabled =
+            true;
+
+        renderEmptyProgramBlocks(
+            "Reading program blocks from TIA Portal..."
+        );
+
+        setPlcProgramBlocksStatus(
+            `Reading program blocks from ${target.plc_name}...`
+        );
+
+
+        try {
+            const query =
+                new URLSearchParams({
+                    process_id:
+                        String(
+                            processId
+                        ),
+
+                    device_name:
+                        target.device_name,
+
+                    plc_name:
+                        target.plc_name,
+                });
+
+
+            const blocks =
+                await getJson(
+                    "/api/v1/tia/plc-program-blocks?"
+                    +
+                    query.toString()
+                );
+
+
+            loadedPlcProgramBlocks =
+                blocks;
+
+
+            renderPlcProgramBlocks(
+                loadedPlcProgramBlocks
+            );
+
+
+            const counts =
+                blocks.reduce(
+                    (result, block) => {
+                        const kind =
+                            block.kind
+                            ||
+                            "Other";
+
+                        result[kind] =
+                            (
+                                result[kind]
+                                ||
+                                0
+                            )
+                            +
+                            1;
+
+                        return result;
+                    },
+                    {}
+                );
+
+
+            const breakdown =
+                [
+                    "OB",
+                    "FC",
+                    "FB",
+                    "DB",
+                ]
+                .filter(
+                    kind =>
+                        counts[kind]
+                )
+                .map(
+                    kind =>
+                        `${kind} ${counts[kind]}`
+                )
+                .join(
+                    " · "
+                );
+
+
+            setPlcProgramBlocksStatus(
+                `${blocks.length} block(s) read from ${target.plc_name}`
+                +
+                (
+                    breakdown
+                        ? ` · ${breakdown}`
+                        : ""
+                ),
+                "success"
+            );
+
+        } catch (error) {
+            resetPlcProgramBlocks(
+                "PLC program block read failed."
+            );
+
+            setPlcProgramBlocksStatus(
+                error.message,
+                "error"
+            );
+
+        } finally {
+            readProgramBlocksButton.disabled =
                 !projectConfig.tia_target;
         }
     }
@@ -4101,6 +4515,14 @@ export function initTiaUi(
     }
 
 
+    if (readProgramBlocksButton) {
+        readProgramBlocksButton.addEventListener(
+            "click",
+            readPlcProgramBlocks
+        );
+    }
+
+
     if (readStructuresButton) {
         readStructuresButton.addEventListener(
             "click",
@@ -4157,6 +4579,17 @@ export function initTiaUi(
     }
 
 
+    if (plcProgramBlocksKindFilter) {
+        plcProgramBlocksKindFilter.addEventListener(
+            "change",
+            () =>
+                renderPlcProgramBlocks(
+                    loadedPlcProgramBlocks
+                )
+        );
+    }
+
+
     if (plcDbsSort) {
         plcDbsSort.addEventListener(
             "change",
@@ -4196,6 +4629,8 @@ export function initTiaUi(
 
             resetPlcTagFilters();
 
+            loadedPlcProgramBlocks = [];
+
             loadedPlcStructures = {
                 data_blocks: [],
                 udts: [],
@@ -4210,6 +4645,15 @@ export function initTiaUi(
             setPlcTagsStatus(
                 "PLC tags not loaded."
             );
+
+            resetPlcProgramBlocks(
+                "Select an Active PLC and click Read program blocks."
+            );
+
+            setPlcProgramBlocksStatus(
+                "Program block inventory not loaded."
+            );
+
 
             resetPlcStructures(
                 "Select an Active PLC and click Read DB / UDT."
@@ -4281,6 +4725,19 @@ export function initTiaUi(
             ? "PLC tags not loaded."
             : "Select an Active PLC first."
     );
+
+    resetPlcProgramBlocks(
+        projectConfig.tia_target
+            ? "Click Read program blocks to inspect the Active PLC."
+            : "Select an Active PLC first."
+    );
+
+    setPlcProgramBlocksStatus(
+        projectConfig.tia_target
+            ? "Program block inventory not loaded."
+            : "Select an Active PLC first."
+    );
+
 
     resetPlcStructures(
         projectConfig.tia_target
