@@ -468,8 +468,7 @@ def _run_adapter(
 
     return [
         line.strip()
-        for line
-        in stdout.splitlines()
+        for line in stdout.splitlines()
         if line.strip()
     ]
 
@@ -1062,8 +1061,7 @@ def get_project_info(
             parts[1].strip()
         ):
             return TiaProjectInfo(
-                project_name=
-                    parts[1].strip()
+                project_name=parts[1].strip()
             )
 
 
