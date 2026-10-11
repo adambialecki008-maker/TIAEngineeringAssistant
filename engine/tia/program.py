@@ -75,15 +75,15 @@ def get_plc_program_blocks(
     ),
     program_only: bool = Query(default=False),
 ):
-    lines = run_adapter(
+    adapter_args = [
         "list-program-blocks",
-        str(
-            process_id
-        ),
+        str(process_id),
         device_name.strip(),
         plc_name.strip(),
-        "program-only" if program_only else "all",
-    )
+    ]
+    if program_only:
+        adapter_args.append("program-only")
+    lines = run_adapter(*adapter_args)
 
 
     blocks = []
