@@ -262,6 +262,10 @@ export function initTiaUi(
         document.getElementById(
             "tia-plc-program-blocks-body"
         );
+    const plcDataBlocksBody =
+        document.getElementById("tia-plc-data-blocks-body");
+    const plcDataBlocksSummary =
+        document.getElementById("tia-plc-data-blocks-summary");
 
     const plcProgramBlocksKindFilter =
         document.getElementById(
@@ -4469,14 +4473,14 @@ export function initTiaUi(
 
 
     function renderEmptyProgramBlocks(
-        message
+        message,
+        body = plcProgramBlocksBody
     ) {
-        if (!plcProgramBlocksBody) {
+        if (!body) {
             return;
         }
 
-
-        plcProgramBlocksBody.replaceChildren();
+        body.replaceChildren();
 
 
         const row =
@@ -4490,7 +4494,7 @@ export function initTiaUi(
             );
 
         cell.colSpan =
-            8;
+            9;
 
         cell.className =
             "empty-table-cell";
@@ -4503,9 +4507,7 @@ export function initTiaUi(
             cell
         );
 
-        plcProgramBlocksBody.appendChild(
-            row
-        );
+        body.appendChild(row);
     }
 
 
@@ -4518,7 +4520,7 @@ export function initTiaUi(
 
         if (plcProgramBlocksSummary) {
             plcProgramBlocksSummary.textContent =
-                "Program blocks";
+                "Program blocks (OB / FC / FB)";
         }
 
 
@@ -4528,63 +4530,27 @@ export function initTiaUi(
         }
 
 
-        renderEmptyProgramBlocks(
-            message
-        );
+        renderEmptyProgramBlocks(message);
+        renderEmptyProgramBlocks(message, plcDataBlocksBody);
+        if (plcDataBlocksSummary) {
+            plcDataBlocksSummary.textContent = "Data blocks (DB)";
+        }
 
         resetPlcProgramBlockDetail();
     }
 
 
-    function renderPlcProgramBlocks(
-        blocks
-    ) {
-        if (!plcProgramBlocksBody) {
+    function renderPlcBlockRows(blocks, body) {
+        if (!body) {
+            return;
+        }
+        body.replaceChildren();
+        if (!blocks.length) {
+            renderEmptyProgramBlocks("No matching blocks found.", body);
             return;
         }
 
-
-        const kindFilter =
-            plcProgramBlocksKindFilter
-                ?.value
-            ||
-            "";
-
-
-        const visible =
-            blocks.filter(
-                block =>
-                    !kindFilter
-                    ||
-                    block.kind ===
-                        kindFilter
-            );
-
-
-        plcProgramBlocksBody.replaceChildren();
-
-
-        if (plcProgramBlocksSummary) {
-            plcProgramBlocksSummary.textContent =
-                `Program blocks (${visible.length} / ${blocks.length})`;
-        }
-
-
-        if (visible.length === 0) {
-            renderEmptyProgramBlocks(
-                blocks.length === 0
-                    ? "No program blocks found."
-                    : "No program blocks match the selected type."
-            );
-
-            return;
-        }
-
-
-        for (
-            const block
-            of visible
-        ) {
+        for (const block of blocks) {
             const row =
                 document.createElement(
                     "tr"
@@ -4677,10 +4643,34 @@ export function initTiaUi(
             );
 
 
-            plcProgramBlocksBody.appendChild(
-                row
-            );
+            body.appendChild(row);
         }
+    }
+
+
+
+    function renderPlcProgramBlocks(blocks) {
+        if (!plcProgramBlocksBody || !plcDataBlocksBody) {
+            return;
+        }
+        const programBlocks = blocks.filter(block => block.kind !== "DB");
+        const dataBlocks = blocks.filter(block => block.kind === "DB");
+        const kindFilter = plcProgramBlocksKindFilter?.value || "";
+        const visible = programBlocks.filter(
+            block => !kindFilter || block.kind === kindFilter
+        );
+
+        if (plcProgramBlocksSummary) {
+            plcProgramBlocksSummary.textContent =
+                "Program blocks (" + visible.length + " / "
+                + programBlocks.length + ")";
+        }
+        if (plcDataBlocksSummary) {
+            plcDataBlocksSummary.textContent =
+                "Data blocks (" + dataBlocks.length + ")";
+        }
+        renderPlcBlockRows(visible, plcProgramBlocksBody);
+        renderPlcBlockRows(dataBlocks, plcDataBlocksBody);
     }
 
 
