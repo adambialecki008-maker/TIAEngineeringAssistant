@@ -711,6 +711,31 @@ def translate_hmi_texts(
                 ),
             )
 
+        # For a pilot, import at most max_rows distinct meaningful source
+        # texts. Avoid wasting test calls on duplicate labels or bare symbols.
+        if request.max_rows is not None:
+            pilot = []
+            pilot_texts = set()
+            for text, cell in matching_cells:
+                if text in pilot_texts or not any(ch.isalpha() for ch in text):
+                    continue
+                pilot.append((text, cell))
+                pilot_texts.add(text)
+                if len(pilot) >= request.max_rows:
+                    break
+
+            if not pilot:
+                raise HTTPException(
+                    422,
+                    "No textual HMI rows are available for the pilot import.",
+                )
+
+            matching_cells = pilot
+            for worksheet in matched_row_indexes:
+                matched_row_indexes[worksheet] = set()
+            for _source, target_cell in matching_cells:
+                matched_row_indexes[target_cell.parent].add(target_cell.row)
+
         unique_texts = list(
             dict.fromkeys(
                 text
