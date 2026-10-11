@@ -181,6 +181,9 @@ def test_preview_real_tia_v21_layout_and_explicit_view_path_root(monkeypatch):
     response = client.post("/api/v1/tia/hmis/preview-texts", json=body)
     assert response.status_code == 200
     assert response.json()["matched_text_rows"] == 2
+    assert response.json()["matched_view_path_roots"] == [
+        {"root": "HMI_00_Main", "rows": 2},
+    ]
     assert response.json()["matched_unique_texts"] == 2
     assert response.json()["matched_eligible_unique_texts"] == 2
     assert response.json()["matched_missing_target_rows"] == 0
@@ -440,3 +443,53 @@ def test_preview_scans_full_hmi_and_counts_missing_targets_not_only_samples(
     assert data["matched_missing_target_rows"] == 75
     assert data["matched_missing_target_unique_texts"] == 2
     assert len([row for row in data["sample_rows"] if row["matches_hmi"]]) == 50
+
+
+def test_preview_matches_one_root_across_all_rows_not_just_samples(monkeypatch):
+    """Read-only matching reports the full root even for alarms after row 50."""
+    def adapter(*args):
+        assert args[0] == "export-project-texts"
+        path = Path(args[-1])
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "User Texts"
+        sheet.append([
+            "Category", "ViewPath", "Internal ID", "Substitutions",
+            "en-US*", "pl-PL",
+        ])
+        for index in range(65):
+            category = "<Alarm>" if index % 2 else "<HMI screen>"
+            sheet.append([
+                category,
+                "Project\\HMI_00_Main\\Screens\\Label_" + str(index),
+                "id-" + str(index),
+                "",
+                "Napisy " + str(index),
+                "Text",
+            ])
+        sheet.append([
+            "<HMI screen>", "Project\\Other_HMI\\Screens\\Label",
+            "other-id", "", "Other", "Text",
+        ])
+        workbook.save(path)
+        workbook.close()
+        return ["PROJECT_TEXTS_EXPORTED|" + str(path)]
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    response = client.post(
+        "/api/v1/tia/hmis/preview-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "HMI_00_Main",
+            "hmi_name": "HMI_00_Main",
+            "source_culture": "en-US",
+            "target_culture": "pl-PL",
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["matched_text_rows"] == 65
+    assert data["matched_view_path_roots"] == [
+        {"root": "HMI_00_Main", "rows": 65},
+    ]
+    assert data["matched_missing_target_unique_texts"] == 65
