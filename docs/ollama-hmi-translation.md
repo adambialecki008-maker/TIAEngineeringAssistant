@@ -23,7 +23,7 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 # Optional default; must match an installed model listed by Ollama:
 # OLLAMA_TRANSLATION_MODEL=your-installed-model:tag
 # Optional: larger batches can reduce Ollama overhead, but may affect
-# output reliability on small local models (1-50, default 15).
+# output reliability on small local models (1-50, default 1 for slower GPUs).
 # OLLAMA_TRANSLATION_BATCH_SIZE=1
 ```
 
