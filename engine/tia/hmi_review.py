@@ -338,7 +338,9 @@ def import_reviewed_hmi_translations(request: ImportReviewRequest):
                 columns = _source_target_columns(sheet, source, target)
                 if columns is None:
                     continue
-                header = columns[0]
+                # _source_target_columns returns (column_tuple, target_header).
+                # The header row index is the first element of column_tuple.
+                header = columns[0][0]
                 retained = keep.get(sheet.title, set())
                 runs = []
                 start = None
