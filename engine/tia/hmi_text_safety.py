@@ -46,6 +46,15 @@ def validate_hmi_translation(source: str, translated: str) -> None:
     if translated.strip().casefold() == "text" and source.strip().casefold() != "text":
         raise HTTPException(502, "Translation returned the placeholder 'Text'.")
 
+    # Preserve numbered instruction prefixes without treating the following
+    # human-language word as part of an identifier: "1.Naciagnij" is prose,
+    # NOT a PLC tag. Accept spelling/diacritic corrections after "1.".
+    step_prefix = r"(?m)^[ \t]*(\d+[.)])(?=\s*[^\W\d_])"
+    if re.findall(step_prefix, source) != re.findall(step_prefix, translated):
+        _reject_unsafe_proposal(
+            source, translated, "changed numbered instruction prefix",
+        )
+
     # Keep syntactic delimiters, used as status/parameter indicators in HMI.
     for ch in "(){}[]":
         if source.count(ch) != translated.count(ch):
@@ -58,15 +67,6 @@ def validate_hmi_translation(source: str, translated: str) -> None:
     if Counter(re.findall(placeholders, source)) != Counter(re.findall(placeholders, translated)):
         _reject_unsafe_proposal(
             source, translated, "changed a dynamic placeholder"
-        )
-
-    # Preserve numbered instruction prefixes without treating the following
-    # human-language word as part of an identifier: "1.Naciagnij" is prose,
-    # NOT a PLC tag. Accept spelling/diacritic corrections after "1.".
-    step_prefix = r"(?m)^[ \t]*(\d+[.)])(?=\s*[^\W\d_])"
-    if re.findall(step_prefix, source) != re.findall(step_prefix, translated):
-        _reject_unsafe_proposal(
-            source, translated, "changed numbered instruction prefix",
         )
 
     # PLC identifiers require both a letter and a digit in the identifier
