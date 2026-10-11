@@ -818,8 +818,7 @@ def get_project_context(
                 and
                 parts[1].strip()
             ):
-                project_name =
-                    parts[1].strip()
+                project_name = parts[1].strip()
 
 
         elif line.startswith(
@@ -980,30 +979,34 @@ def get_project_context(
             continue
 
 
-        plc.online_state =
-            metrics["online_state"]
+        plc.online_state = metrics[
+            "online_state"
+        ]
 
-        plc.block_count =
-            metrics["block_count"]
+        plc.block_count = metrics[
+            "block_count"
+        ]
 
-        plc.data_block_count =
-            metrics["data_block_count"]
+        plc.data_block_count = metrics[
+            "data_block_count"
+        ]
 
-        plc.udt_count =
-            metrics["udt_count"]
+        plc.udt_count = metrics[
+            "udt_count"
+        ]
 
-        plc.tag_count =
-            metrics["tag_count"]
+        plc.tag_count = metrics[
+            "tag_count"
+        ]
 
 
-        plc.resource_rows =
-            resources_by_target.get(
-                (
-                    plc.device_name.casefold(),
-                    plc.plc_name.casefold(),
-                ),
-                [],
-            )
+        plc.resource_rows = resources_by_target.get(
+            (
+                plc.device_name.casefold(),
+                plc.plc_name.casefold(),
+            ),
+            [],
+        )
 
 
     if not project_name:
