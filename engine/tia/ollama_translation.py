@@ -6,6 +6,7 @@ local /api/tags and /api/chat HTTP endpoints with a JSON-schema response.
 import json
 import os
 import socket
+from collections.abc import Callable
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -175,17 +176,42 @@ def translate_ollama_batch(
     return translations
 
 
+def translation_batch_size() -> int:
+    """Number of source texts per local model request (1-50).
+
+    Larger batches reduce overhead but may increase JSON-format errors on
+    smaller models. Defaults to the existing safe batch size (15).
+    """
+    raw = os.getenv("OLLAMA_TRANSLATION_BATCH_SIZE", "15").strip()
+    try:
+        size = int(raw)
+    except ValueError as exc:
+        raise HTTPException(
+            422, "OLLAMA_TRANSLATION_BATCH_SIZE must be an integer (1-50).",
+        ) from exc
+    if not 1 <= size <= 50:
+        raise HTTPException(
+            422, "OLLAMA_TRANSLATION_BATCH_SIZE must be between 1 and 50.",
+        )
+    return size
+
+
 def translate_ollama_texts(
     texts: list[str], target_culture: str,
     model_name: str | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, str]:
     model = resolve_ollama_model(model_name)
     translations = {}
-    # Small batches are more reliable with local, lightweight models.
-    for start in range(0, len(texts), 15):
+    batch_size = translation_batch_size()
+    total = len(texts)
+    if progress is not None:
+        progress(0, total)
+    for start in range(0, total, batch_size):
+        batch = texts[start:start + batch_size]
         translations.update(
-            translate_ollama_batch(
-                texts[start:start + 15], target_culture, model,
-            )
+            translate_ollama_batch(batch, target_culture, model)
         )
+        if progress is not None:
+            progress(min(start + len(batch), total), total)
     return translations
