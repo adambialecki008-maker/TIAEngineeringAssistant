@@ -586,11 +586,14 @@ def translate_hmi_texts(
 
         workbook = load_workbook(temporary_path)
         matching_cells = []
+        matched_row_indexes = {}
         seen_references = []
 
         for worksheet in workbook.worksheets:
             columns = _project_text_columns(
-                worksheet
+                worksheet,
+                source_culture,
+                target_culture,
             )
 
             if columns is None:
@@ -603,6 +606,36 @@ def translate_hmi_texts(
                 _category_column,
                 reference_column,
             ) = columns
+
+            # The actual V21 XLSX uses en-US* and <target culture>.
+            # Before enabling the target culture, some exports instead
+            # show en-US* / en-US. Retitle only that known placeholder;
+            # reject any other ambiguous target column.
+            reference_title = str(
+                worksheet.cell(header_row, reference_column).value or ""
+            ).strip().casefold()
+            if reference_title == "viewpath":
+                source_title = str(
+                    worksheet.cell(header_row, source_column).value or ""
+                ).strip()
+                target_cell_header = worksheet.cell(header_row, target_column)
+                actual_target_title = str(target_cell_header.value or "").strip()
+                if source_title.rstrip("*").casefold() != source_culture.casefold():
+                    raise HTTPException(
+                        409,
+                        "Unexpected TIA source language header: " + source_title,
+                    )
+                if actual_target_title.casefold() != target_culture.casefold():
+                    if actual_target_title.casefold() != source_culture.casefold():
+                        raise HTTPException(
+                            409,
+                            "Unexpected TIA target language header: "
+                            + actual_target_title
+                            + "; expected " + target_culture,
+                        )
+                    target_cell_header.value = target_culture
+
+            matched_row_indexes[worksheet] = set()
 
             for row_index in range(
                 header_row + 1,
@@ -631,6 +664,7 @@ def translate_hmi_texts(
                     reference,
                     request.device_name,
                     request.hmi_name,
+                    request.view_path_root,
                 ):
                     continue
 
@@ -650,6 +684,7 @@ def translate_hmi_texts(
                 ):
                     continue
 
+                matched_row_indexes[worksheet].add(row_index)
                 matching_cells.append(
                     (
                         str(source_text),
@@ -692,6 +727,30 @@ def translate_hmi_texts(
             target_cell.value = translations[
                 source_text
             ]
+
+        # Import a workbook containing ONLY selected HMI text rows.
+        # Otherwise renaming a placeholder language column could cause
+        # unrelated HMI texts to be imported as translations as well.
+        for worksheet, keep_rows in matched_row_indexes.items():
+            columns = _project_text_columns(
+                worksheet, source_culture, target_culture,
+            )
+            if columns is None:
+                continue
+            header_row = columns[0]
+            excluded_runs = []
+            run_start = None
+            for index in range(header_row + 1, worksheet.max_row + 1):
+                if index in keep_rows:
+                    if run_start is not None:
+                        excluded_runs.append((run_start, index - 1))
+                        run_start = None
+                elif run_start is None:
+                    run_start = index
+            if run_start is not None:
+                excluded_runs.append((run_start, worksheet.max_row))
+            for start, end in reversed(excluded_runs):
+                worksheet.delete_rows(start, end - start + 1)
 
         workbook.save(temporary_path)
 
