@@ -93,6 +93,16 @@ export function initTiaUi(
             "tia-hmi-translation-scope"
         );
 
+    const hmiOllamaModelSelect = document.getElementById(
+        "tia-hmi-ollama-model"
+    );
+    const hmiRefreshOllamaModels = document.getElementById(
+        "tia-hmi-refresh-ollama-models"
+    );
+    const hmiOllamaStatus = document.getElementById(
+        "tia-hmi-ollama-status"
+    );
+
     const hmiTranslateButton =
         document.getElementById(
             "tia-hmi-translate-button"
@@ -1003,6 +1013,7 @@ export function initTiaUi(
             device_name: hmi.device_name,
             hmi_name: hmi.hmi_name,
             view_path_root: hmiViewPathRootSelect?.value || null,
+            ollama_model: hmiOllamaModelSelect?.value || null,
             source_culture: sourceCulture,
             target_culture: targetCulture,
         };
@@ -1086,7 +1097,8 @@ export function initTiaUi(
         const isVerified = Boolean(key && key === verifiedHmiPreviewKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress;
         if (hmiTranslateButton) {
-            hmiTranslateButton.disabled = busy || !isVerified;
+            hmiTranslateButton.disabled =
+                busy || !isVerified || !hmiOllamaModelSelect?.value;
         }
         if (hmiPreviewButton) {
             hmiPreviewButton.disabled = busy || !selection;
@@ -1096,6 +1108,69 @@ export function initTiaUi(
                 busy || !preparedHmiReview || preparedHmiReview.selectionKey !== key;
         }
     }
+
+    async function refreshHmiOllamaModels() {
+        if (!hmiOllamaModelSelect) {
+            return;
+        }
+        const previous = hmiOllamaModelSelect.value;
+        hmiOllamaModelSelect.disabled = true;
+        if (hmiRefreshOllamaModels) {
+            hmiRefreshOllamaModels.disabled = true;
+        }
+        if (hmiOllamaStatus) {
+            hmiOllamaStatus.textContent = "Reading installed models from local Ollama...";
+        }
+        try {
+            const response = await getJson(
+                "/api/v1/tia/hmis/translation-models"
+            );
+            hmiOllamaModelSelect.replaceChildren();
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = "Select an installed Ollama model";
+            hmiOllamaModelSelect.appendChild(placeholder);
+            for (const name of response.models || []) {
+                const option = document.createElement("option");
+                option.value = name;
+                option.textContent = name;
+                hmiOllamaModelSelect.appendChild(option);
+            }
+            const available = response.models || [];
+            const selected = available.includes(previous)
+                ? previous : response.selected_model;
+            if (selected && available.includes(selected)) {
+                hmiOllamaModelSelect.value = selected;
+            }
+            if (hmiOllamaStatus) {
+                hmiOllamaStatus.textContent =
+                    available.length
+                    + " local Ollama model(s) found. No OpenAI API key is needed."
+                    + (!selected && available.length > 1
+                        ? " Choose a model from the list." : "");
+            }
+        } catch (error) {
+            hmiOllamaModelSelect.replaceChildren();
+            const errorOption = document.createElement("option");
+            errorOption.value = "";
+            errorOption.textContent = "Ollama unavailable";
+            hmiOllamaModelSelect.appendChild(errorOption);
+            if (hmiOllamaStatus) {
+                hmiOllamaStatus.textContent = error.message;
+            }
+        } finally {
+            hmiOllamaModelSelect.disabled = false;
+            if (hmiRefreshOllamaModels) {
+                hmiRefreshOllamaModels.disabled = false;
+            }
+            if (hmiOllamaModelSelect.value !== previous) {
+                invalidateHmiPreview();
+            } else {
+                updateHmiTranslateButtonState();
+            }
+        }
+    }
+
 
     async function previewSelectedHmi() {
         const selection = hmiTranslationSelection();
@@ -1361,6 +1436,7 @@ export function initTiaUi(
         }
 
         populateHmiTranslationLanguages();
+        void refreshHmiOllamaModels();
 
         setHmiTranslationStatus(
             "Choose the TIA source slot containing the current texts and the target language. "
@@ -6767,6 +6843,19 @@ export function initTiaUi(
         hmiTranslationScopeSelect.addEventListener(
             "change",
             discardHmiReview
+        );
+    }
+
+    if (hmiOllamaModelSelect) {
+        hmiOllamaModelSelect.addEventListener(
+            "change",
+            invalidateHmiPreview
+        );
+    }
+    if (hmiRefreshOllamaModels) {
+        hmiRefreshOllamaModels.addEventListener(
+            "click",
+            refreshHmiOllamaModels
         );
     }
 
