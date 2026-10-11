@@ -1143,11 +1143,12 @@ export function initTiaUi(
                 hmiOllamaModelSelect.value = selected;
             }
             if (hmiOllamaStatus) {
-                hmiOllamaStatus.textContent =
-                    available.length
-                    + " local Ollama model(s) found. No OpenAI API key is needed."
-                    + (!selected && available.length > 1
-                        ? " Choose a model from the list." : "");
+                hmiOllamaStatus.textContent = available.length === 0
+                    ? "No Ollama models installed. Run ollama list or pull a model."
+                    : available.length + " Ollama model(s) available."
+                        + " No OpenAI API key is needed."
+                        + (!selected && available.length > 1
+                            ? " Choose a model from the list." : "");
             }
         } catch (error) {
             hmiOllamaModelSelect.replaceChildren();
