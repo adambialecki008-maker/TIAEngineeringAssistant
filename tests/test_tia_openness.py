@@ -1269,6 +1269,26 @@ def test_hmi_project_text_reference_filter():
     )
 
 
+def test_hmi_reference_matching_accepts_tia_name_variants():
+    assert _reference_matches_hmi(
+        "Project\\HMI RT 1 [WinCC RT Advanced]\\Screen_1",
+        "HMI_RT_1",
+        "HMI_RT_1",
+    )
+
+    assert _reference_matches_hmi(
+        "Project/HMI_RT_1 [WinCC RT Advanced]/Screen_1",
+        "HMI_RT_1",
+        "HMI_RT_1",
+    )
+
+    assert not _reference_matches_hmi(
+        "Project\\HMI_RT_10 [WinCC RT Advanced]\\Screen_1",
+        "HMI_RT_1",
+        "HMI_RT_1",
+    )
+
+
 def test_project_text_columns_are_detected():
     workbook = Workbook()
     worksheet = workbook.active
