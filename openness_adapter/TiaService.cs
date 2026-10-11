@@ -920,6 +920,198 @@ namespace TiaOpennessAdapter
         }
 
 
+        public static int ExportPlcProgramBlock(
+            int processId,
+            string deviceName,
+            string plcName,
+            string groupPath,
+            string blockName,
+            string outputFilePath
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    blockName
+                )
+                ||
+                string.IsNullOrWhiteSpace(
+                    outputFilePath
+                )
+            )
+            {
+                Console.Error.WriteLine(
+                    "PROGRAM_BLOCK_EXPORT_ARGUMENT_REQUIRED"
+                );
+
+                return 3;
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                PlcTarget target =
+                    FindPlcTarget(
+                        project,
+                        deviceName,
+                        plcName
+                    );
+
+
+                if (target == null)
+                {
+                    Console.Error.WriteLine(
+                        "PLC_NOT_FOUND|" +
+                        SanitizeOutput(
+                            deviceName
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            plcName
+                        )
+                    );
+
+                    return 7;
+                }
+
+
+                PlcBlock block =
+                    FindPlcBlock(
+                        target.Software,
+                        groupPath,
+                        blockName
+                    );
+
+
+                if (block == null)
+                {
+                    Console.Error.WriteLine(
+                        "PLC_PROGRAM_BLOCK_NOT_FOUND|" +
+                        SanitizeOutput(
+                            groupPath
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            blockName
+                        )
+                    );
+
+                    return 7;
+                }
+
+
+                FileInfo outputFile =
+                    new FileInfo(
+                        outputFilePath
+                    );
+
+
+                if (
+                    outputFile.Directory
+                    != null
+                    &&
+                    !outputFile.Directory.Exists
+                )
+                {
+                    outputFile
+                        .Directory
+                        .Create();
+                }
+
+
+                if (outputFile.Exists)
+                {
+                    outputFile.Delete();
+                }
+
+
+                block.Export(
+                    outputFile,
+                    ExportOptions.WithDefaults
+                );
+
+
+                Console.WriteLine(
+                    "PROGRAM_BLOCK_EXPORTED|" +
+                    SanitizeOutput(
+                        groupPath
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        block.Name
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        GetResourceObjectType(
+                            block
+                        )
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        ReadPropertyText(
+                            block,
+                            "Number"
+                        )
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        ReadPropertyText(
+                            block,
+                            "ProgrammingLanguage"
+                        )
+                    ) +
+                    "|" +
+                    SanitizeOutput(
+                        ReadPropertyText(
+                            block,
+                            "IsConsistent"
+                        )
+                    ) +
+                    "|" +
+                    ReadBlockLoadMemory(
+                        block
+                    ) +
+                    "|" +
+                    ReadBlockWorkMemory(
+                        block
+                    )
+                );
+            }
+
+
+            return 0;
+        }
+
+
         public static int ExportPlcStructure(
             int processId,
             string deviceName,
@@ -3809,6 +4001,119 @@ namespace TiaOpennessAdapter
             )
             .Trim()
             .Trim('/');
+        }
+
+
+        private static PlcBlock FindPlcBlock(
+            PlcSoftware software,
+            string groupPath,
+            string name
+        )
+        {
+            string targetPath =
+                NormalizeGroupPath(
+                    groupPath
+                );
+
+
+            if (targetPath.Length == 0)
+            {
+                return software
+                    .BlockGroup
+                    .Blocks
+                    .FirstOrDefault(
+                        block =>
+                            string.Equals(
+                                block.Name,
+                                name,
+                                StringComparison
+                                    .OrdinalIgnoreCase
+                            )
+                    );
+            }
+
+
+            foreach (
+                PlcBlockUserGroup group
+                in software
+                    .BlockGroup
+                    .Groups
+            )
+            {
+                PlcBlock result =
+                    FindPlcBlock(
+                        group,
+                        group.Name,
+                        targetPath,
+                        name
+                    );
+
+
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+
+
+            return null;
+        }
+
+
+        private static PlcBlock FindPlcBlock(
+            PlcBlockUserGroup group,
+            string currentPath,
+            string targetPath,
+            string name
+        )
+        {
+            if (
+                string.Equals(
+                    currentPath,
+                    targetPath,
+                    StringComparison
+                        .OrdinalIgnoreCase
+                )
+            )
+            {
+                return group
+                    .Blocks
+                    .FirstOrDefault(
+                        block =>
+                            string.Equals(
+                                block.Name,
+                                name,
+                                StringComparison
+                                    .OrdinalIgnoreCase
+                            )
+                    );
+            }
+
+
+            foreach (
+                PlcBlockUserGroup child
+                in group.Groups
+            )
+            {
+                PlcBlock result =
+                    FindPlcBlock(
+                        child,
+                        currentPath +
+                        "/" +
+                        child.Name,
+                        targetPath,
+                        name
+                    );
+
+
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+
+
+            return null;
         }
 
 
