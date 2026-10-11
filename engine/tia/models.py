@@ -260,6 +260,7 @@ class TranslateHmiTextsRequest(BaseModel):
         min_length=1,
         max_length=128,
     )
+    view_path_root: str | None = Field(default=None, max_length=128)
     source_culture: str = Field(
         min_length=2,
         max_length=32,
@@ -280,6 +281,11 @@ class HmiProjectTextPreviewRow(BaseModel):
     matches_hmi: bool
 
 
+class HmiProjectTextRoot(BaseModel):
+    root: str
+    rows: int
+
+
 class HmiProjectTextSheetDiagnostic(BaseModel):
     sheet_name: str
     declared_rows: int | None = None
@@ -297,6 +303,7 @@ class HmiProjectTextsPreviewResponse(BaseModel):
     worksheets_found: int
     worksheet_count: int
     sheet_diagnostics: list[HmiProjectTextSheetDiagnostic]
+    view_path_roots: list[HmiProjectTextRoot]
     total_text_rows: int
     matched_text_rows: int
     reference_examples: list[str]
