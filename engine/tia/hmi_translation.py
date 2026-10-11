@@ -153,7 +153,7 @@ def _segment_matches_target(
 
 
 def _view_path_root(reference) -> str:
-    parts = str(reference or "").replace("/", "\\\\").split("\\\\")
+    parts = str(reference or "").replace("/", "\\").split("\\")
     return parts[1].strip() if len(parts) >= 2 else ""
 
 
