@@ -136,3 +136,35 @@ def test_local_ollama_rejects_missing_translation_id(monkeypatch):
         )
     assert err.value.status_code == 502
     assert "IDs" in err.value.detail
+
+
+def test_configured_translation_batches_report_progress(monkeypatch):
+    monkeypatch.setenv("OLLAMA_TRANSLATION_BATCH_SIZE", "20")
+    monkeypatch.setattr(
+        ollama, "resolve_ollama_model",
+        lambda selected: "local-test-model",
+    )
+    batch_sizes = []
+    events = []
+
+    def fake_batch(texts, target_culture, model):
+        batch_sizes.append(len(texts))
+        return {text: text for text in texts}
+
+    monkeypatch.setattr(ollama, "translate_ollama_batch", fake_batch)
+    texts = ["Label " + str(i) for i in range(45)]
+    result = ollama.translate_ollama_texts(
+        texts, "pl-PL", "local-test-model",
+        progress=lambda done, total: events.append((done, total)),
+    )
+    assert len(result) == 45
+    assert batch_sizes == [20, 20, 5]
+    assert events == [(0, 45), (20, 45), (40, 45), (45, 45)]
+
+
+@pytest.mark.parametrize("size", ["foo", "0", "51"])
+def test_translation_batch_size_validates_configuration(monkeypatch, size):
+    monkeypatch.setenv("OLLAMA_TRANSLATION_BATCH_SIZE", size)
+    with pytest.raises(HTTPException) as error:
+        ollama.translation_batch_size()
+    assert error.value.status_code == 422
