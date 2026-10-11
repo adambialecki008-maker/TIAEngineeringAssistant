@@ -275,6 +275,10 @@ def _adapter_error_status(
         )
         or
         normalized.startswith(
+            "PLC_STRUCTURE_NOT_FOUND|"
+        )
+        or
+        normalized.startswith(
             "PLC_NOT_FOUND|"
         )
         or
