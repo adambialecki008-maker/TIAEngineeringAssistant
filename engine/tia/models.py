@@ -270,6 +270,30 @@ class TranslateHmiTextsRequest(BaseModel):
     )
 
 
+class HmiProjectTextPreviewRow(BaseModel):
+    sheet: str
+    row: int
+    source_text: str
+    target_text: str
+    category: str
+    reference: str
+    matches_hmi: bool
+
+
+class HmiProjectTextsPreviewResponse(BaseModel):
+    hmi_name: str
+    device_name: str
+    source_culture: str
+    target_culture: str
+    source_column_header: str
+    target_column_header: str
+    worksheets_found: int
+    total_text_rows: int
+    matched_text_rows: int
+    reference_examples: list[str]
+    sample_rows: list[HmiProjectTextPreviewRow]
+
+
 class TranslateHmiTextsResponse(BaseModel):
     status: str
     hmi_name: str
