@@ -1494,8 +1494,9 @@ export function initTiaUi(
 
         const scope = hmiTranslationScopeSelect?.value || "10";
         if (scope === "all" && !confirm(
-            "Generate AI translations for all matching HMI texts? "
-            + "This may use billable API calls. No TIA changes will be made yet."
+            "Generate local Ollama translations for all matching HMI texts? "
+            + "This may take a long time depending on your hardware and model. "
+            + "No TIA changes will be made yet."
         )) {
             return;
         }
@@ -1503,8 +1504,52 @@ export function initTiaUi(
         discardHmiReview();
         hmiReviewInProgress = true;
         updateHmiTranslateButtonState();
+        const progressId = crypto.randomUUID().replace(/-/g, "");
+        let activeProgress = true;
+        let progressPolling = false;
+        let lastProgressLabel = "";
+        const pollTranslationProgress = async () => {
+            if (!activeProgress || progressPolling) {
+                return;
+            }
+            progressPolling = true;
+            try {
+                const status = await getJson(
+                    "/api/v1/tia/hmis/translation-progress/" + progressId
+                );
+                if (!activeProgress) {
+                    return;
+                }
+                let text = "Preparing local Ollama translations...";
+                if (status.stage === "exporting_project_texts") {
+                    text = "Exporting TIA project texts...";
+                } else if (status.stage === "translating") {
+                    text = "Ollama: " + status.completed + " / "
+                        + status.total + " unique texts"
+                        + (status.percent !== null
+                            ? " (" + status.percent + "%)" : "")
+                        + ". Elapsed: " + status.elapsed_seconds + " s.";
+                } else if (status.stage === "preparing_review") {
+                    text = "Finalizing proposed translations...";
+                } else if (status.stage === "ready") {
+                    text = "Translations prepared. Loading review table...";
+                }
+                if (text !== lastProgressLabel) {
+                    lastProgressLabel = text;
+                    setHmiTranslationStatus(text);
+                }
+            } catch (_error) {
+                // Initial polling can race with the first progress update.
+                // The main POST still reports any real error to the user.
+            } finally {
+                progressPolling = false;
+            }
+        };
+        const progressTimer = window.setInterval(
+            pollTranslationProgress, 1500
+        );
         setHmiTranslationStatus(
-            "Preparing translations only. Nothing is being imported to TIA..."
+            "Starting HMI project-text export and local Ollama translation..."
         );
 
         try {
@@ -1513,6 +1558,7 @@ export function initTiaUi(
                 {
                     ...selection,
                     max_rows: scope === "all" ? null : 10,
+                    progress_id: progressId,
                 }
             );
             if (hmiTranslationKey(hmiTranslationSelection()) !== key
@@ -1558,6 +1604,8 @@ export function initTiaUi(
         } catch (error) {
             setHmiTranslationStatus(error.message, "error");
         } finally {
+            activeProgress = false;
+            window.clearInterval(progressTimer);
             hmiReviewInProgress = false;
             updateHmiTranslateButtonState();
         }
