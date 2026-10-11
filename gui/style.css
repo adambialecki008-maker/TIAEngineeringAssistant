@@ -1366,30 +1366,95 @@ td {
 }
 
 
-/* Readable source/current/proposed HMI translation comparison. */
+/* TIA text preview: focus on source/current/proposed translations.
+   Long ViewPath diagnostics are collapsed per row. */
+#tia-hmi-preview-results,
 #tia-hmi-review-results {
-    margin-top: 20px;
-    padding-top: 12px;
+    margin-top: 16px;
+    min-width: 0;
+}
+#tia-hmi-review-results {
+    padding-top: 14px;
     border-top: 1px solid #30404d;
 }
-#tia-hmi-review-results .table-wrapper {
+.hmi-preview-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.hmi-preview-toolbar label,
+.hmi-preview-toolbar .hint {
+    font-size: 12px;
+}
+.hmi-preview-toolbar select {
+    max-width: 240px;
+    min-width: 170px;
+}
+.hmi-text-table-wrapper {
     max-width: 100%;
-    overflow-x: auto;
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid #30404d;
+    border-radius: 6px;
 }
-#tia-hmi-review-results table {
-    min-width: 1040px;
+.hmi-text-table {
+    width: 100%;
+    min-width: 790px;
     table-layout: fixed;
+    border-collapse: collapse;
 }
-#tia-hmi-review-results th:nth-child(1),
-#tia-hmi-review-results td:nth-child(1) { width: 19%; }
-#tia-hmi-review-results th:nth-child(2),
-#tia-hmi-review-results td:nth-child(2) { width: 17%; }
-#tia-hmi-review-results th:nth-child(3),
-#tia-hmi-review-results td:nth-child(3) { width: 22%; }
-#tia-hmi-review-results th:nth-child(4),
-#tia-hmi-review-results td:nth-child(4) { width: 42%; }
-#tia-hmi-review-results td {
+.hmi-text-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.hmi-text-table th {
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    line-height: 1.3;
+    background: #1c2731;
+    color: #eef3f7;
+}
+.hmi-text-table td {
+    vertical-align: top;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    vertical-align: top;
+    line-height: 1.45;
+}
+.hmi-text-table tbody tr:hover {
+    background: #1c2a34;
+}
+.hmi-row-details summary {
+    cursor: pointer;
+    color: #a7d7ff;
+    font-size: 12px;
+}
+.hmi-row-details[open] summary {
+    margin-bottom: 8px;
+}
+.hmi-row-meta {
+    padding: 8px;
+    border: 1px solid #30404d;
+    border-radius: 5px;
+    background: #101820;
+    color: #c5d2dd;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+}
+.hmi-row-meta small {
+    display: block;
+    margin-bottom: 6px;
+    color: #91a4b5;
+}
+#tia-hmi-preview-results > details {
+    margin-top: 10px;
+}
+@media (max-width: 800px) {
+    .hmi-text-table {
+        min-width: 700px;
+    }
 }
