@@ -481,9 +481,9 @@
                             <option value="all">All matched texts (only after pilot verification)</option>
                         </select>
                         <p class="hint">
-                            Pilot imports at most 10 different text values, not all
-                            rows shown in the preview. Check them in TIA Portal before
-                            selecting all.
+                            Pilot prepares at most 10 distinct text values.
+                            Review source, existing target and proposed target first.
+                            The import is a separate, explicitly confirmed action.
                         </p>
                     </div>
 
@@ -522,7 +522,7 @@
                         <p id="tia-hmi-preview-summary" class="hint"></p>
                         <div class="table-wrapper">
                             <table>
-                                <thead><tr><th>Match</th><th>Source text</th><th>Target text (current)</th><th>Category</th><th>Reference</th></tr></thead>
+                                <thead><tr><th>Match</th><th>Source text</th><th>Existing target (TIA export, not translated)</th><th>Category</th><th>Reference</th></tr></thead>
                                 <tbody id="tia-hmi-preview-rows"></tbody>
                             </table>
                         </div>
