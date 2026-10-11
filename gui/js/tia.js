@@ -88,17 +88,13 @@ export function initTiaUi(
             "tia-hmi-view-path-root"
         );
 
-    const hmiTranslationScopeSelect =
-        document.getElementById(
-            "tia-hmi-translation-scope"
-        );
-
     const hmiBatchSizeInput = document.getElementById("tia-hmi-batch-size");
     const hmiBatchTotalInput = document.getElementById("tia-hmi-total-to-translate");
     const hmiBatchStartButton = document.getElementById("tia-hmi-batch-start");
     const hmiBatchResumeButton = document.getElementById("tia-hmi-batch-resume");
     const hmiBatchPauseButton = document.getElementById("tia-hmi-batch-pause");
     const hmiBatchStatus = document.getElementById("tia-hmi-batch-status");
+    const hmiScanSummary = document.getElementById("tia-hmi-scan-summary");
 
     const hmiOllamaModelSelect = document.getElementById(
         "tia-hmi-ollama-model"
@@ -464,6 +460,7 @@ export function initTiaUi(
     let verifiedHmiPreviewKey = null;
     let hmiPreviewInProgress = false;
     let lastHmiPreviewRows = [];
+    let latestHmiScan = null;
     let hmiBatchRunning = false;
     let hmiBatchStarting = false;
     let hmiBatchPauseRequested = false;
@@ -1096,6 +1093,14 @@ export function initTiaUi(
 
     function invalidateHmiPreview() {
         verifiedHmiPreviewKey = null;
+        latestHmiScan = null;
+        if (hmiScanSummary) {
+            hmiScanSummary.textContent =
+                "Run Preview texts to count rows and unique source texts in this HMI.";
+        }
+        if (hmiBatchTotalInput) {
+            hmiBatchTotalInput.placeholder = "Scan HMI to see total";
+        }
         hmiPreviewResults?.classList.add("hidden");
         lastHmiPreviewRows = [];
         renderHmiPreviewRows();
@@ -1344,9 +1349,12 @@ export function initTiaUi(
         const total = totalString ? Number(totalString) : null;
         if (!Number.isInteger(size) || size < 1 || size > 200
             || (total !== null &&
-                (!Number.isInteger(total) || total < 1 || total > 100000))) {
+                (!Number.isInteger(total) || total < 1 || total > 100000))
+            || (latestHmiScan && total !== null
+                && total > latestHmiScan.eligible)) {
             setHmiBatchStatus(
-                "Batch size must be 1–200; total must be empty or 1–100000.",
+                "Batch size must be 1–200; total must be empty or "
+                + "between 1 and the eligible unique-text count from the scan.",
                 true
             );
             return;
@@ -1461,6 +1469,27 @@ export function initTiaUi(
                 return false;
             }
             lastHmiPreviewRows = result.sample_rows || [];
+            latestHmiScan = {
+                rows: result.matched_text_rows ?? 0,
+                unique: result.matched_unique_texts ?? 0,
+                eligible: result.matched_eligible_unique_texts ?? 0,
+                missingRows: result.matched_missing_target_rows ?? 0,
+                missingUnique: result.matched_missing_target_unique_texts ?? 0,
+            };
+            if (hmiScanSummary) {
+                hmiScanSummary.textContent =
+                    "HMI scan: " + latestHmiScan.rows + " text rows, "
+                    + latestHmiScan.unique + " unique source texts, "
+                    + latestHmiScan.eligible + " unique texts eligible for the batch job. "
+                    + latestHmiScan.missingRows + " rows ("
+                    + latestHmiScan.missingUnique + " unique) have an empty or "
+                    + "'Text' target. This is a diagnostic estimate, not a "
+                    + "verified count of untranslated strings.";
+            }
+            if (hmiBatchTotalInput) {
+                hmiBatchTotalInput.placeholder =
+                    "All eligible: " + latestHmiScan.eligible;
+            }
             renderHmiPreviewRows();
 
             if (hmiPreviewSummary) {
@@ -1763,12 +1792,20 @@ export function initTiaUi(
             return;
         }
 
-        const scope = hmiTranslationScopeSelect?.value || "10";
-        if (scope === "all" && !confirm(
-            "Generate local Ollama translations for all matching HMI texts? "
-            + "This may take a long time depending on your hardware and model. "
-            + "No TIA changes will be made yet."
-        )) {
+        const batchSize = Number(hmiBatchSizeInput?.value);
+        if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 200) {
+            setHmiTranslationStatus(
+                "Enter Batch size between 1 and 200 unique texts.", "error"
+            );
+            return;
+        }
+        // Manual review is deliberately limited; never submit max_rows=null.
+        // Total to translate applies only to the automatic multi-batch job.
+        if (batchSize > 50) {
+            setHmiTranslationStatus(
+                "Manual review supports at most 50 texts per batch. "
+                + "Reduce Batch size or use automatic import.", "error"
+            );
             return;
         }
 
@@ -1820,7 +1857,8 @@ export function initTiaUi(
             pollTranslationProgress, 1500
         );
         setHmiTranslationStatus(
-            "Starting HMI project-text export and local Ollama translation..."
+            "Preparing at most " + batchSize
+            + " unique texts for review. Nothing will be imported to TIA..."
         );
 
         try {
@@ -1828,7 +1866,7 @@ export function initTiaUi(
                 "/api/v1/tia/hmis/prepare-translations",
                 {
                     ...selection,
-                    max_rows: scope === "all" ? null : 10,
+                    max_rows: batchSize,
                     progress_id: progressId,
                 }
             );
@@ -7243,12 +7281,7 @@ export function initTiaUi(
     if (hmiPreviewFilter) {
         hmiPreviewFilter.addEventListener("change", renderHmiPreviewRows);
     }
-    if (hmiTranslationScopeSelect) {
-        hmiTranslationScopeSelect.addEventListener(
-            "change",
-            discardHmiReview
-        );
-    }
+    hmiBatchSizeInput?.addEventListener("change", discardHmiReview);
 
     hmiBatchStartButton?.addEventListener(
         "click", () => { void startHmiBatchImport(); }
