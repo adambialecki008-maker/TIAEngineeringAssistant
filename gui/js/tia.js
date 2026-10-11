@@ -63,6 +63,36 @@ export function initTiaUi(
             "tia-active-languages"
         );
 
+    const hmiTranslationPanel =
+        document.getElementById(
+            "tia-hmi-translation-panel"
+        );
+
+    const hmiTranslationTitle =
+        document.getElementById(
+            "tia-hmi-translation-title"
+        );
+
+    const hmiSourceLanguageSelect =
+        document.getElementById(
+            "tia-hmi-source-language"
+        );
+
+    const hmiTargetLanguageSelect =
+        document.getElementById(
+            "tia-hmi-target-language"
+        );
+
+    const hmiTranslateButton =
+        document.getElementById(
+            "tia-hmi-translate-button"
+        );
+
+    const hmiTranslationStatus =
+        document.getElementById(
+            "tia-hmi-translation-status"
+        );
+
     const readTagsButton =
         document.getElementById(
             "tia-read-tags-button"
@@ -362,6 +392,8 @@ export function initTiaUi(
     let existingHmis = [];
 
     let projectLanguages = [];
+
+    let selectedHmiForTranslation = null;
 
     let currentProjectName = "";
 
@@ -729,7 +761,7 @@ export function initTiaUi(
             );
 
         cell.colSpan =
-            4;
+            5;
 
         cell.className =
             "empty-table-cell";
@@ -814,9 +846,431 @@ export function initTiaUi(
             }
 
 
+            const actionsCell =
+                document.createElement(
+                    "td"
+                );
+
+            actionsCell.className =
+                "actions-cell";
+
+            actionsCell.appendChild(
+                createActionButton(
+                    "Translate texts",
+                    () =>
+                        openHmiTranslation(
+                            hmi
+                        )
+                )
+            );
+
+            row.appendChild(
+                actionsCell
+            );
+
+
             existingHmisBody.appendChild(
                 row
             );
+        }
+    }
+
+
+    function setHmiTranslationStatus(
+        message,
+        type = "normal"
+    ) {
+        if (!hmiTranslationStatus) {
+            return;
+        }
+
+        hmiTranslationStatus.textContent =
+            message;
+
+        hmiTranslationStatus.classList.toggle(
+            "error",
+            type === "error"
+        );
+
+        hmiTranslationStatus.classList.toggle(
+            "success",
+            type === "success"
+        );
+    }
+
+
+    function projectLanguageLabel(
+        language
+    ) {
+        const roles = [];
+
+        if (language.is_reference) {
+            roles.push(
+                "Reference"
+            );
+        }
+
+        if (language.is_editing) {
+            roles.push(
+                "Editing"
+            );
+        }
+
+        return (
+            language.english_name
+            +
+            " ("
+            +
+            language.culture
+            +
+            ")"
+            +
+            (
+                roles.length
+                    ? " · " + roles.join(" / ")
+                    : ""
+            )
+        );
+    }
+
+
+    function updateHmiTranslateButtonState() {
+        if (!hmiTranslateButton) {
+            return;
+        }
+
+        hmiTranslateButton.disabled =
+            !selectedHmiForTranslation
+            ||
+            !hmiSourceLanguageSelect
+                ?.value
+            ||
+            !hmiTargetLanguageSelect
+                ?.value;
+    }
+
+
+    function populateHmiTranslationLanguages() {
+        if (
+            !selectedHmiForTranslation
+            ||
+            !hmiSourceLanguageSelect
+            ||
+            !hmiTargetLanguageSelect
+        ) {
+            return;
+        }
+
+        const previousSource =
+            hmiSourceLanguageSelect.value;
+
+        const previousTarget =
+            hmiTargetLanguageSelect.value;
+
+        const activeLanguages =
+            projectLanguages.filter(
+                language =>
+                    language.is_active
+            );
+
+        hmiSourceLanguageSelect.replaceChildren();
+
+        const sourcePlaceholder =
+            document.createElement(
+                "option"
+            );
+
+        sourcePlaceholder.value = "";
+        sourcePlaceholder.textContent =
+            "Select TIA source slot";
+
+        hmiSourceLanguageSelect.appendChild(
+            sourcePlaceholder
+        );
+
+        for (
+            const language
+            of activeLanguages
+        ) {
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value =
+                language.culture;
+
+            option.textContent =
+                projectLanguageLabel(
+                    language
+                );
+
+            hmiSourceLanguageSelect.appendChild(
+                option
+            );
+        }
+
+        const referenceLanguage =
+            activeLanguages.find(
+                language =>
+                    language.is_reference
+            );
+
+        if (
+            previousSource
+            &&
+            activeLanguages.some(
+                language =>
+                    language.culture
+                    ===
+                    previousSource
+            )
+        ) {
+            hmiSourceLanguageSelect.value =
+                previousSource;
+
+        } else if (referenceLanguage) {
+            hmiSourceLanguageSelect.value =
+                referenceLanguage.culture;
+        }
+
+        const sourceCulture =
+            hmiSourceLanguageSelect.value;
+
+        hmiTargetLanguageSelect.replaceChildren();
+
+        const targetPlaceholder =
+            document.createElement(
+                "option"
+            );
+
+        targetPlaceholder.value = "";
+        targetPlaceholder.textContent =
+            "Select target language";
+
+        hmiTargetLanguageSelect.appendChild(
+            targetPlaceholder
+        );
+
+        for (
+            const language
+            of projectLanguages
+        ) {
+            if (
+                language.culture
+                ===
+                sourceCulture
+            ) {
+                continue;
+            }
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value =
+                language.culture;
+
+            option.textContent =
+                projectLanguageLabel(
+                    language
+                )
+                +
+                (
+                    language.is_active
+                        ? ""
+                        : " · will be added"
+                );
+
+            hmiTargetLanguageSelect.appendChild(
+                option
+            );
+        }
+
+        if (
+            previousTarget
+            &&
+            previousTarget !== sourceCulture
+            &&
+            projectLanguages.some(
+                language =>
+                    language.culture
+                    ===
+                    previousTarget
+            )
+        ) {
+            hmiTargetLanguageSelect.value =
+                previousTarget;
+        }
+
+        updateHmiTranslateButtonState();
+    }
+
+
+    function openHmiTranslation(
+        hmi
+    ) {
+        selectedHmiForTranslation =
+            hmi;
+
+        if (hmiTranslationPanel) {
+            hmiTranslationPanel.classList.remove(
+                "hidden"
+            );
+        }
+
+        if (hmiTranslationTitle) {
+            hmiTranslationTitle.textContent =
+                hmi.hmi_name
+                ||
+                hmi.device_name
+                ||
+                "HMI";
+        }
+
+        populateHmiTranslationLanguages();
+
+        setHmiTranslationStatus(
+            "Choose the TIA source slot containing the current texts and the target language. "
+            +
+            "The actual source language is detected from each text, so Polish text stored in an English slot is handled correctly."
+        );
+
+        hmiTranslationPanel
+            ?.scrollIntoView(
+                {
+                    behavior: "smooth",
+                    block: "nearest",
+                }
+            );
+    }
+
+
+    function resetHmiTranslation() {
+        selectedHmiForTranslation =
+            null;
+
+        if (hmiTranslationPanel) {
+            hmiTranslationPanel.classList.add(
+                "hidden"
+            );
+        }
+
+        if (hmiSourceLanguageSelect) {
+            hmiSourceLanguageSelect.replaceChildren();
+        }
+
+        if (hmiTargetLanguageSelect) {
+            hmiTargetLanguageSelect.replaceChildren();
+        }
+
+        updateHmiTranslateButtonState();
+    }
+
+
+    async function translateSelectedHmi() {
+        const processId =
+            selectedProcessId();
+
+        const hmi =
+            selectedHmiForTranslation;
+
+        const sourceCulture =
+            hmiSourceLanguageSelect
+                ?.value
+                ?.trim();
+
+        const targetCulture =
+            hmiTargetLanguageSelect
+                ?.value
+                ?.trim();
+
+        if (
+            !processId
+            ||
+            !hmi
+            ||
+            !sourceCulture
+            ||
+            !targetCulture
+        ) {
+            setHmiTranslationStatus(
+                "Select HMI, TIA source slot and target language.",
+                "error"
+            );
+
+            return;
+        }
+
+        hmiTranslateButton.disabled =
+            true;
+
+        setHmiTranslationStatus(
+            "Exporting Project texts, filtering "
+            +
+            hmi.hmi_name
+            +
+            ", translating and importing back to TIA Portal..."
+        );
+
+        try {
+            const result =
+                await postJson(
+                    "/api/v1/tia/hmis/translate-texts",
+                    {
+                        process_id:
+                            processId,
+
+                        device_name:
+                            hmi.device_name,
+
+                        hmi_name:
+                            hmi.hmi_name,
+
+                        source_culture:
+                            sourceCulture,
+
+                        target_culture:
+                            targetCulture,
+                    }
+                );
+
+            await refreshProjectLanguages();
+
+            setHmiTranslationStatus(
+                "Translated "
+                +
+                String(
+                    result.translated_rows
+                )
+                +
+                " HMI text row(s), "
+                +
+                String(
+                    result.unique_texts
+                )
+                +
+                " unique text(s). Import state: "
+                +
+                (
+                    result.import_state
+                    ||
+                    "completed"
+                )
+                +
+                ".",
+                "success"
+            );
+
+        } catch (error) {
+            setHmiTranslationStatus(
+                error.message,
+                "error"
+            );
+
+        } finally {
+            updateHmiTranslateButtonState();
         }
     }
 
@@ -964,6 +1418,8 @@ export function initTiaUi(
 
         addLanguageButton.disabled =
             inactive.length === 0;
+
+        populateHmiTranslationLanguages();
 
         setLanguagesStatus(
             String(active.length)
@@ -4932,6 +5388,8 @@ export function initTiaUi(
 
             existingHmis = [];
 
+            resetHmiTranslation();
+
             currentProjectName = "";
 
             updateTargetSummary();
@@ -5988,6 +6446,32 @@ export function initTiaUi(
         addLanguageButton.addEventListener(
             "click",
             addProjectLanguage
+        );
+    }
+
+
+    if (hmiSourceLanguageSelect) {
+        hmiSourceLanguageSelect.addEventListener(
+            "change",
+            () => {
+                populateHmiTranslationLanguages();
+            }
+        );
+    }
+
+
+    if (hmiTargetLanguageSelect) {
+        hmiTargetLanguageSelect.addEventListener(
+            "change",
+            updateHmiTranslateButtonState
+        );
+    }
+
+
+    if (hmiTranslateButton) {
+        hmiTranslateButton.addEventListener(
+            "click",
+            translateSelectedHmi
         );
     }
 
