@@ -363,6 +363,123 @@ def test_plc_structures_are_parsed(
     }
 
 
+def test_plc_structure_detail_is_parsed(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_adapter(
+        *arguments,
+    ):
+        calls.append(
+            arguments[:-1]
+        )
+
+        xml_file =
+            arguments[-1]
+
+        with open(
+            xml_file,
+            "w",
+            encoding="utf-8",
+        ) as handle:
+            handle.write(
+                """
+<Document>
+  <SW.Blocks.GlobalDB>
+    <AttributeList>
+      <Interface>
+        <Sections>
+          <Section Name="Static">
+            <Member Name="Enabled" Datatype="Bool" />
+            <Member Name="Settings" Datatype="Struct">
+              <Sections>
+                <Section Name="None">
+                  <Member Name="Timeout" Datatype="Time" />
+                </Section>
+              </Sections>
+            </Member>
+          </Section>
+        </Sections>
+      </Interface>
+    </AttributeList>
+  </SW.Blocks.GlobalDB>
+</Document>
+""".strip()
+            )
+
+        return [
+            "STRUCTURE_EXPORTED|db||GlobalData"
+        ]
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+    response = client.get(
+        "/api/v1/tia/plc-structure",
+        params={
+            "process_id": 3544,
+            "device_name": "S7-1500 Station_1",
+            "plc_name": "PLC_1",
+            "kind": "db",
+            "group_path": "",
+            "name": "GlobalData",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert calls == [
+        (
+            "export-structure",
+            "3544",
+            "S7-1500 Station_1",
+            "PLC_1",
+            "db",
+            "",
+            "GlobalData",
+        )
+    ]
+
+    assert response.json() == {
+        "kind": "db",
+        "group_path": "",
+        "name": "GlobalData",
+        "members": [
+            {
+                "section": "Static",
+                "path": "Enabled",
+                "name": "Enabled",
+                "data_type": "Bool",
+                "level": 0,
+                "offset": "",
+                "comment": "",
+            },
+            {
+                "section": "Static",
+                "path": "Settings",
+                "name": "Settings",
+                "data_type": "Struct",
+                "level": 0,
+                "offset": "",
+                "comment": "",
+            },
+            {
+                "section": "Static",
+                "path": "Settings.Timeout",
+                "name": "Timeout",
+                "data_type": "Time",
+                "level": 1,
+                "offset": "",
+                "comment": "",
+            },
+        ],
+    }
+
+
 def test_existing_plc_tags_are_parsed(
     monkeypatch,
 ):
