@@ -263,7 +263,6 @@
 
                         <p class="hint">
                             Project detected from the selected TIA Portal process.
-                            PLC family controls generator data types and Hardware Catalog filtering.
                         </p>
                     </div>
                 </div>
@@ -284,32 +283,6 @@
                         </div>
                     </div>
 
-
-                    <div class="field-group">
-                        <label for="plc-family">
-                            PLC family:
-                        </label>
-
-                        <select id="plc-family">
-
-                            <option value="">
-                                Select PLC
-                            </option>
-
-                            <option value="S7-1200">
-                                S7-1200
-                            </option>
-
-                            <option value="S7-1200-G2">
-                                S7-1200 G2
-                            </option>
-
-                            <option value="S7-1500">
-                                S7-1500
-                            </option>
-
-                        </select>
-                    </div>
 
                 </div>
 
@@ -361,6 +334,14 @@
                                 </th>
 
                                 <th>
+                                    TIA state
+                                </th>
+
+                                <th>
+                                    Resources
+                                </th>
+
+                                <th>
                                     Actions
                                 </th>
                             </tr>
@@ -370,7 +351,7 @@
 
                             <tr>
                                 <td
-                                    colspan="4"
+                                    colspan="6"
                                     class="empty-table-cell"
                                 >
                                     Select a TIA process and refresh PLCs.
@@ -381,6 +362,13 @@
                     </table>
 
                 </div>
+
+
+                <p class="hint tia-runtime-note">
+                    Project resource counts are read from the TIA project.
+                    Measured cycle time and live memory usage require an online runtime diagnostics connection
+                    and are not inferred from the offline project.
+                </p>
 
 
                 <p
@@ -825,6 +813,33 @@
 
 
                 <div class="form-grid">
+
+                    <div class="field-group">
+                        <label for="plc-family">
+                            PLC family:
+                        </label>
+
+                        <select id="plc-family">
+
+                            <option value="">
+                                Select PLC
+                            </option>
+
+                            <option value="S7-1200">
+                                S7-1200
+                            </option>
+
+                            <option value="S7-1200-G2">
+                                S7-1200 G2
+                            </option>
+
+                            <option value="S7-1500">
+                                S7-1500
+                            </option>
+
+                        </select>
+                    </div>
+
 
                     <div class="field-group">
 
