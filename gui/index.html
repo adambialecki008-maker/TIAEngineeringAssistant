@@ -493,23 +493,6 @@
                             Local Ollama server — no OpenAI API key required.
                         </p>
                     </div>
-                    <div class="field-group">
-                        <label for="tia-hmi-translation-strategy">Text handling:</label>
-                        <select id="tia-hmi-translation-strategy">
-                            <option value="copy" selected>
-                                Copy original Polish labels into missing target cells (no AI)
-                            </option>
-                            <option value="ollama">
-                                Translate missing target texts with Ollama
-                            </option>
-                        </select>
-                        <p class="hint">
-                            Your TIA export contains Polish source texts in the
-                            en-US* column. Copy mode preserves them exactly.
-                            Both modes leave already populated target texts unchanged.
-                        </p>
-                    </div>
-
                     <div class="hmi-translation-batch-controls">
                         <h4>HMI text scan and translation scope</h4>
                         <section class="hmi-scan-help hmi-workflow-step">
