@@ -58,6 +58,21 @@ def test_tia_project_context_is_parsed(
                 "PLC_METRICS|Station_1|PLC_1|Online|"
                 "420|83|12|976"
             ),
+            (
+                "PLC_RESOURCE|Station_1|PLC_1|Used|"
+                "9964947|390157|174144|"
+            ),
+            (
+                "PLC_RESOURCE|Station_1|PLC_1|DB|"
+                "1631719|0|174144|"
+            ),
+            (
+                "HMI|Panel_1|HMI_1|"
+                "System:Device.HMI|"
+                "OrderNumber:6AV2...|"
+                "Siemens.Engineering.Hmi.HmiTarget|"
+                "HMI_1"
+            ),
         ]
 
     monkeypatch.setattr(
@@ -114,6 +129,63 @@ def test_tia_project_context_is_parsed(
 
                 "tag_count":
                     976,
+
+                "resource_rows": [
+                    {
+                        "object_type":
+                            "Used",
+
+                        "load_memory_bytes":
+                            9964947,
+
+                        "code_work_memory_bytes":
+                            390157,
+
+                        "data_work_memory_bytes":
+                            174144,
+
+                        "retain_memory_bytes":
+                            None,
+                    },
+                    {
+                        "object_type":
+                            "DB",
+
+                        "load_memory_bytes":
+                            1631719,
+
+                        "code_work_memory_bytes":
+                            0,
+
+                        "data_work_memory_bytes":
+                            174144,
+
+                        "retain_memory_bytes":
+                            None,
+                    },
+                ],
+            },
+        ],
+
+        "hmis": [
+            {
+                "device_name":
+                    "Panel_1",
+
+                "hmi_name":
+                    "HMI_1",
+
+                "device_type_identifier":
+                    "System:Device.HMI",
+
+                "hmi_type_identifier":
+                    "OrderNumber:6AV2...",
+
+                "software_type":
+                    "Siemens.Engineering.Hmi.HmiTarget",
+
+                "software_name":
+                    "HMI_1",
             },
         ],
     }
@@ -224,6 +296,9 @@ def test_existing_project_plcs_are_parsed(
 
             "tag_count":
                 0,
+
+            "resource_rows":
+                [],
         }
     ]
 
