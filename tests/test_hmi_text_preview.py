@@ -493,3 +493,41 @@ def test_preview_matches_one_root_across_all_rows_not_just_samples(monkeypatch):
         {"root": "HMI_00_Main", "rows": 65},
     ]
     assert data["matched_missing_target_unique_texts"] == 65
+
+
+def test_preview_does_not_report_single_root_when_auto_match_is_ambiguous(
+    monkeypatch,
+):
+    """Multiple matching HMI roots must require an explicit user choice."""
+    def adapter(*args):
+        path = Path(args[-1])
+        wb = Workbook()
+        sheet = wb.active
+        sheet.title = "User Texts"
+        sheet.append(["Category", "ViewPath", "Internal ID", "Substitutions",
+                      "en-US*", "pl-PL"])
+        sheet.append(["<HMI screen>", "Project\\HMI_RT_1 [Runtime]\\Screens\\Main",
+                      "one", "", "Zawor 1", "Text"])
+        sheet.append(["<HMI screen>", "Project\\HMI_RT_1 [Panel]\\Screens\\Main",
+                      "two", "", "Zawor 2", "Text"])
+        wb.save(path)
+        wb.close()
+        return ["PROJECT_TEXTS_EXPORTED|" + str(path)]
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    result = client.post(
+        "/api/v1/tia/hmis/preview-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "HMI_RT_1",
+            "hmi_name": "HMI_RT_1",
+            "source_culture": "en-US",
+            "target_culture": "pl-PL",
+        },
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["matched_text_rows"] == 2
+    assert result.json()["matched_view_path_roots"] == [
+        {"root": "HMI_RT_1 [Runtime]", "rows": 1},
+        {"root": "HMI_RT_1 [Panel]", "rows": 1},
+    ]
