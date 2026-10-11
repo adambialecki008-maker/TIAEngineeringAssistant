@@ -473,6 +473,24 @@
                     </div>
 
                     <div class="field-group">
+                        <label for="tia-hmi-ollama-model">
+                            Local translation model (Ollama):
+                        </label>
+                        <div class="action-row hmi-ollama-model-row">
+                            <select id="tia-hmi-ollama-model">
+                                <option value="">Loading local Ollama models...</option>
+                            </select>
+                            <button id="tia-hmi-refresh-ollama-models"
+                                    type="button" class="secondary-button">
+                                Refresh models
+                            </button>
+                        </div>
+                        <p id="tia-hmi-ollama-status" class="hint">
+                            Local Ollama server — no OpenAI API key required.
+                        </p>
+                    </div>
+
+                    <div class="field-group">
                         <label for="tia-hmi-translation-scope">
                             Import scope:
                         </label>
