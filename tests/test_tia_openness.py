@@ -35,6 +35,71 @@ def test_tia_processes_are_parsed(
     ]
 
 
+def test_tia_project_context_is_parsed(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_adapter(
+        *arguments,
+    ):
+        calls.append(
+            arguments
+        )
+
+        return [
+            "PROJECT|LargeMachineProject",
+            (
+                "PLC|Station_1|PLC_1|"
+                "System:Device.S71500|"
+                "OrderNumber:6ES7..."
+            ),
+        ]
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+    response = client.get(
+        "/api/v1/tia/project-context",
+        params={
+            "process_id": 3544,
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert calls == [
+        (
+            "list-project-plcs",
+            "3544",
+        )
+    ]
+
+    assert response.json() == {
+        "project_name":
+            "LargeMachineProject",
+
+        "plcs": [
+            {
+                "device_name":
+                    "Station_1",
+
+                "plc_name":
+                    "PLC_1",
+
+                "device_type_identifier":
+                    "System:Device.S71500",
+
+                "plc_type_identifier":
+                    "OrderNumber:6ES7...",
+            },
+        ],
+    }
+
+
 def test_tia_project_info_is_parsed(
     monkeypatch,
 ):
