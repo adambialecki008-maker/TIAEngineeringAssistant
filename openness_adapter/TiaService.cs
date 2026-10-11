@@ -7,6 +7,7 @@ using System.Text;
 using Siemens.Engineering;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.Online;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
@@ -120,6 +121,10 @@ namespace TiaOpennessAdapter
                     )
                     {
                         WritePlc(
+                            target
+                        );
+
+                        WritePlcMetrics(
                             target
                         );
                     }
@@ -1998,6 +2003,226 @@ namespace TiaOpennessAdapter
 
 
             return 0;
+        }
+
+
+        private static void WritePlcMetrics(
+            PlcTarget target
+        )
+        {
+            PlcSoftware software =
+                target.Software;
+
+
+            int blockCount =
+                EnumeratePlcBlocks(
+                    software
+                )
+                .Count();
+
+            int dataBlockCount =
+                EnumeratePlcBlocks(
+                    software
+                )
+                .OfType<DataBlock>()
+                .Count();
+
+            int udtCount =
+                EnumeratePlcTypes(
+                    software
+                )
+                .Count();
+
+            int tagCount =
+                EnumeratePlcTags(
+                    software
+                )
+                .Count();
+
+
+            string onlineState =
+                "Unavailable";
+
+
+            try
+            {
+                OnlineProvider onlineProvider =
+                    target
+                        .DeviceItem
+                        .GetService<
+                            OnlineProvider
+                        >();
+
+
+                if (onlineProvider != null)
+                {
+                    onlineState =
+                        onlineProvider
+                            .State
+                            .ToString();
+                }
+            }
+            catch
+            {
+                onlineState =
+                    "Unavailable";
+            }
+
+
+            Console.WriteLine(
+                "PLC_METRICS|" +
+                SanitizeOutput(
+                    target.Device.Name
+                ) +
+                "|" +
+                SanitizeOutput(
+                    target.DeviceItem.Name
+                ) +
+                "|" +
+                SanitizeOutput(
+                    onlineState
+                ) +
+                "|" +
+                blockCount +
+                "|" +
+                dataBlockCount +
+                "|" +
+                udtCount +
+                "|" +
+                tagCount
+            );
+        }
+
+
+        private static IEnumerable<PlcBlock> EnumeratePlcBlocks(
+            PlcSoftware software
+        )
+        {
+            foreach (
+                PlcBlock block
+                in software
+                    .BlockGroup
+                    .Blocks
+            )
+            {
+                yield return block;
+            }
+
+
+            foreach (
+                PlcBlockUserGroup group
+                in software
+                    .BlockGroup
+                    .Groups
+            )
+            {
+                foreach (
+                    PlcBlock block
+                    in EnumeratePlcBlocks(
+                        group
+                    )
+                )
+                {
+                    yield return block;
+                }
+            }
+        }
+
+
+        private static IEnumerable<PlcBlock> EnumeratePlcBlocks(
+            PlcBlockUserGroup group
+        )
+        {
+            foreach (
+                PlcBlock block
+                in group.Blocks
+            )
+            {
+                yield return block;
+            }
+
+
+            foreach (
+                PlcBlockUserGroup child
+                in group.Groups
+            )
+            {
+                foreach (
+                    PlcBlock block
+                    in EnumeratePlcBlocks(
+                        child
+                    )
+                )
+                {
+                    yield return block;
+                }
+            }
+        }
+
+
+        private static IEnumerable<PlcType> EnumeratePlcTypes(
+            PlcSoftware software
+        )
+        {
+            foreach (
+                PlcType type
+                in software
+                    .TypeGroup
+                    .Types
+            )
+            {
+                yield return type;
+            }
+
+
+            foreach (
+                PlcTypeUserGroup group
+                in software
+                    .TypeGroup
+                    .Groups
+            )
+            {
+                foreach (
+                    PlcType type
+                    in EnumeratePlcTypes(
+                        group
+                    )
+                )
+                {
+                    yield return type;
+                }
+            }
+        }
+
+
+        private static IEnumerable<PlcType> EnumeratePlcTypes(
+            PlcTypeUserGroup group
+        )
+        {
+            foreach (
+                PlcType type
+                in group.Types
+            )
+            {
+                yield return type;
+            }
+
+
+            foreach (
+                PlcTypeUserGroup child
+                in group.Groups
+            )
+            {
+                foreach (
+                    PlcType type
+                    in EnumeratePlcTypes(
+                        child
+                    )
+                )
+                {
+                    yield return type;
+                }
+            }
         }
 
 
