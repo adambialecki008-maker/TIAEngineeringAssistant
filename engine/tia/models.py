@@ -115,6 +115,13 @@ class PlcProgramBlockInfo(BaseModel):
     work_memory_bytes: int = 0
 
 
+
+class PlcProgramBlockDetail(PlcProgramBlockInfo):
+    members: list["PlcStructureMemberInfo"] = Field(
+        default_factory=list
+    )
+
+
 class PlcDataBlockInfo(BaseModel):
     group_path: str
     name: str
