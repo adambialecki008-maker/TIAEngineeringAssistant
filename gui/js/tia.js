@@ -98,6 +98,13 @@ export function initTiaUi(
             "tia-hmi-translate-button"
         );
 
+    const hmiImportReviewedButton = document.getElementById(
+        "tia-hmi-import-reviewed-button"
+    );
+    const hmiReviewResults = document.getElementById("tia-hmi-review-results");
+    const hmiReviewSummary = document.getElementById("tia-hmi-review-summary");
+    const hmiReviewRows = document.getElementById("tia-hmi-review-rows");
+
     const hmiPreviewButton =
         document.getElementById(
             "tia-hmi-preview-button"
@@ -432,6 +439,8 @@ export function initTiaUi(
 
     let verifiedHmiPreviewKey = null;
     let hmiPreviewInProgress = false;
+    let hmiReviewInProgress = false;
+    let preparedHmiReview = null;
 
     let currentProjectName = "";
 
@@ -995,22 +1004,34 @@ export function initTiaUi(
         return selection ? JSON.stringify(selection) : null;
     }
 
+    function discardHmiReview() {
+        preparedHmiReview = null;
+        hmiReviewResults?.classList.add("hidden");
+        hmiReviewRows?.replaceChildren();
+        updateHmiTranslateButtonState();
+    }
+
     function invalidateHmiPreview() {
         verifiedHmiPreviewKey = null;
         hmiPreviewResults?.classList.add("hidden");
         hmiPreviewRows?.replaceChildren();
-        updateHmiTranslateButtonState();
+        discardHmiReview();
     }
 
     function updateHmiTranslateButtonState() {
         const selection = hmiTranslationSelection();
+        const key = hmiTranslationKey(selection);
+        const isVerified = Boolean(key && key === verifiedHmiPreviewKey);
+        const busy = hmiPreviewInProgress || hmiReviewInProgress;
         if (hmiTranslateButton) {
-            hmiTranslateButton.disabled = hmiPreviewInProgress
-                || !selection
-                || hmiTranslationKey(selection) !== verifiedHmiPreviewKey;
+            hmiTranslateButton.disabled = busy || !isVerified;
         }
         if (hmiPreviewButton) {
-            hmiPreviewButton.disabled = hmiPreviewInProgress || !selection;
+            hmiPreviewButton.disabled = busy || !selection;
+        }
+        if (hmiImportReviewedButton) {
+            hmiImportReviewedButton.disabled =
+                busy || !preparedHmiReview || preparedHmiReview.selectionKey !== key;
         }
     }
 
@@ -1334,89 +1355,142 @@ export function initTiaUi(
 
     async function translateSelectedHmi() {
         const selection = hmiTranslationSelection();
-        if (!selection || hmiTranslationKey(selection) !== verifiedHmiPreviewKey) {
+        const key = hmiTranslationKey(selection);
+        if (!selection || !key || key !== verifiedHmiPreviewKey) {
             setHmiTranslationStatus(
-                "Run Preview texts for the selected HMI and ViewPath root first.",
+                "Preview this HMI and ViewPath root before preparing translations.",
                 "error"
             );
             return;
         }
 
         const scope = hmiTranslationScopeSelect?.value || "10";
-        const maxRows = scope === "all" ? null : 10;
-        if (scope === "all") {
-            const confirmed = confirm(
-                "Translate and import ALL matched rows for "
-                + (selection.view_path_root || selection.hmi_name)
-                + "?\n\nThis may require many billable API calls. "
-                + "Verify a 10-text pilot in TIA Portal first."
-            );
-            if (!confirmed) {
-                return;
-            }
+        if (scope === "all" && !confirm(
+            "Generate AI translations for all matching HMI texts? "
+            + "This may use billable API calls. No TIA changes will be made yet."
+        )) {
+            return;
         }
 
-        hmiTranslateButton.disabled = true;
-        if (hmiPreviewButton) {
-            hmiPreviewButton.disabled = true;
-        }
+        discardHmiReview();
+        hmiReviewInProgress = true;
+        updateHmiTranslateButtonState();
         setHmiTranslationStatus(
-            "Translating and importing "
-            + (scope === "all" ? "all matching rows" : "a 10-text pilot")
-            + " for "
-            + (selection.view_path_root || selection.hmi_name)
-            + "..."
+            "Preparing translations only. Nothing is being imported to TIA..."
         );
 
         try {
-            // Reuse the exact selection that passed Preview texts.
-            // In particular, view_path_root MUST be sent to the backend.
             const result = await postJson(
-                "/api/v1/tia/hmis/translate-texts",
+                "/api/v1/tia/hmis/prepare-translations",
                 {
                     ...selection,
-                    max_rows: maxRows,
+                    max_rows: scope === "all" ? null : 10,
                 }
             );
+            if (hmiTranslationKey(hmiTranslationSelection()) !== key
+                || verifiedHmiPreviewKey !== key) {
+                return;
+            }
 
-            await refreshProjectLanguages();
-            invalidateHmiPreview();
-
-            const status = (result.import_state || "").trim();
-            const importOk = status.toLowerCase() === "success";
-            const message =
-                "Processed "
-                + String(result.translated_rows)
-                + " row(s), "
-                + String(result.unique_texts)
-                + " unique text(s) for "
-                + (selection.view_path_root || selection.hmi_name)
-                + ". TIA import state: "
-                + (status || "missing")
-                + ". "
-                + (importOk
-                    ? "Reopen Project texts in TIA and verify the target column."
-                    : "Check the import log: " + (result.import_log || "not returned"));
-            const examples = (result.translated_examples || []).slice(0, 5);
-            const exampleText = examples.length
-                ? "\nSample imported rows:\n"
-                    + examples.map(item =>
-                        item.source_text + " → " + item.target_text
-                        + "\n" + item.view_path
-                    ).join("\n")
-                : "";
+            preparedHmiReview = {
+                reviewId: result.review_id,
+                selectionKey: key,
+                rowCount: result.selected_rows,
+            };
+            hmiReviewRows?.replaceChildren();
+            for (const item of result.examples || []) {
+                const row = document.createElement("tr");
+                for (const value of [
+                    item.source_text,
+                    item.current_target || "— (empty)",
+                    item.proposed_target,
+                    item.view_path,
+                ]) {
+                    const cell = document.createElement("td");
+                    cell.textContent = String(value || "");
+                    row.appendChild(cell);
+                }
+                hmiReviewRows?.appendChild(row);
+            }
+            if (hmiReviewSummary) {
+                hmiReviewSummary.textContent =
+                    "Prepared " + result.selected_rows + " row(s), "
+                    + result.unique_texts + " unique source text(s). "
+                    + "These are NEW proposed values, not existing target values. "
+                    + "Review each displayed proposal before importing."
+                    + (result.selected_rows > (result.examples || []).length
+                        ? " Showing first " + result.examples.length + " of "
+                            + result.selected_rows + " proposed rows."
+                        : "");
+            }
+            hmiReviewResults?.classList.remove("hidden");
             setHmiTranslationStatus(
-                message + exampleText,
-                importOk ? "success" : "error"
+                "Translations prepared. TIA project was not changed. "
+                + "Review the Proposed target column, then choose Import reviewed texts.",
+                "success"
             );
-
         } catch (error) {
             setHmiTranslationStatus(error.message, "error");
-
         } finally {
+            hmiReviewInProgress = false;
             updateHmiTranslateButtonState();
         }
     }
+
+    async function importReviewedHmiTexts() {
+        const review = preparedHmiReview;
+        const key = hmiTranslationKey(hmiTranslationSelection());
+        if (!review || review.selectionKey !== key
+            || verifiedHmiPreviewKey !== key) {
+            setHmiTranslationStatus(
+                "Translations must be prepared and reviewed for this HMI first.",
+                "error"
+            );
+            return;
+        }
+
+        if (!confirm(
+            "Import " + review.rowCount
+            + " PREPARED text row(s) into the selected TIA project? "
+            + "The project will be saved and each imported value verified."
+        )) {
+            return;
+        }
+
+        hmiReviewInProgress = true;
+        updateHmiTranslateButtonState();
+        setHmiTranslationStatus(
+            "Importing approved texts into TIA, then verifying by re-export..."
+        );
+
+        // A review can be imported once. On any failure a fresh review is required.
+        preparedHmiReview = null;
+        try {
+            const result = await postJson(
+                "/api/v1/tia/hmis/import-reviewed-translations",
+                { review_id: review.reviewId }
+            );
+            const count = result.verified_rows || 0;
+            setHmiTranslationStatus(
+                "TIA import " + result.import_state + ". Verified "
+                + count + " of " + result.imported_rows
+                + " translated row(s) by exporting from TIA again."
+                + (result.import_log ? " Log: " + result.import_log : ""),
+                count === result.imported_rows ? "success" : "error"
+            );
+            await refreshProjectLanguages();
+            invalidateHmiPreview();
+        } catch (error) {
+            setHmiTranslationStatus(
+                error.message + " Prepare a new translation review before retrying.",
+                "error"
+            );
+        } finally {
+            hmiReviewInProgress = false;
+            updateHmiTranslateButtonState();
+        }
+    }
+
 
     function setLanguagesStatus(
         message,
@@ -6630,6 +6704,19 @@ export function initTiaUi(
         hmiTranslateButton.addEventListener(
             "click",
             translateSelectedHmi
+        );
+    }
+
+    if (hmiImportReviewedButton) {
+        hmiImportReviewedButton.addEventListener(
+            "click",
+            importReviewedHmiTexts
+        );
+    }
+    if (hmiTranslationScopeSelect) {
+        hmiTranslationScopeSelect.addEventListener(
+            "change",
+            discardHmiReview
         );
     }
 
