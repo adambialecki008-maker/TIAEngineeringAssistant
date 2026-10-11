@@ -156,13 +156,14 @@ import**. It advances only after a batch has been imported and verified by
 a TIA re-export. During translation or import, a separate stage message
 continues to update; an AI-generated text alone never advances the bar.
 
-The selected HMI text export has previously contained Polish strings in
-the en-US* source column. To avoid broken local-model paraphrases such as
-`(Hydrauliczna)` -> `(cykliski)`, the new **Text handling** dropdown
-defaults to **Copy original Polish labels into missing target cells (no AI)**.
-For genuinely foreign-language text requiring translation, explicitly
-select **Translate missing target texts with Ollama** and review a small pilot
-before automatic import.
+The HMI interface translates using the selected local **Ollama model**.
+There is no separate Text handling dropdown. The exported en-US* source
+column can already contain Polish, so the model must preserve any text
+that is already in the target language. Local models can still change the
+meaning of technical labels (for example, `linkę` into `linię`).
+Review a small pilot and verify it in TIA before automatic import.
+A backward-compatible `copy` strategy remains available at the API level
+for saved jobs but is not offered in the standard interface.
 
 Both review and batch endpoints only fill empty or generic `Text` target
 cells. Populated target values are not overwritten by automated imports.
