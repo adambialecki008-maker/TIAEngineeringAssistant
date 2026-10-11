@@ -93,6 +93,13 @@ export function initTiaUi(
             "tia-hmi-translation-scope"
         );
 
+    const hmiBatchSizeInput = document.getElementById("tia-hmi-batch-size");
+    const hmiBatchTotalInput = document.getElementById("tia-hmi-total-to-translate");
+    const hmiBatchStartButton = document.getElementById("tia-hmi-batch-start");
+    const hmiBatchResumeButton = document.getElementById("tia-hmi-batch-resume");
+    const hmiBatchPauseButton = document.getElementById("tia-hmi-batch-pause");
+    const hmiBatchStatus = document.getElementById("tia-hmi-batch-status");
+
     const hmiOllamaModelSelect = document.getElementById(
         "tia-hmi-ollama-model"
     );
@@ -457,6 +464,10 @@ export function initTiaUi(
     let verifiedHmiPreviewKey = null;
     let hmiPreviewInProgress = false;
     let lastHmiPreviewRows = [];
+    let hmiBatchRunning = false;
+    let hmiBatchStarting = false;
+    let hmiBatchPauseRequested = false;
+    let hmiBatchJobId = null;
     let hmiReviewInProgress = false;
     let preparedHmiReview = null;
 
@@ -1095,7 +1106,8 @@ export function initTiaUi(
         const selection = hmiTranslationSelection();
         const key = hmiTranslationKey(selection);
         const isVerified = Boolean(key && key === verifiedHmiPreviewKey);
-        const busy = hmiPreviewInProgress || hmiReviewInProgress;
+        const busy = hmiPreviewInProgress || hmiReviewInProgress
+            || hmiBatchRunning || hmiBatchStarting;
         if (hmiTranslateButton) {
             hmiTranslateButton.disabled =
                 busy || !isVerified || !hmiOllamaModelSelect?.value;
@@ -1106,6 +1118,17 @@ export function initTiaUi(
         if (hmiImportReviewedButton) {
             hmiImportReviewedButton.disabled =
                 busy || !preparedHmiReview || preparedHmiReview.selectionKey !== key;
+        }
+        if (hmiBatchStartButton) {
+            hmiBatchStartButton.disabled = busy || !isVerified
+                || !selection?.view_path_root || !selection.ollama_model;
+        }
+        if (hmiBatchResumeButton) {
+            hmiBatchResumeButton.disabled = busy || !savedHmiBatchJobId();
+        }
+        if (hmiBatchPauseButton) {
+            hmiBatchPauseButton.disabled = !hmiBatchRunning
+                || hmiBatchPauseRequested;
         }
     }
 
@@ -1169,6 +1192,253 @@ export function initTiaUi(
             } else {
                 updateHmiTranslateButtonState();
             }
+        }
+    }
+
+
+    function hmiBatchStorageKey() {
+        const selection = hmiTranslationSelection();
+        if (!selection?.view_path_root) {
+            return null;
+        }
+        return "tia-hmi-batch-v1:" + [
+            selection.process_id, selection.device_name,
+            selection.view_path_root, selection.source_culture,
+            selection.target_culture,
+        ].join(":");
+    }
+
+    function savedHmiBatchJobId() {
+        const key = hmiBatchStorageKey();
+        if (!key) {
+            return null;
+        }
+        try {
+            return window.localStorage.getItem(key);
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    function saveHmiBatchJobId(jobId) {
+        const key = hmiBatchStorageKey();
+        if (key) {
+            try {
+                window.localStorage.setItem(key, jobId);
+            } catch (_error) {
+                // Persistence on the server is authoritative; localStorage
+                // is only used to discover a saved job after page reload.
+            }
+        }
+    }
+
+    function setHmiBatchStatus(message, isError = false) {
+        if (!hmiBatchStatus) {
+            return;
+        }
+        hmiBatchStatus.textContent = message;
+        hmiBatchStatus.classList.toggle("error", isError);
+        hmiBatchStatus.classList.toggle("success", !isError);
+    }
+
+    function showHmiBatchJob(job) {
+        const last = job.last_verified_batch;
+        let message = "Job: " + job.status + " — "
+            + job.completed_unique + " / " + job.total_unique
+            + " unique texts; " + job.completed_rows + " TIA rows verified. "
+            + "Batch " + Math.min(job.batch_index, job.total_batches)
+            + " / " + job.total_batches + ".";
+        if (last) {
+            message += " Last batch: " + last.verified_unique
+                + " unique texts, " + last.verified_rows
+                + " HMI rows verified.";
+        }
+        if (job.error) {
+            message += " ERROR: " + job.error;
+        }
+        if (job.note) {
+            message += " " + job.note;
+        }
+        setHmiBatchStatus(message, Boolean(job.error)
+            || job.status === "interrupted");
+    }
+
+    async function pollHmiBatchProgress(jobId) {
+        try {
+            const progress = await getJson(
+                "/api/v1/tia/hmis/translation-progress/" + jobId
+            );
+            if (!hmiBatchRunning || hmiBatchJobId !== jobId) {
+                return;
+            }
+            const labels = {
+                exporting_project_texts: "TIA: exporting current texts",
+                translating: "Ollama: translating",
+                importing_to_tia: "TIA: importing and verifying this batch",
+                verified: "TIA: batch verified",
+            };
+            const label = labels[progress.stage] || progress.stage;
+            setHmiBatchStatus(label + " — " + progress.completed
+                + " / " + progress.total
+                + " unique texts (" + (progress.percent ?? 0)
+                + "%). Completed TIA batches are saved on disk.");
+        } catch (_error) {
+            // Polling can begin before the first recorded progress event.
+        }
+    }
+
+    async function runHmiBatchLoop(jobId, retryFirst = false) {
+        if (hmiBatchRunning) {
+            return;
+        }
+        hmiBatchRunning = true;
+        hmiBatchPauseRequested = false;
+        hmiBatchJobId = jobId;
+        updateHmiTranslateButtonState();
+        const timer = window.setInterval(
+            () => { void pollHmiBatchProgress(jobId); }, 1800
+        );
+        try {
+            let retry = retryFirst;
+            while (!hmiBatchPauseRequested) {
+                const job = await postJson(
+                    "/api/v1/tia/hmis/batch-translations/" + jobId + "/next",
+                    {retry_failed_batch: retry}
+                );
+                retry = false;
+                showHmiBatchJob(job);
+                if (job.status === "completed" || job.status === "paused") {
+                    break;
+                }
+                if (job.status !== "ready") {
+                    break;
+                }
+            }
+        } catch (error) {
+            setHmiBatchStatus(
+                "Batch stopped: " + error.message
+                + ". Verified earlier batches remain recorded. "
+                + "Check TIA before retrying an interrupted import.",
+                true
+            );
+        } finally {
+            window.clearInterval(timer);
+            hmiBatchRunning = false;
+            updateHmiTranslateButtonState();
+        }
+    }
+
+    async function startHmiBatchImport() {
+        const selection = hmiTranslationSelection();
+        const key = hmiTranslationKey(selection);
+        if (!selection || key !== verifiedHmiPreviewKey
+            || !selection.view_path_root || !selection.ollama_model) {
+            setHmiBatchStatus(
+                "Select an explicit HMI ViewPath root and run Preview texts first.",
+                true
+            );
+            return;
+        }
+        const size = Number(hmiBatchSizeInput?.value);
+        const totalString = hmiBatchTotalInput?.value?.trim() || "";
+        const total = totalString ? Number(totalString) : null;
+        if (!Number.isInteger(size) || size < 1 || size > 200
+            || (total !== null &&
+                (!Number.isInteger(total) || total < 1 || total > 100000))) {
+            setHmiBatchStatus(
+                "Batch size must be 1–200; total must be empty or 1–100000.",
+                true
+            );
+            return;
+        }
+        if (!confirm(
+            "START AUTOMATIC TIA IMPORT?\n\n"
+            + "The selected HMI will be translated by local Ollama in batches "
+            + "of " + size + " unique texts"
+            + (total ? ", up to " + total + " total." : ", for ALL unique texts.")
+            + "\n\nEach batch is imported into TIA WITHOUT individual "
+            + "translation approval and verified by re-export before the next. "
+            + "A project backup and successful pilot are strongly recommended. "
+            + "Do not edit this TIA project during the job."
+        )) {
+            return;
+        }
+        hmiBatchStarting = true;
+        updateHmiTranslateButtonState();
+        setHmiBatchStatus("Initializing batch job from TIA project texts...");
+        try {
+            const job = await postJson(
+                "/api/v1/tia/hmis/batch-translations/start",
+                {...selection, batch_size: size, total_to_translate: total}
+            );
+            hmiBatchJobId = job.job_id;
+            saveHmiBatchJobId(job.job_id);
+            showHmiBatchJob(job);
+            await runHmiBatchLoop(job.job_id);
+        } catch (error) {
+            setHmiBatchStatus(error.message, true);
+        } finally {
+            hmiBatchStarting = false;
+            updateHmiTranslateButtonState();
+        }
+    }
+
+    async function resumeHmiBatchImport() {
+        const jobId = savedHmiBatchJobId();
+        if (!jobId) {
+            setHmiBatchStatus("No saved job for this HMI.", true);
+            return;
+        }
+        try {
+            const job = await getJson(
+                "/api/v1/tia/hmis/batch-translations/" + jobId
+            );
+            showHmiBatchJob(job);
+            if (job.status === "completed") {
+                return;
+            }
+            if (job.status === "processing") {
+                setHmiBatchStatus(
+                    "The batch is running in another request. Do not launch another import.",
+                    true
+                );
+                return;
+            }
+            const uncertain = job.status === "error"
+                || job.status === "interrupted";
+            if (uncertain && !confirm(
+                "Previous import may have partially modified TIA. "
+                + "After checking the actual TIA text values, retry the "
+                + "unfinished batch? Earlier verified batches will not be replayed."
+            )) {
+                return;
+            }
+            await runHmiBatchLoop(jobId, uncertain);
+        } catch (error) {
+            setHmiBatchStatus(error.message, true);
+        }
+    }
+
+    async function pauseHmiBatchImport() {
+        if (!hmiBatchJobId || !hmiBatchRunning) {
+            return;
+        }
+        hmiBatchPauseRequested = true;
+        updateHmiTranslateButtonState();
+        setHmiBatchStatus(
+            "Pause requested. The current TIA import will finish and "
+            + "be verified before the job stops."
+        );
+        try {
+            await postJson(
+                "/api/v1/tia/hmis/batch-translations/"
+                + hmiBatchJobId + "/pause", {}
+            );
+        } catch (error) {
+            setHmiBatchStatus(
+                "Pause request could not be saved: " + error.message,
+                true
+            );
         }
     }
 
@@ -1441,6 +1711,7 @@ export function initTiaUi(
 
         populateHmiTranslationLanguages();
         void refreshHmiOllamaModels();
+        updateHmiTranslateButtonState();
 
         setHmiTranslationStatus(
             "Choose the TIA source slot containing the current texts and the target language. "
@@ -6978,6 +7249,16 @@ export function initTiaUi(
             discardHmiReview
         );
     }
+
+    hmiBatchStartButton?.addEventListener(
+        "click", () => { void startHmiBatchImport(); }
+    );
+    hmiBatchResumeButton?.addEventListener(
+        "click", () => { void resumeHmiBatchImport(); }
+    );
+    hmiBatchPauseButton?.addEventListener(
+        "click", () => { void pauseHmiBatchImport(); }
+    );
 
     if (hmiOllamaModelSelect) {
         hmiOllamaModelSelect.addEventListener(
