@@ -5,6 +5,8 @@ The original source culture is never modified during import.
 """
 import tempfile
 import time
+import re
+from threading import Lock
 from pathlib import Path
 from uuid import uuid4
 
@@ -27,6 +29,48 @@ router = APIRouter()
 # Local single-process app: prepared reviews are deliberately ephemeral.
 _REVIEW_TTL = 30 * 60
 _REVIEWS: dict[str, dict] = {}
+_PROGRESS: dict[str, dict] = {}
+_PROGRESS_LOCK = Lock()
+_PROGRESS_TTL = 3600
+
+
+def _record_progress(progress_id: str | None, stage: str,
+                     completed: int = 0, total: int = 0):
+    if not progress_id:
+        return
+    now = time.monotonic()
+    with _PROGRESS_LOCK:
+        for key, value in list(_PROGRESS.items()):
+            if now - value["updated_at"] > _PROGRESS_TTL:
+                _PROGRESS.pop(key, None)
+        previous = _PROGRESS.get(progress_id, {})
+        _PROGRESS[progress_id] = {
+            "stage": stage,
+            "completed": completed,
+            "total": total,
+            "started_at": previous.get("started_at", now),
+            "updated_at": now,
+        }
+
+
+@router.get("/hmis/translation-progress/{progress_id}")
+def get_hmi_translation_progress(progress_id: str):
+    if not re.fullmatch(r"[a-f0-9]{32}", progress_id):
+        raise HTTPException(400, "Invalid translation progress identifier.")
+    with _PROGRESS_LOCK:
+        progress = _PROGRESS.get(progress_id)
+        if progress is None:
+            raise HTTPException(404, "No active HMI translation for this identifier.")
+        snapshot = dict(progress)
+    elapsed = round(time.monotonic() - snapshot["started_at"], 1)
+    return {
+        "stage": snapshot["stage"],
+        "completed": snapshot["completed"],
+        "total": snapshot["total"],
+        "percent": round(100 * snapshot["completed"] / snapshot["total"], 1)
+        if snapshot["total"] else None,
+        "elapsed_seconds": elapsed,
+    }
 
 
 class TranslationReviewItem(BaseModel):
@@ -188,6 +232,10 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
             429, "Too many pending reviews. Import or restart the app."
         )
 
+    # The synchronous FastAPI endpoint runs in a thread pool. A separate
+    # GET request can report progress while export or Ollama is running.
+    _record_progress(request.progress_id, "exporting_project_texts")
+
     path = _project_export(
         request.process_id, request.source_culture, request.target_culture
     )
@@ -225,7 +273,15 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         row["source"] for row in rows
         if any(ch.isalpha() for ch in row["source"])
     ))
-    translated = _translate_texts(unique, request.target_culture, model)
+    _record_progress(request.progress_id, "translating", 0, len(unique))
+
+    translated = _translate_texts(
+        unique, request.target_culture, model,
+        progress=lambda done, total: _record_progress(
+            request.progress_id, "translating", done, total
+        ),
+    )
+    _record_progress(request.progress_id, "preparing_review", len(unique), len(unique))
 
     for row in rows:
         source = row["source"]
@@ -248,6 +304,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         "model": model,
         "rows": rows,
     }
+    _record_progress(request.progress_id, "ready", len(unique), len(unique))
     return TranslationReviewResponse(
         review_id=token,
         hmi_name=request.hmi_name,
