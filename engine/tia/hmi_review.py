@@ -3,13 +3,11 @@
 Prepare performs export + translation only; import is a separate explicit action.
 The original source culture is never modified during import.
 """
-import os
 import tempfile
 import time
 from pathlib import Path
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from openpyxl import load_workbook
 from pydantic import BaseModel, Field
@@ -22,8 +20,8 @@ from engine.tia.hmi_translation import (
     _translate_texts,
 )
 from engine.tia.models import TranslateHmiTextsRequest
+from engine.tia.ollama_translation import list_ollama_models, resolve_ollama_model
 
-load_dotenv()
 router = APIRouter()
 
 # Local single-process app: prepared reviews are deliberately ephemeral.
@@ -45,6 +43,7 @@ class TranslationReviewResponse(BaseModel):
     view_path_root: str
     source_culture: str
     target_culture: str
+    ollama_model: str
     selected_rows: int
     unique_texts: int
     examples: list[TranslationReviewItem]
@@ -160,6 +159,19 @@ def _samples(rows):
     ]
 
 
+@router.get("/hmis/translation-models")
+def get_hmi_translation_models():
+    """List installed local Ollama models without modifying the TIA project."""
+    names = list_ollama_models()
+    selected = None
+    try:
+        selected = resolve_ollama_model(available=names)
+    except HTTPException as exc:
+        if exc.status_code not in (422, 503):
+            raise
+    return {"provider": "ollama", "models": names, "selected_model": selected}
+
+
 @router.post(
     "/hmis/prepare-translations",
     response_model=TranslationReviewResponse,
@@ -167,10 +179,8 @@ def _samples(rows):
 def prepare_hmi_translations(request: TranslateHmiTextsRequest):
     if request.source_culture.casefold() == request.target_culture.casefold():
         raise HTTPException(400, "Source and target cultures must differ.")
-    if not os.getenv("OPENAI_API_KEY", "").strip():
-        raise HTTPException(
-            503, "OPENAI_API_KEY is not configured; no TIA changes were made."
-        )
+    # Ensure local Ollama and selected model are available before XLSX export.
+    model = resolve_ollama_model(request.ollama_model)
 
     _prune_expired_reviews()
     if len(_REVIEWS) >= 20:
@@ -215,7 +225,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         row["source"] for row in rows
         if any(ch.isalpha() for ch in row["source"])
     ))
-    translated = _translate_texts(unique, request.target_culture)
+    translated = _translate_texts(unique, request.target_culture, model)
 
     for row in rows:
         source = row["source"]
@@ -235,6 +245,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
     _REVIEWS[token] = {
         "created": time.monotonic(),
         "request": request.model_dump(),
+        "model": model,
         "rows": rows,
     }
     return TranslationReviewResponse(
@@ -243,6 +254,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         view_path_root=request.view_path_root or request.device_name,
         source_culture=request.source_culture,
         target_culture=request.target_culture,
+        ollama_model=model,
         selected_rows=len(rows),
         unique_texts=len(unique),
         examples=_samples(rows),
