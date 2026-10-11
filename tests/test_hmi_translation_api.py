@@ -27,6 +27,7 @@ def test_local_ollama_model_discovery_and_translation(monkeypatch):
     requests = []
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_TRANSLATION_MODEL", raising=False)
+    monkeypatch.setenv("OLLAMA_TRANSLATION_BATCH_SIZE", "15")
 
     def fake_urlopen(request, timeout):
         requests.append(request)
@@ -168,3 +169,24 @@ def test_translation_batch_size_validates_configuration(monkeypatch, size):
     with pytest.raises(HTTPException) as error:
         ollama.translation_batch_size()
     assert error.value.status_code == 422
+
+
+def test_default_ollama_fragment_size_is_one(monkeypatch):
+    monkeypatch.delenv("OLLAMA_TRANSLATION_BATCH_SIZE", raising=False)
+    monkeypatch.setattr(
+        ollama, "resolve_ollama_model",
+        lambda requested: "local-test-model",
+    )
+    batches = []
+
+    def fake_batch(texts, target, model):
+        batches.append(list(texts))
+        return {source: source for source in texts}
+
+    monkeypatch.setattr(ollama, "translate_ollama_batch", fake_batch)
+    result = ollama.translate_ollama_texts(
+        ["Label one", "Label two", "Label three"],
+        "pl-PL", "local-test-model",
+    )
+    assert list(result) == ["Label one", "Label two", "Label three"]
+    assert batches == [["Label one"], ["Label two"], ["Label three"]]
