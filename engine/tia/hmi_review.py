@@ -22,6 +22,9 @@ from engine.tia.hmi_translation import (
     _translate_texts,
 )
 from engine.tia.models import TranslateHmiTextsRequest
+from engine.tia.hmi_text_safety import (
+    needs_target_fill, validate_hmi_translation,
+)
 from engine.tia.ollama_translation import (
     list_ollama_models, resolve_ollama_model, translation_batch_size,
 )
@@ -235,8 +238,13 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
             422, "Prepare one batch requires max_rows from 1 to 50. "
             "Use the batch import workflow for a larger total.",
         )
-    # Ensure local Ollama and selected model are available before XLSX export.
-    model = resolve_ollama_model(request.ollama_model)
+    # Source-copy mode is intentional when Polish labels live in en-US*.
+    # Never require or call Ollama for this deterministic operation.
+    model = (
+        "source-copy"
+        if request.translation_strategy == "copy"
+        else resolve_ollama_model(request.ollama_model)
+    )
 
     _prune_expired_reviews()
     if len(_REVIEWS) >= 20:
@@ -265,22 +273,25 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
             404, "No source text found for the selected HMI ViewPath root."
         )
 
-    # Manual preparation selects one representative of each unique source.
-    if request.max_rows is not None:
-        chosen = []
-        seen = set()
-        for row in rows:
-            if not any(char.isalpha() for char in row["source"]):
-                continue
-            if row["source"] in seen:
-                continue
-            seen.add(row["source"])
-            chosen.append(row)
-            if len(chosen) >= request.max_rows:
-                break
-        rows = chosen
+    # Fill only empty / generic 'Text' target cells. Never retranslate
+    # correctly populated targets, even when Ollama would propose a change.
+    rows = [r for r in rows
+            if needs_target_fill(r["source"], r["current_target"])]
+    chosen = []
+    seen = set()
+    for row in rows:
+        if row["source"] in seen:
+            continue
+        seen.add(row["source"])
+        chosen.append(row)
+        if len(chosen) >= request.max_rows:
+            break
+    rows = chosen
     if not rows:
-        raise HTTPException(422, "No meaningful text rows to translate.")
+        raise HTTPException(
+            422, "No missing/placeholder target texts in this HMI. "
+            "Existing target translations are preserved.",
+        )
 
     unique = list(dict.fromkeys(
         row["source"] for row in rows
@@ -288,26 +299,22 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
     ))
     _record_progress(request.progress_id, "translating", 0, len(unique))
 
-    translated = _translate_texts(
-        unique, request.target_culture, model,
-        progress=lambda done, total: _record_progress(
-            request.progress_id, "translating", done, total
-        ),
-    )
+    if request.translation_strategy == "copy":
+        translated = {source: source for source in unique}
+        _record_progress(request.progress_id, "translating", len(unique), len(unique))
+    else:
+        translated = _translate_texts(
+            unique, request.target_culture, model,
+            progress=lambda done, total: _record_progress(
+                request.progress_id, "translating", done, total
+            ),
+        )
     _record_progress(request.progress_id, "preparing_review", len(unique), len(unique))
 
     for row in rows:
         source = row["source"]
         proposal = translated[source] if source in translated else source
-        if not isinstance(proposal, str) or not proposal.strip():
-            raise HTTPException(
-                502, "Translation model returned empty text for " + source[:60]
-            )
-        if proposal.strip().casefold() == "text" and source.strip().casefold() != "text":
-            raise HTTPException(
-                502, "Translation returned suspicious placeholder 'Text' for "
-                + source[:60]
-            )
+        validate_hmi_translation(source, proposal)
         row["proposal"] = proposal
 
     token = uuid4().hex
@@ -399,6 +406,14 @@ def import_reviewed_hmi_translations(request: ImportReviewRequest):
                         "TIA project text changed after review: "
                         + row["key"][1][:180]
                     )
+                if not needs_target_fill(row["source"], row["current_target"]):
+                    raise HTTPException(
+                        409, "Existing HMI target is already populated; "
+                        "refusing to overwrite: " + row["key"][1][:180]
+                    )
+                validate_hmi_translation(
+                    prepared_row["source"], prepared_row["proposal"]
+                )
                 workbook[row["sheet"]].cell(
                     row["row_index"], row["target_column"]
                 ).value = prepared_row["proposal"]
