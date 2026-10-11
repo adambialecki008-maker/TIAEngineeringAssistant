@@ -30,7 +30,7 @@ _ACTIVE_JOBS: set[str] = set()
 class StartBatchJobRequest(TranslateHmiTextsRequest):
     # One Ollama-to-TIA import transaction per batch, not the internal
     # Ollama JSON requests (whose size is OLLAMA_TRANSLATION_BATCH_SIZE).
-    batch_size: int = Field(default=15, ge=1, le=200)
+    batch_size: int = Field(default=50, ge=1, le=200)
     total_to_translate: int | None = Field(default=None, ge=1, le=100000)
 
 
@@ -201,8 +201,6 @@ def run_next_hmi_batch(job_id: str, action: BatchJobAction):
         # Calling /next from an explicitly paused job means resume.
         # A pause requested DURING a running batch is handled at the
         # previous batch's commit boundary, never mid-import.
-        if job["status"] == "paused":
-            job["pause_requested"] = False
         job["pause_requested"] = False
         job["status"] = "processing"
         job["error"] = None
