@@ -1590,3 +1590,10 @@ td {
     margin: 6px 0 0;
     font-size: 12px;
 }
+
+/* Keep Openness connection diagnostics next to the TIA process selector. */
+.tia-connection-status {
+    margin: 10px 0 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
