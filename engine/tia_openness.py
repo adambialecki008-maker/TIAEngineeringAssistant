@@ -62,6 +62,11 @@ class TiaProjectInfo(BaseModel):
     project_name: str
 
 
+class TiaProjectContext(BaseModel):
+    project_name: str
+    plcs: list[ProjectPlc]
+
+
 class HardwareItem(BaseModel):
     device_name: str
     item_path: str
@@ -738,6 +743,85 @@ def get_tia_processes():
 
 
     return processes
+
+
+@router.get(
+    "/project-context",
+    response_model=TiaProjectContext,
+)
+def get_project_context(
+    process_id: int = Query(
+        ge=1
+    ),
+):
+    lines = _run_adapter(
+        "list-project-plcs",
+        str(
+            process_id
+        ),
+    )
+
+
+    project_name = ""
+    plcs = []
+
+
+    for line in lines:
+        if line.startswith(
+            "PROJECT|"
+        ):
+            parts = line.split(
+                "|",
+                1,
+            )
+
+
+            if (
+                len(parts) == 2
+                and
+                parts[1].strip()
+            ):
+                project_name =
+                    parts[1].strip()
+
+
+        elif line.startswith(
+            "PLC|"
+        ):
+            parts = line.split(
+                "|",
+                4,
+            )
+
+
+            if len(parts) != 5:
+                continue
+
+
+            plcs.append(
+                ProjectPlc(
+                    device_name=parts[1],
+                    plc_name=parts[2],
+                    device_type_identifier=parts[3],
+                    plc_type_identifier=parts[4],
+                )
+            )
+
+
+    if not project_name:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No open TIA project found "
+                "for the selected process."
+            ),
+        )
+
+
+    return TiaProjectContext(
+        project_name=project_name,
+        plcs=plcs,
+    )
 
 
 @router.get(
