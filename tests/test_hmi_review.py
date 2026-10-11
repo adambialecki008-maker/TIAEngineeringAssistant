@@ -78,11 +78,14 @@ def _setup(monkeypatch, *, verify_updates=True, stale=False):
             ]
         raise AssertionError("Unexpected adapter call " + args[0])
 
-    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+    monkeypatch.setattr(
+        review_module, "resolve_ollama_model",
+        lambda requested: "test-local-model:latest",
+    )
     monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
     monkeypatch.setattr(
         review_module, "_translate_texts",
-        lambda texts, target: {
+        lambda texts, target, model: {
             source: {"212BP2 Za zaworem": "212BP2 Za zaworem",
                      "Zgniatarka": "Zgniatarka"}.get(source, source)
             for source in texts
@@ -174,7 +177,7 @@ def test_prepare_rejects_placeholder_for_nonplaceholder_source(monkeypatch):
     _setup(monkeypatch)
     monkeypatch.setattr(
         review_module, "_translate_texts",
-        lambda texts, target: {source: "Text" for source in texts},
+        lambda texts, target, model: {source: "Text" for source in texts},
     )
     response = client.post(
         "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
