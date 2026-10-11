@@ -94,6 +94,13 @@ export function initTiaUi(
     const hmiBatchResumeButton = document.getElementById("tia-hmi-batch-resume");
     const hmiBatchPauseButton = document.getElementById("tia-hmi-batch-pause");
     const hmiBatchStatus = document.getElementById("tia-hmi-batch-status");
+    const hmiBatchPlan = document.getElementById("tia-hmi-batch-plan");
+    const hmiBatchAutoRepeat = document.getElementById("tia-hmi-batch-auto-repeat");
+    const hmiBatchProgress = document.getElementById("tia-hmi-batch-progress");
+    const hmiBatchProgressText =
+        document.getElementById("tia-hmi-batch-progress-text");
+    const hmiTranslationStrategySelect =
+        document.getElementById("tia-hmi-translation-strategy");
     const hmiScanSummary = document.getElementById("tia-hmi-scan-summary");
     const hmiScanButton = document.getElementById("tia-hmi-scan-button");
     const hmiUseScanTotalButton =
@@ -1027,6 +1034,7 @@ export function initTiaUi(
             hmi_name: hmi.hmi_name,
             view_path_root: hmiViewPathRootSelect?.value || null,
             ollama_model: hmiOllamaModelSelect?.value || null,
+            translation_strategy: hmiTranslationStrategySelect?.value || "copy",
             source_culture: sourceCulture,
             target_culture: targetCulture,
         };
@@ -1135,6 +1143,8 @@ export function initTiaUi(
         const isVerified = Boolean(key && key === verifiedHmiPreviewKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting;
+        const hasTranslationEngine = selection?.translation_strategy === "copy"
+            || Boolean(selection?.ollama_model);
         if (hmiTranslateButton) {
             const count = manualHmiPrepareCount();
             hmiTranslateButton.textContent = count
@@ -1142,7 +1152,7 @@ export function initTiaUi(
                     + " for review"
                 : "Prepare one batch (review)";
             hmiTranslateButton.disabled =
-                busy || !isVerified || !hmiOllamaModelSelect?.value
+                busy || !isVerified || !hasTranslationEngine
                 || !count || count > 50;
             hmiTranslateButton.title = count > 50
                 ? "Manual review allows at most 50 unique texts. "
@@ -1168,7 +1178,7 @@ export function initTiaUi(
         }
         if (hmiBatchStartButton) {
             hmiBatchStartButton.disabled = busy || !isVerified
-                || !selection?.view_path_root || !selection.ollama_model;
+                || !selection?.view_path_root || !hasTranslationEngine;
         }
         if (hmiBatchResumeButton) {
             hmiBatchResumeButton.disabled = busy || !savedHmiBatchJobId();
@@ -1290,7 +1300,66 @@ export function initTiaUi(
         hmiBatchStatus.classList.toggle("success", !isError);
     }
 
+    function renderHmiBatchProgress(completed, total) {
+        const safeTotal = Number.isFinite(total) && total > 0 ? total : 0;
+        const done = Math.max(0, Math.min(Number(completed) || 0, safeTotal));
+        const percent = safeTotal ? 100 * done / safeTotal : 0;
+        if (hmiBatchProgress) {
+            hmiBatchProgress.value = percent;
+            hmiBatchProgress.setAttribute("aria-valuenow", String(Math.round(percent)));
+        }
+        if (hmiBatchProgressText) {
+            hmiBatchProgressText.textContent = done + " / "
+                + (safeTotal || "—") + " (" + Math.round(percent) + "%)";
+        }
+    }
+
+    function renderHmiBatchPlan() {
+        if (!hmiBatchPlan) {
+            return;
+        }
+        const batch = Number(hmiBatchSizeInput?.value);
+        const raw = hmiBatchTotalInput?.value?.trim() || "";
+        const specified = raw ? Number(raw) : null;
+        const scanned = latestHmiScan?.missingUnique ?? null;
+        if (!Number.isInteger(batch) || batch < 1 || batch > 200
+            || (specified !== null && (!Number.isInteger(specified)
+                || specified < 1 || specified > 100000))) {
+            hmiBatchPlan.textContent =
+                "Batch size must be 1–200; total must be positive or blank.";
+            return;
+        }
+        if (specified !== null && scanned !== null && specified > scanned) {
+            hmiBatchPlan.textContent = "Requested " + specified
+                + " unique texts exceeds " + scanned
+                + " missing/placeholder source texts found in HMI scan.";
+            return;
+        }
+        const total = specified ?? scanned;
+        if (!total) {
+            hmiBatchPlan.textContent =
+                "Scan HMI to determine the missing-target text count, "
+                + "or enter a total manually.";
+            return;
+        }
+        const chunks = Math.ceil(total / batch);
+        const last = total - batch * (chunks - 1);
+        const sequence = chunks === 1
+            ? "1 batch × " + last + " text(s)"
+            : chunks + " batches: " + (chunks - 1) + " × " + batch
+                + " + final × " + last;
+        hmiBatchPlan.textContent =
+            "Plan: " + sequence + " = " + total + " unique texts. "
+            + (hmiBatchAutoRepeat?.checked
+                ? "Auto-continue ON: each batch is imported and verified "
+                    + "in TIA, then the next starts until the limit."
+                : "Auto-continue OFF: import/verify one batch, then stop. "
+                    + "Use Resume saved job to continue.")
+            + " Only missing or placeholder target cells are changed.";
+    }
+
     function showHmiBatchJob(job) {
+        renderHmiBatchProgress(job.completed_unique, job.total_unique);
         const last = job.last_verified_batch;
         let message = "Job: " + job.status + " — "
             + job.completed_unique + " / " + job.total_unique
