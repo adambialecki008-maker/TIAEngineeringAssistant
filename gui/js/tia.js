@@ -178,6 +178,27 @@ export function initTiaUi(
         );
 
 
+    const plcStructureDetail =
+        document.getElementById(
+            "tia-plc-structure-detail"
+        );
+
+    const plcStructureDetailTitle =
+        document.getElementById(
+            "tia-plc-structure-detail-title"
+        );
+
+    const plcStructureDetailStatus =
+        document.getElementById(
+            "tia-plc-structure-detail-status"
+        );
+
+    const plcStructureDetailBody =
+        document.getElementById(
+            "tia-plc-structure-detail-body"
+        );
+
+
     const loadModelsButton =
         document.getElementById(
             "tia-load-models-button"
@@ -1822,6 +1843,307 @@ export function initTiaUi(
     }
 
 
+    function setPlcStructureDetailStatus(
+        message,
+        type = "normal"
+    ) {
+        if (!plcStructureDetailStatus) {
+            return;
+        }
+
+
+        plcStructureDetailStatus.textContent =
+            message;
+
+        plcStructureDetailStatus.classList.toggle(
+            "error",
+            type === "error"
+        );
+
+        plcStructureDetailStatus.classList.toggle(
+            "success",
+            type === "success"
+        );
+    }
+
+
+    function resetPlcStructureDetail() {
+        if (plcStructureDetail) {
+            plcStructureDetail.classList.add(
+                "hidden"
+            );
+        }
+
+        if (plcStructureDetailTitle) {
+            plcStructureDetailTitle.textContent =
+                "Structure detail";
+        }
+
+        if (plcStructureDetailBody) {
+            plcStructureDetailBody.replaceChildren();
+        }
+
+        setPlcStructureDetailStatus(
+            "Select a DB or UDT."
+        );
+    }
+
+
+    function renderPlcStructureDetail(
+        detail
+    ) {
+        if (
+            !plcStructureDetail
+            ||
+            !plcStructureDetailBody
+        ) {
+            return;
+        }
+
+
+        plcStructureDetail.classList.remove(
+            "hidden"
+        );
+
+        plcStructureDetailBody.replaceChildren();
+
+
+        const groupText =
+            detail.group_path
+                ? ` / ${detail.group_path}`
+                : "";
+
+        plcStructureDetailTitle.textContent =
+            `${detail.kind.toUpperCase()} ${detail.name}${groupText}`;
+
+
+        if (
+            !detail.members
+            ||
+            detail.members.length === 0
+        ) {
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+            const cell =
+                document.createElement(
+                    "td"
+                );
+
+            cell.colSpan =
+                5;
+
+            cell.className =
+                "empty-table-cell";
+
+            cell.textContent =
+                "No members found in exported structure.";
+
+            row.appendChild(
+                cell
+            );
+
+            plcStructureDetailBody.appendChild(
+                row
+            );
+
+            setPlcStructureDetailStatus(
+                "Structure exported, but no members were found."
+            );
+
+            return;
+        }
+
+
+        for (
+            const member
+            of detail.members
+        ) {
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+
+            const sectionCell =
+                document.createElement(
+                    "td"
+                );
+
+            sectionCell.textContent =
+                member.section
+                ||
+                "—";
+
+
+            const memberCell =
+                document.createElement(
+                    "td"
+                );
+
+            memberCell.textContent =
+                member.name;
+
+            memberCell.title =
+                member.path
+                ||
+                member.name;
+
+            memberCell.style.paddingLeft =
+                `${12 + (member.level || 0) * 18}px`;
+
+
+            const typeCell =
+                document.createElement(
+                    "td"
+                );
+
+            typeCell.textContent =
+                member.data_type
+                ||
+                "—";
+
+
+            const offsetCell =
+                document.createElement(
+                    "td"
+                );
+
+            offsetCell.textContent =
+                member.offset
+                ||
+                "—";
+
+
+            const commentCell =
+                document.createElement(
+                    "td"
+                );
+
+            commentCell.textContent =
+                member.comment
+                ||
+                "—";
+
+
+            row.append(
+                sectionCell,
+                memberCell,
+                typeCell,
+                offsetCell,
+                commentCell
+            );
+
+            plcStructureDetailBody.appendChild(
+                row
+            );
+        }
+
+
+        setPlcStructureDetailStatus(
+            `${detail.members.length} member(s) loaded.`,
+            "success"
+        );
+    }
+
+
+    async function readPlcStructureDetail(
+        kind,
+        item
+    ) {
+        const processId =
+            selectedProcessId();
+
+        const target =
+            projectConfig.tia_target;
+
+
+        if (!processId) {
+            setPlcStructuresStatus(
+                "Select a TIA process first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (!target) {
+            setPlcStructuresStatus(
+                "Select an Active PLC first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        plcStructureDetail.classList.remove(
+            "hidden"
+        );
+
+        plcStructureDetailTitle.textContent =
+            `Loading ${kind.toUpperCase()} ${item.name}...`;
+
+        plcStructureDetailBody.replaceChildren();
+
+        setPlcStructureDetailStatus(
+            "Exporting structure XML from TIA Portal..."
+        );
+
+
+        try {
+            const query =
+                new URLSearchParams({
+                    process_id:
+                        String(
+                            processId
+                        ),
+
+                    device_name:
+                        target.device_name,
+
+                    plc_name:
+                        target.plc_name,
+
+                    kind:
+                        kind,
+
+                    group_path:
+                        item.group_path
+                        ||
+                        "",
+
+                    name:
+                        item.name,
+                });
+
+
+            const detail =
+                await getJson(
+                    "/api/v1/tia/plc-structure?"
+                    +
+                    query.toString()
+                );
+
+
+            renderPlcStructureDetail(
+                detail
+            );
+
+        } catch (error) {
+            plcStructureDetailBody.replaceChildren();
+
+            setPlcStructureDetailStatus(
+                error.message,
+                "error"
+            );
+        }
+    }
+
+
     function renderPlcStructures(
         structures
     ) {
@@ -1871,7 +2193,7 @@ export function initTiaUi(
                 renderEmptyStructureTable(
                     plcDbsBody,
                     "No Data Blocks found.",
-                    5
+                    6
                 );
 
             } else {
@@ -1918,6 +2240,30 @@ export function initTiaUi(
                     }
 
 
+                    const actionsCell =
+                        document.createElement(
+                            "td"
+                        );
+
+                    actionsCell.className =
+                        "actions-cell";
+
+                    actionsCell.appendChild(
+                        createActionButton(
+                            "Read structure",
+                            () =>
+                                readPlcStructureDetail(
+                                    "db",
+                                    item
+                                )
+                        )
+                    );
+
+                    row.appendChild(
+                        actionsCell
+                    );
+
+
                     plcDbsBody.appendChild(
                         row
                     );
@@ -1934,7 +2280,7 @@ export function initTiaUi(
                 renderEmptyStructureTable(
                     plcUdtsBody,
                     "No UDTs found.",
-                    4
+                    5
                 );
 
             } else {
@@ -1977,6 +2323,30 @@ export function initTiaUi(
                     }
 
 
+                    const actionsCell =
+                        document.createElement(
+                            "td"
+                        );
+
+                    actionsCell.className =
+                        "actions-cell";
+
+                    actionsCell.appendChild(
+                        createActionButton(
+                            "Read structure",
+                            () =>
+                                readPlcStructureDetail(
+                                    "udt",
+                                    item
+                                )
+                        )
+                    );
+
+                    row.appendChild(
+                        actionsCell
+                    );
+
+
                     plcUdtsBody.appendChild(
                         row
                     );
@@ -2004,14 +2374,16 @@ export function initTiaUi(
         renderEmptyStructureTable(
             plcDbsBody,
             message,
-            5
+            6
         );
 
         renderEmptyStructureTable(
             plcUdtsBody,
             message,
-            4
+            5
         );
+
+        resetPlcStructureDetail();
     }
 
 
