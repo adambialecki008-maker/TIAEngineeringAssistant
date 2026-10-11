@@ -537,41 +537,50 @@ summary {
     margin-bottom: 10px;
 }
 
-.plc-resource-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(72px, 1fr));
-    gap: 8px;
-    min-width: 210px;
+.plc-resource-table-wrapper {
+    max-width: 760px;
+    overflow-x: auto;
 }
 
-.plc-resource-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 7px 8px;
-    border: 1px solid #d8dde2;
-    border-radius: 5px;
-    background: #f7f9fa;
+.plc-resource-table {
+    min-width: 690px;
+    border: 1px solid #d7dde2;
+    border-collapse: collapse;
+    background: #ffffff;
+    font-size: 12px;
 }
 
-.plc-resource-label {
-    color: #6b747c;
-    font-size: 11px;
+.plc-resource-table th,
+.plc-resource-table td {
+    padding: 7px 9px;
+    border: 1px solid #d7dde2;
+    text-align: right;
+    white-space: nowrap;
 }
 
-.plc-resource-value {
-    color: #26343f;
-    font-size: 13px;
+.plc-resource-table th:first-child,
+.plc-resource-table td:first-child {
+    text-align: left;
+}
+
+.plc-resource-table th {
+    background: #f1f3f5;
+    color: #303a43;
+    font-weight: 600;
+}
+
+.plc-resource-used-row td {
+    background: #f7f9fb;
+    font-weight: 700;
 }
 
 .plc-resource-note {
-    max-width: 260px;
+    max-width: 690px;
     margin: 9px 0 0;
     color: #78818a;
     font-size: 11px;
     line-height: 1.35;
 }
-
 
 /* TIA inventory */
 
