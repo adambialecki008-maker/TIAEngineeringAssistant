@@ -173,7 +173,7 @@
 
                 <p class="hint">
                     Select the TIA process and Active PLC in the TIA Portal tab.
-                    PLC family is configured there as part of the PLC context.
+                    New PLC family selection is available only in Create PLC.
                 </p>
             </div>
 
@@ -364,6 +364,54 @@
                 >
                     Active PLC: not selected
                 </p>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Existing HMIs
+                        </h3>
+
+                        <p class="hint">
+                            HMI / WinCC software objects detected in the currently open TIA project.
+                            This view is read-only.
+                        </p>
+                    </div>
+                </div>
+
+
+                <div class="table-wrapper">
+
+                    <table
+                        id="tia-existing-hmis-table"
+                        class="management-table"
+                    >
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>HMI</th>
+                                <th>Type</th>
+                                <th>Software</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="tia-existing-hmis-body">
+                            <tr>
+                                <td
+                                    colspan="4"
+                                    class="empty-table-cell"
+                                >
+                                    Select a TIA process and refresh project context.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
 
             </div>
 
