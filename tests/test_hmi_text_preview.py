@@ -122,3 +122,124 @@ def test_preview_handles_read_only_sheet_with_unknown_dimensions(monkeypatch):
     assert data["total_text_rows"] == 3
     assert data["matched_text_rows"] == 1
     assert data["sample_rows"][0]["source_text"] == "Zmiana"
+
+
+def _write_tia_v21_export(path: Path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "User Texts"
+    sheet.append([
+        "Category", "ViewPath", "Internal ID", "Substitutions",
+        "en-US*", "en-US", 'ref="0"',
+    ])
+    sheet.append([
+        "<HMI screen>", "Project\\HMI_00_Main\\Screens\\Main\\Text",
+        "opaque-1", "", "Zmiana", "Zmiana", "",
+    ])
+    sheet.append([
+        "<Alarm>", "Project\\HMI_00_Main\\Alarms\\Alarm_1",
+        "opaque-2", "", "Zgniatarka", "Zgniatarka", "",
+    ])
+    sheet.append([
+        "<HMI screen>", "Project\\HMI_Other\\Screens\\Main\\Text",
+        "opaque-3", "", "Other HMI text", "Other HMI text", "",
+    ])
+    system = workbook.create_sheet("System Texts")
+    system.append([
+        "Category", "ViewPath", "Internal ID", "Substitutions",
+        "en-US*", "en-US", 'ref="0"',
+    ])
+    workbook.save(path)
+
+
+def test_preview_real_tia_v21_layout_and_explicit_view_path_root(monkeypatch):
+    def adapter(*args):
+        assert args[0] == "export-project-texts"
+        _write_tia_v21_export(Path(args[-1]))
+        return ["PROJECT_TEXTS_EXPORTED|" + args[-1]]
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    body = {
+        "process_id": 13940,
+        "device_name": "Unknown_inventory_device",
+        "hmi_name": "HMI_RT_1",
+        "source_culture": "en-US",
+        "target_culture": "pl-PL",
+    }
+    response = client.post("/api/v1/tia/hmis/preview-texts", json=body)
+    assert response.status_code == 200
+    info = response.json()
+    assert info["worksheets_found"] == 2
+    assert info["worksheet_count"] == 2
+    assert info["total_text_rows"] == 3
+    assert info["matched_text_rows"] == 0
+    assert info["source_column_header"] == "en-US*"
+    assert info["target_column_header"] == "en-US"
+    assert any(x["root"] == "HMI_00_Main" for x in info["view_path_roots"])
+
+    body["view_path_root"] = "HMI_00_Main"
+    response = client.post("/api/v1/tia/hmis/preview-texts", json=body)
+    assert response.status_code == 200
+    assert response.json()["matched_text_rows"] == 2
+
+
+def test_translate_imports_only_selected_hmi_and_renames_target_header(
+    monkeypatch,
+):
+    import engine.tia.hmi_translation as translation
+
+    commands = []
+    imported = []
+
+    def adapter(*args):
+        commands.append(args[0])
+        if args[0] == "add-project-language":
+            return ["LANGUAGE_ADDED|de-DE"]
+        if args[0] == "export-project-texts":
+            _write_tia_v21_export(Path(args[-1]))
+            return ["PROJECT_TEXTS_EXPORTED|" + args[-1]]
+        if args[0] == "import-project-texts":
+            assert args[-1] == "false"
+            file_path = Path(args[2])
+            workbook = load_workbook(file_path)
+            rows = list(workbook["User Texts"].values)
+            assert rows[0][4] == "en-US*"
+            assert rows[0][5] == "de-DE"
+            assert len(rows) == 3
+            assert all("HMI_00_Main" in row[1] for row in rows[1:])
+            assert rows[1][2] == "opaque-1"
+            assert rows[2][2] == "opaque-2"
+            assert rows[1][5] == "Shift"
+            assert rows[2][5] == "Crusher"
+            imported.append(True)
+            workbook.close()
+            return ["PROJECT_TEXTS_IMPORTED|Success|", "PROJECT_SAVED|Project"]
+        raise AssertionError("Unexpected adapter command " + args[0])
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    monkeypatch.setattr(
+        translation,
+        "_translate_texts",
+        lambda texts, target: {
+            "Zmiana": "Shift", "Zgniatarka": "Crusher",
+        },
+    )
+    response = client.post(
+        "/api/v1/tia/hmis/translate-texts",
+        json={
+            "process_id": 13940,
+            "device_name": "Unknown_inventory_device",
+            "hmi_name": "HMI_RT_1",
+            "view_path_root": "HMI_00_Main",
+            "source_culture": "en-US",
+            "target_culture": "de-DE",
+        },
+    )
+    assert response.status_code == 200
+    assert imported
+    assert response.json()["translated_rows"] == 2
+    assert commands == [
+        "add-project-language",
+        "export-project-texts",
+        "import-project-texts",
+    ]
