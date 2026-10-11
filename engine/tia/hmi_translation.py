@@ -13,6 +13,8 @@ from engine.tia.adapter import read_project_saved
 from engine.tia.compat import run_adapter
 from engine.tia.models import (
     HmiProjectTextPreviewRow,
+    HmiProjectTextRoot,
+    HmiProjectTextSheetDiagnostic,
     HmiProjectTextsPreviewResponse,
     TranslateHmiTextsRequest,
     TranslateHmiTextsResponse,
@@ -25,38 +27,73 @@ load_dotenv()
 router = APIRouter()
 
 
-def _project_text_columns(worksheet):
-    # Read-only XLSX exports may not have worksheet dimensions.
-    # Iterate over actual rows rather than relying on max_row.
+def _project_text_columns(worksheet, source_culture=None, target_culture=None):
+    # Siemens TIA V21: Category | ViewPath | Internal ID |
+    # Substitutions | en-US* | de-DE | ref="0" ...
+    # Older/other layouts may use Category and Reference at the end.
     for row_index, row in enumerate(
         worksheet.iter_rows(min_row=1, max_row=50, values_only=True),
         start=1,
     ):
-        values = {
-            str(value).strip().casefold(): column
-            for column, value in enumerate(row, start=1)
+        names = {
+            str(value).strip().casefold(): index
+            for index, value in enumerate(row, start=1)
             if value is not None
         }
-
-        category_column = values.get("category")
-        reference_column = values.get("reference")
-
-        if (
-            category_column is None
-            or reference_column is None
-            or category_column < 3
-        ):
+        category_col = names.get("category")
+        reference_col = names.get("viewpath") or names.get("reference")
+        if category_col is None or reference_col is None:
             continue
 
-        return (
-            row_index,
-            category_column - 2,
-            category_column - 1,
-            category_column,
-            reference_column,
-        )
+        if "viewpath" in names:
+            source = (source_culture or "").strip().casefold()
+            target = (target_culture or "").strip().casefold()
+            source_col = names.get(source + "*") if source else None
+            if source_col is None and source:
+                source_col = names.get(source)
+            if source_col is None:
+                source_col = next(
+                    (index for index, value in enumerate(row, start=1)
+                     if isinstance(value, str) and value.strip().endswith("*")
+                     and index > names["substitutions"]),
+                    None,
+                ) if "substitutions" in names else None
 
+            target_col = names.get(target) if target else None
+            if target_col is None and source:
+                # In exports made before the target was enabled, TIA can
+                # return source* and source as the two language columns.
+                target_col = next(
+                    (index for index, value in enumerate(row, start=1)
+                     if index != source_col
+                     and isinstance(value, str)
+                     and value.strip().casefold() == source),
+                    None,
+                )
+            if target_col is None and source_col is not None:
+                # The next language column is adjacent to the source in
+                # the two-language ExportProjectTexts XLSX format.
+                possible = source_col + 1
+                if possible <= len(row) and isinstance(row[possible - 1], str):
+                    name = row[possible - 1].strip()
+                    if name and not name.startswith('ref="'):
+                        target_col = possible
+
+            if source_col and target_col and source_col != target_col:
+                return (
+                    row_index, source_col, target_col,
+                    category_col, reference_col,
+                )
+            continue
+
+        # Previous workbook layout: languages precede Category, Reference.
+        if category_col >= 3:
+            return (
+                row_index, category_col - 2, category_col - 1,
+                category_col, reference_col,
+            )
     return None
+
 
 
 def _canonical_reference_part(
@@ -115,51 +152,30 @@ def _segment_matches_target(
     ].isalnum()
 
 
+def _view_path_root(reference) -> str:
+    parts = str(reference or "").replace("/", "\\\\").split("\\\\")
+    return parts[1].strip() if len(parts) >= 2 else ""
+
+
 def _reference_matches_hmi(
     reference,
     device_name: str,
     hmi_name: str,
+    view_path_root: str | None = None,
 ) -> bool:
-    text = str(
-        reference
-        or
-        ""
-    ).replace(
-        "/",
-        "\\",
+    # Match the actual device/root of ViewPath, never arbitrary nested
+    # screen or object names that might coincide with another HMI.
+    root = _canonical_reference_part(_view_path_root(reference))
+    targets = (
+        [view_path_root]
+        if view_path_root
+        else [device_name, hmi_name]
+    )
+    return any(
+        _segment_matches_target(root, _canonical_reference_part(name))
+        for name in targets if name
     )
 
-    segments = [
-        _canonical_reference_part(
-            segment
-        )
-        for segment
-        in text.split(
-            "\\"
-        )
-        if str(
-            segment
-        ).strip()
-    ]
-
-    targets = {
-        _canonical_reference_part(
-            device_name
-        ),
-        _canonical_reference_part(
-            hmi_name
-        ),
-    }
-
-    for segment in segments:
-        for target in targets:
-            if _segment_matches_target(
-                segment,
-                target,
-            ):
-                return True
-
-    return False
 
 
 def _output_text(response_data) -> str:
@@ -355,59 +371,76 @@ def _translate_texts(
 
 
 def _preview_workbook(workbook, request):
+    from collections import Counter
+
     matched_rows = []
     unmatched_rows = []
     references = []
     reference_set = set()
+    roots = Counter()
+    diagnostics = []
     total = 0
     matched = 0
     headers = ("", "")
     sheets_found = 0
 
     for worksheet in workbook.worksheets:
-        # TIA exports can have missing or inaccurate worksheet dimensions.
-        # ReadOnlyWorksheet.reset_dimensions() allows iter_rows() to scan
-        # the actual XML records even when max_row/max_column are unknown.
         if hasattr(worksheet, "reset_dimensions"):
             worksheet.reset_dimensions()
 
-        columns = _project_text_columns(worksheet)
+        # Capture raw structure even when no expected column headers exist.
+        sample = []
+        for index, row in enumerate(
+            worksheet.iter_rows(min_row=1, max_row=5, values_only=True),
+            start=1,
+        ):
+            sample.append(
+                str(index) + ": " + " | ".join(
+                    str(value or "")[:100] for value in row[:6]
+                )
+            )
+
+        columns = _project_text_columns(
+            worksheet, request.source_culture, request.target_culture,
+        )
+        diagnostics.append(
+            HmiProjectTextSheetDiagnostic(
+                sheet_name=worksheet.title,
+                declared_rows=worksheet.max_row,
+                declared_columns=worksheet.max_column,
+                sample_rows=sample,
+            )
+        )
         if columns is None:
             continue
 
         sheets_found += 1
         header_row, source_col, target_col, category_col, reference_col = columns
 
+        head = next(
+            worksheet.iter_rows(
+                min_row=header_row, max_row=header_row, values_only=True
+            ), (),
+        )
         if not headers[0]:
-            header_values = next(
-                worksheet.iter_rows(
-                    min_row=header_row,
-                    max_row=header_row,
-                    values_only=True,
-                ),
-                (),
-            )
             headers = (
-                str(header_values[source_col - 1] or "")
-                if len(header_values) >= source_col else "",
-                str(header_values[target_col - 1] or "")
-                if len(header_values) >= target_col else "",
+                str(head[source_col - 1] or "")
+                if len(head) >= source_col else "",
+                str(head[target_col - 1] or "")
+                if len(head) >= target_col else "",
             )
 
         for index, row in enumerate(
             worksheet.iter_rows(min_row=header_row + 1, values_only=True),
             start=header_row + 1,
         ):
-            def value_at(column):
+            def cell_value(column):
                 return row[column - 1] if len(row) >= column else None
 
-            source = value_at(source_col)
-            reference = str(value_at(reference_col) or "").strip()
-            if (
-                reference
-                and len(references) < 50
-                and reference not in reference_set
-            ):
+            source = cell_value(source_col)
+            reference = str(cell_value(reference_col) or "").strip()
+            category = str(cell_value(category_col) or "")
+            if reference and len(references) < 50 and reference not in reference_set:
                 reference_set.add(reference)
                 references.append(reference)
 
@@ -415,21 +448,27 @@ def _preview_workbook(workbook, request):
                 continue
 
             total += 1
+            if "viewpath" in str(head[reference_col - 1]).casefold():
+                root = _view_path_root(reference)
+                if root and category.casefold().startswith("<hmi"):
+                    roots[root] += 1
+
             matches = _reference_matches_hmi(
-                reference, request.device_name, request.hmi_name
+                reference, request.device_name, request.hmi_name,
+                request.view_path_root,
             )
             if matches:
                 matched += 1
 
-            preview_rows = matched_rows if matches else unmatched_rows
-            if len(preview_rows) < 50:
-                preview_rows.append(
+            dest = matched_rows if matches else unmatched_rows
+            if len(dest) < 50:
+                dest.append(
                     HmiProjectTextPreviewRow(
                         sheet=worksheet.title,
                         row=index,
                         source_text=str(source),
-                        target_text=str(value_at(target_col) or ""),
-                        category=str(value_at(category_col) or ""),
+                        target_text=str(cell_value(target_col) or ""),
+                        category=category,
                         reference=reference,
                         matches_hmi=matches,
                     )
@@ -443,6 +482,12 @@ def _preview_workbook(workbook, request):
         source_column_header=headers[0],
         target_column_header=headers[1],
         worksheets_found=sheets_found,
+        worksheet_count=len(workbook.worksheets),
+        sheet_diagnostics=diagnostics,
+        view_path_roots=[
+            HmiProjectTextRoot(root=name, rows=count)
+            for name, count in roots.most_common(50)
+        ],
         total_text_rows=total,
         matched_text_rows=matched,
         reference_examples=references,
