@@ -517,23 +517,59 @@ summary {
 }
 
 .plc-resources-cell {
-    min-width: 265px;
+    min-width: 180px;
 }
 
-.plc-resource-primary {
+.plc-resource-details {
+    min-width: 160px;
+}
+
+.plc-resource-details summary {
+    width: fit-content;
+    cursor: pointer;
+    color: #355f82;
+    font-size: 13px;
     font-weight: 600;
-    white-space: nowrap;
+    user-select: none;
 }
 
-.plc-resource-secondary {
-    margin-top: 4px;
-    color: #6c7680;
-    font-size: 12px;
-    white-space: nowrap;
+.plc-resource-details[open] summary {
+    margin-bottom: 10px;
 }
 
-.tia-runtime-note {
-    margin-top: 10px;
+.plc-resource-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(72px, 1fr));
+    gap: 8px;
+    min-width: 210px;
+}
+
+.plc-resource-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 8px;
+    border: 1px solid #d8dde2;
+    border-radius: 5px;
+    background: #f7f9fa;
+}
+
+.plc-resource-label {
+    color: #6b747c;
+    font-size: 11px;
+}
+
+.plc-resource-value {
+    color: #26343f;
+    font-size: 13px;
+}
+
+.plc-resource-note {
+    max-width: 260px;
+    margin: 9px 0 0;
+    color: #78818a;
+    font-size: 11px;
+    line-height: 1.35;
 }
 
 
