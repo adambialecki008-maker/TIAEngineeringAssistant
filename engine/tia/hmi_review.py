@@ -467,11 +467,18 @@ def import_reviewed_hmi_translations(request: ImportReviewRequest):
                 parts = line.split("|", 2)
                 import_state = parts[1] if len(parts) > 1 else ""
                 import_log = parts[2] if len(parts) > 2 else ""
-        if import_state.casefold() not in ("success", "succeeded"):
+        # ProjectTextResultState.Info is a non-error result from TIA
+        # Openness, not a failed import. It still requires a fresh XLSX
+        # export and exact verification of every approved target cell below.
+        # Warning/Error/unknown states remain blocked.
+        accepted_states = {"success", "succeeded", "ok", "info", "information"}
+        if import_state.strip().casefold() not in accepted_states:
             raise HTTPException(
-                502, "TIA import did not confirm success: "
+                502, "TIA import returned a non-confirmed state: "
                 + (import_state or "missing status")
-                + ". Log: " + (import_log or "not available")
+                + ". Review the XML log: " + (import_log or "not available")
+                + ". Import may have partially changed TIA; check the "
+                + "current project texts before retrying."
             )
     finally:
         path.unlink(missing_ok=True)
@@ -499,7 +506,8 @@ def import_reviewed_hmi_translations(request: ImportReviewRequest):
     if mismatches:
         raise HTTPException(
             502,
-            "TIA reported import success but verification failed for "
+            "TIA import returned " + import_state
+            + " but re-export verification failed for "
             + str(len(mismatches)) + " row(s). First: "
             + mismatches[0][:180] + ". Import log: "
             + (import_log or "not available")
