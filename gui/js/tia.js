@@ -262,10 +262,6 @@ export function initTiaUi(
         document.getElementById(
             "tia-plc-program-blocks-body"
         );
-    const plcDataBlocksBody =
-        document.getElementById("tia-plc-data-blocks-body");
-    const plcDataBlocksSummary =
-        document.getElementById("tia-plc-data-blocks-summary");
 
     const plcProgramBlocksKindFilter =
         document.getElementById(
@@ -4531,10 +4527,6 @@ export function initTiaUi(
 
 
         renderEmptyProgramBlocks(message);
-        renderEmptyProgramBlocks(message, plcDataBlocksBody);
-        if (plcDataBlocksSummary) {
-            plcDataBlocksSummary.textContent = "Data blocks (DB)";
-        }
 
         resetPlcProgramBlockDetail();
     }
@@ -4650,11 +4642,12 @@ export function initTiaUi(
 
 
     function renderPlcProgramBlocks(blocks) {
-        if (!plcProgramBlocksBody || !plcDataBlocksBody) {
+        if (!plcProgramBlocksBody) {
             return;
         }
-        const programBlocks = blocks.filter(block => block.kind !== "DB");
-        const dataBlocks = blocks.filter(block => block.kind === "DB");
+        const programBlocks = blocks.filter(
+            block => ["OB", "FC", "FB"].includes(block.kind)
+        );
         const kindFilter = plcProgramBlocksKindFilter?.value || "";
         const visible = programBlocks.filter(
             block => !kindFilter || block.kind === kindFilter
@@ -4665,12 +4658,7 @@ export function initTiaUi(
                 "Program blocks (" + visible.length + " / "
                 + programBlocks.length + ")";
         }
-        if (plcDataBlocksSummary) {
-            plcDataBlocksSummary.textContent =
-                "Data blocks (" + dataBlocks.length + ")";
-        }
         renderPlcBlockRows(visible, plcProgramBlocksBody);
-        renderPlcBlockRows(dataBlocks, plcDataBlocksBody);
     }
 
 
@@ -4714,7 +4702,7 @@ export function initTiaUi(
         }
 
         setPlcProgramBlockDetailStatus(
-            "Select a program block or data block."
+            "Select a program block."
         );
     }
 
@@ -4950,7 +4938,7 @@ export function initTiaUi(
             return;
         }
 
-        // Detail appears ABOVE both potentially long block inventories.
+        // Detail appears ABOVE the potentially long program inventory.
         // Move to it immediately so Inspect always produces visible feedback.
         plcProgramBlockDetail.classList.remove("hidden");
         plcProgramBlockDetailTitle.textContent =
@@ -4962,9 +4950,7 @@ export function initTiaUi(
         });
         setPlcProgramBlockDetailStatus(
             "Loading " + block.kind + " " + block.name
-            + (block.kind === "DB"
-                ? " structure via TIA Openness..."
-                : " interface via TIA Openness...")
+            + " interface via TIA Openness..."
         );
 
         const query = new URLSearchParams({
@@ -4975,21 +4961,9 @@ export function initTiaUi(
             name: block.name,
         });
         try {
-            let detail;
-            if (block.kind === "DB") {
-                // DBs are data structures, not executable OB/FB/FC blocks.
-                // Use the existing structure export/parser, never the
-                // executable block exporter.
-                query.set("kind", "db");
-                const structure = await getJson(
-                    "/api/v1/tia/plc-structure?" + query.toString()
-                );
-                detail = { ...block, members: structure.members || [] };
-            } else {
-                detail = await getJson(
-                    "/api/v1/tia/plc-program-block?" + query.toString()
-                );
-            }
+            const detail = await getJson(
+                "/api/v1/tia/plc-program-block?" + query.toString()
+            );
             renderPlcProgramBlockDetail(detail);
         } catch (error) {
             // Preserve the read-only inventory metadata even if TIA refuses
@@ -5062,6 +5036,7 @@ export function initTiaUi(
 
                     plc_name:
                         target.plc_name,
+                    program_only: "true",
                 });
 
 
@@ -5110,7 +5085,6 @@ export function initTiaUi(
                     "OB",
                     "FC",
                     "FB",
-                    "DB",
                 ]
                 .filter(
                     kind =>
@@ -5126,7 +5100,7 @@ export function initTiaUi(
 
 
             setPlcProgramBlocksStatus(
-                `${blocks.length} block(s) read from ${target.plc_name}`
+                `${blocks.length} program block(s) read from ${target.plc_name}`
                 +
                 (
                     breakdown
