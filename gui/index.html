@@ -53,7 +53,7 @@
             data-tab="project"
             type="button"
         >
-            Project
+            Overview
         </button>
 
         <button
@@ -109,71 +109,85 @@
             <div class="panel-header">
                 <div>
                     <h2>
-                        Project settings
+                        Project overview
                     </h2>
 
                     <p class="panel-description">
-                        Global configuration used by the generator.
+                        Current TIA Portal project and active engineering target.
                     </p>
                 </div>
             </div>
 
 
-            <div class="card">
+            <div class="overview-grid">
 
-                <div class="form-row">
+                <div class="card overview-card">
+                    <div class="overview-label">
+                        TIA project
+                    </div>
 
-                    <label for="plc-family">
-                        PLC family:
-                    </label>
-
-                    <select id="plc-family">
-
-                        <option value="">
-                            Select PLC
-                        </option>
-
-                        <option value="S7-1200">
-                            S7-1200
-                        </option>
-
-                        <option value="S7-1200-G2">
-                            S7-1200 G2
-                        </option>
-
-                        <option value="S7-1500">
-                            S7-1500
-                        </option>
-
-                    </select>
-
+                    <div
+                        id="overview-project-name"
+                        class="overview-value"
+                    >
+                        Not connected
+                    </div>
                 </div>
 
-                <p class="hint">
-                    Available data types depend on the selected PLC family.
-                </p>
+
+                <div class="card overview-card">
+                    <div class="overview-label">
+                        Active PLC
+                    </div>
+
+                    <div
+                        id="project-active-plc"
+                        class="overview-value"
+                    >
+                        Not selected
+                    </div>
+                </div>
+
+
+                <div class="card overview-card">
+                    <div class="overview-label">
+                        Device
+                    </div>
+
+                    <div
+                        id="overview-device-name"
+                        class="overview-value"
+                    >
+                        Not selected
+                    </div>
+                </div>
+
+
+                <div class="card overview-card">
+                    <div class="overview-label">
+                        PLC family
+                    </div>
+
+                    <div
+                        id="overview-plc-family"
+                        class="overview-value"
+                    >
+                        Not selected
+                    </div>
+                </div>
 
             </div>
 
 
             <div class="card">
-
                 <h3>
-                    Active TIA target
+                    Engineering context
                 </h3>
 
-                <p
-                    id="project-active-plc"
-                    class="target-summary"
-                >
-                    No PLC selected.
-                </p>
-
                 <p class="hint">
-                    Select an existing PLC in the TIA Portal tab.
-                    The selected target will later be used for source import.
+                    Select the TIA process and Active PLC in the TIA Portal tab.
+                    PLC family is configured there as part of the PLC context.
                 </p>
-
             </div>
 
         </section>
@@ -233,6 +247,69 @@
                         </option>
 
                     </select>
+
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            PLC context
+                        </h3>
+
+                        <p class="hint">
+                            Project detected from the selected TIA Portal process.
+                            PLC family controls generator data types and Hardware Catalog filtering.
+                        </p>
+                    </div>
+                </div>
+
+
+                <div class="form-grid">
+
+                    <div class="field-group">
+                        <label>
+                            TIA project:
+                        </label>
+
+                        <div
+                            id="tia-project-name"
+                            class="read-only-value"
+                        >
+                            Not connected
+                        </div>
+                    </div>
+
+
+                    <div class="field-group">
+                        <label for="plc-family">
+                            PLC family:
+                        </label>
+
+                        <select id="plc-family">
+
+                            <option value="">
+                                Select PLC
+                            </option>
+
+                            <option value="S7-1200">
+                                S7-1200
+                            </option>
+
+                            <option value="S7-1200-G2">
+                                S7-1200 G2
+                            </option>
+
+                            <option value="S7-1500">
+                                S7-1500
+                            </option>
+
+                        </select>
+                    </div>
 
                 </div>
 
