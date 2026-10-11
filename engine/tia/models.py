@@ -310,6 +310,10 @@ class HmiProjectTextsPreviewResponse(BaseModel):
     view_path_roots: list[HmiProjectTextRoot]
     total_text_rows: int
     matched_text_rows: int
+    matched_unique_texts: int
+    matched_eligible_unique_texts: int
+    matched_missing_target_rows: int
+    matched_missing_target_unique_texts: int
     reference_examples: list[str]
     sample_rows: list[HmiProjectTextPreviewRow]
 
