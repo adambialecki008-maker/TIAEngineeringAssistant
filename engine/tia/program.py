@@ -73,6 +73,7 @@ def get_plc_program_blocks(
         min_length=1,
         max_length=128,
     ),
+    program_only: bool = Query(default=False),
 ):
     lines = run_adapter(
         "list-program-blocks",
@@ -81,6 +82,7 @@ def get_plc_program_blocks(
         ),
         device_name.strip(),
         plc_name.strip(),
+        "program-only" if program_only else "all",
     )
 
 
@@ -140,6 +142,9 @@ def get_plc_program_blocks(
             )
         )
 
+
+    if program_only:
+        blocks = [b for b in blocks if b.kind in {"OB", "FC", "FB"}]
 
     blocks.sort(
         key=lambda block: (
