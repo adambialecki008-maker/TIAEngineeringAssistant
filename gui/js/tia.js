@@ -613,7 +613,7 @@ export function initTiaUi(
                 "td"
             );
 
-        cell.colSpan = 4;
+        cell.colSpan = 6;
 
         cell.className =
             "empty-table-cell";
@@ -732,6 +732,79 @@ export function initTiaUi(
                 "—";
 
 
+            const stateCell =
+                document.createElement(
+                    "td"
+                );
+
+            const stateBadge =
+                document.createElement(
+                    "span"
+                );
+
+            stateBadge.className =
+                "plc-state-badge";
+
+            stateBadge.textContent =
+                plc.online_state
+                ||
+                "Unavailable";
+
+            stateBadge.dataset.state =
+                (
+                    plc.online_state
+                    ||
+                    "Unavailable"
+                )
+                .toLowerCase();
+
+            stateCell.appendChild(
+                stateBadge
+            );
+
+
+            const resourcesCell =
+                document.createElement(
+                    "td"
+                );
+
+            resourcesCell.className =
+                "plc-resources-cell";
+
+
+            const resourcesPrimary =
+                document.createElement(
+                    "div"
+                );
+
+            resourcesPrimary.className =
+                "plc-resource-primary";
+
+            resourcesPrimary.textContent =
+                `Blocks ${plc.block_count ?? 0} · DB ${plc.data_block_count ?? 0} · UDT ${plc.udt_count ?? 0}`;
+
+
+            const resourcesSecondary =
+                document.createElement(
+                    "div"
+                );
+
+            resourcesSecondary.className =
+                "plc-resource-secondary";
+
+            resourcesSecondary.textContent =
+                `Tags ${plc.tag_count ?? 0} · Cycle — · Live memory —`;
+
+            resourcesSecondary.title =
+                "Cycle time and live memory usage require an online runtime diagnostics connection.";
+
+
+            resourcesCell.append(
+                resourcesPrimary,
+                resourcesSecondary
+            );
+
+
             const actionsCell =
                 document.createElement(
                     "td"
@@ -790,6 +863,14 @@ export function initTiaUi(
 
             row.appendChild(
                 typeCell
+            );
+
+            row.appendChild(
+                stateCell
+            );
+
+            row.appendChild(
+                resourcesCell
             );
 
             row.appendChild(
