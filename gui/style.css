@@ -1597,3 +1597,90 @@ td {
     font-size: 13px;
     overflow-wrap: anywhere;
 }
+
+/* Four consistent stages in the HMI text workflow: scan, scope,
+   manual review, automatic verified import.  Keep styling local so
+   PLC and the other application controls are not affected. */
+.hmi-translation-batch-controls > h4 {
+    font-size: 17px;
+    line-height: 1.4;
+    margin: 0 0 12px;
+}
+
+.hmi-workflow-step {
+    margin-top: 14px;
+    padding: 16px;
+    border: 1px solid #344957;
+    border-radius: 7px;
+    background: #192630;
+    min-width: 0;
+}
+
+.hmi-workflow-step .hmi-step-heading {
+    display: block;
+    margin: 0 0 10px;
+    padding: 0;
+    color: #f0f5f9;
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.hmi-workflow-step .hint,
+.hmi-workflow-step p:not(.status-box):not(.hmi-batch-plan) {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.hmi-workflow-step .field-group > label {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.hmi-workflow-step button {
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.25;
+}
+
+.hmi-workflow-step .action-row {
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.hmi-workflow-step .hmi-translation-actions {
+    margin-bottom: 12px;
+}
+
+.hmi-scope-step .hmi-translation-grid {
+    margin-top: 10px;
+}
+
+.hmi-manual-step .hmi-action-status {
+    margin: 0;
+    font-size: 13px;
+}
+
+.hmi-workflow-step.hmi-batch-panel {
+    margin: 14px 0 20px;
+}
+
+.hmi-workflow-step .hmi-batch-plan {
+    font-size: 14px;
+}
+
+.hmi-workflow-step .hmi-batch-progress-caption {
+    font-size: 14px;
+}
+
+@media (max-width: 620px) {
+    .hmi-workflow-step {
+        padding: 12px;
+    }
+    .hmi-workflow-step .hmi-translation-actions button {
+        flex: 1 1 180px;
+    }
+}
