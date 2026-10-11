@@ -22,7 +22,9 @@ from engine.tia.hmi_translation import (
     _translate_texts,
 )
 from engine.tia.models import TranslateHmiTextsRequest
-from engine.tia.ollama_translation import list_ollama_models, resolve_ollama_model
+from engine.tia.ollama_translation import (
+    list_ollama_models, resolve_ollama_model, translation_batch_size,
+)
 
 router = APIRouter()
 
@@ -213,7 +215,12 @@ def get_hmi_translation_models():
     except HTTPException as exc:
         if exc.status_code not in (422, 503):
             raise
-    return {"provider": "ollama", "models": names, "selected_model": selected}
+    return {
+        "provider": "ollama",
+        "models": names,
+        "selected_model": selected,
+        "request_batch_size": translation_batch_size(),
+    }
 
 
 @router.post(
