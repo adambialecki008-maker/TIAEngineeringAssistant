@@ -893,38 +893,148 @@ export function initTiaUi(
                 "plc-resources-cell";
 
 
-            const resourcesPrimary =
+            const resourcesDetails =
+                document.createElement(
+                    "details"
+                );
+
+            resourcesDetails.className =
+                "plc-resource-details";
+
+
+            const resourcesSummary =
+                document.createElement(
+                    "summary"
+                );
+
+            resourcesSummary.textContent =
+                "View resources";
+
+
+            const resourcesGrid =
                 document.createElement(
                     "div"
                 );
 
-            resourcesPrimary.className =
-                "plc-resource-primary";
-
-            resourcesPrimary.textContent =
-                `Blocks ${plc.block_count ?? 0} · DB ${plc.data_block_count ?? 0} · UDT ${plc.udt_count ?? 0}`;
+            resourcesGrid.className =
+                "plc-resource-grid";
 
 
-            const resourcesSecondary =
-                document.createElement(
-                    "div"
+            const resourceItems = [
+                [
+                    "Blocks",
+                    plc.block_count
+                    ??
+                    0,
+                ],
+
+                [
+                    "DB",
+                    plc.data_block_count
+                    ??
+                    0,
+                ],
+
+                [
+                    "UDT",
+                    plc.udt_count
+                    ??
+                    0,
+                ],
+
+                [
+                    "Tags",
+                    plc.tag_count
+                    ??
+                    0,
+                ],
+
+                [
+                    "Cycle",
+                    "—",
+                ],
+
+                [
+                    "Live memory",
+                    "—",
+                ],
+            ];
+
+
+            for (
+                const [
+                    label,
+                    value,
+                ]
+                of resourceItems
+            ) {
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+                item.className =
+                    "plc-resource-item";
+
+
+                const labelElement =
+                    document.createElement(
+                        "span"
+                    );
+
+                labelElement.className =
+                    "plc-resource-label";
+
+                labelElement.textContent =
+                    label;
+
+
+                const valueElement =
+                    document.createElement(
+                        "strong"
+                    );
+
+                valueElement.className =
+                    "plc-resource-value";
+
+                valueElement.textContent =
+                    String(
+                        value
+                    );
+
+
+                item.append(
+                    labelElement,
+                    valueElement
                 );
 
-            resourcesSecondary.className =
-                "plc-resource-secondary";
-
-            resourcesSecondary.textContent =
-                `Tags ${plc.tag_count ?? 0} · Cycle — · Live memory —`;
-
-            resourcesSecondary.title =
-                "Cycle time and live memory usage require an online runtime diagnostics connection.";
+                resourcesGrid.appendChild(
+                    item
+                );
+            }
 
 
-            resourcesCell.append(
-                resourcesPrimary,
-                resourcesSecondary
+            const resourcesNote =
+                document.createElement(
+                    "p"
+                );
+
+            resourcesNote.className =
+                "plc-resource-note";
+
+            resourcesNote.textContent =
+                "Cycle time and live memory require an online runtime diagnostics connection.";
+
+
+            resourcesDetails.append(
+                resourcesSummary,
+                resourcesGrid,
+                resourcesNote
             );
 
+            resourcesCell.appendChild(
+                resourcesDetails
+            );
 
             const actionsCell =
                 document.createElement(
