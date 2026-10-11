@@ -1329,3 +1329,38 @@ td {
         min-width: 0;
     }
 }
+
+
+
+/* Per-HMI translation */
+
+.hmi-translation-panel {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid #30404d;
+    border-radius: 7px;
+    background: #141b21;
+}
+
+.hmi-translation-grid {
+    grid-template-columns:
+        minmax(260px, 1fr)
+        minmax(260px, 1fr);
+    margin-top: 12px;
+}
+
+.hmi-translation-actions {
+    margin-top: 14px;
+    margin-bottom: 10px;
+}
+
+#tia-hmi-source-language,
+#tia-hmi-target-language {
+    width: 100%;
+}
+
+@media (max-width: 900px) {
+    .hmi-translation-grid {
+        grid-template-columns: 1fr;
+    }
+}
