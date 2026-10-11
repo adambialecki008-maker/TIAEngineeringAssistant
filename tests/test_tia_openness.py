@@ -612,6 +612,119 @@ def test_plc_program_blocks_are_parsed(
     ]
 
 
+def test_plc_program_block_detail_is_parsed(
+    monkeypatch,
+):
+    calls = []
+
+
+    def fake_run_adapter(
+        *arguments,
+    ):
+        calls.append(
+            arguments[:-1]
+        )
+
+        xml_file =
+            arguments[-1]
+
+        with open(
+            xml_file,
+            "w",
+            encoding="utf-8",
+        ) as handle:
+            handle.write(
+                """
+<Document>
+  <SW.Blocks.FB>
+    <AttributeList>
+      <Interface>
+        <Sections>
+          <Section Name="Input">
+            <Member Name="Start" Datatype="Bool" />
+          </Section>
+          <Section Name="Output">
+            <Member Name="Running" Datatype="Bool" />
+          </Section>
+        </Sections>
+      </Interface>
+    </AttributeList>
+  </SW.Blocks.FB>
+</Document>
+""".strip()
+            )
+
+        return [
+            (
+                "PROGRAM_BLOCK_EXPORTED|Process|"
+                "FB_Motor|FB|120|SCL|True|2048|512"
+            ),
+        ]
+
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+
+    response = client.get(
+        "/api/v1/tia/plc-program-block",
+        params={
+            "process_id": 3544,
+            "device_name": "S7-1500 Station_1",
+            "plc_name": "PLC_1",
+            "group_path": "Process",
+            "name": "FB_Motor",
+        },
+    )
+
+
+    assert response.status_code == 200
+
+    assert calls == [
+        (
+            "export-program-block",
+            "3544",
+            "S7-1500 Station_1",
+            "PLC_1",
+            "Process",
+            "FB_Motor",
+        )
+    ]
+
+    data = response.json()
+
+    assert data["name"] == "FB_Motor"
+    assert data["kind"] == "FB"
+    assert data["number"] == 120
+    assert data["programming_language"] == "SCL"
+    assert data["load_memory_bytes"] == 2048
+    assert data["work_memory_bytes"] == 512
+
+    assert data["members"] == [
+        {
+            "section": "Input",
+            "path": "Start",
+            "name": "Start",
+            "data_type": "Bool",
+            "level": 0,
+            "offset": "",
+            "comment": "",
+        },
+        {
+            "section": "Output",
+            "path": "Running",
+            "name": "Running",
+            "data_type": "Bool",
+            "level": 0,
+            "offset": "",
+            "comment": "",
+        },
+    ]
+
+
 def test_plc_structures_are_parsed(
     monkeypatch,
 ):
@@ -1035,4 +1148,94 @@ def test_create_plc_tags_writes_adapter_file(
         "project_saved": (
             "OpennessTests"
         ),
+    }
+
+
+
+def test_project_languages_are_parsed(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        lambda *args: [
+            (
+                "PROJECT_LANGUAGE|en-US|English (United States)|"
+                "English (United States)|True|True|True"
+            ),
+            (
+                "PROJECT_LANGUAGE|de-DE|German (Germany)|"
+                "Deutsch (Deutschland)|False|False|False"
+            ),
+        ],
+    )
+
+
+    response = client.get(
+        "/api/v1/tia/languages",
+        params={
+            "process_id": 3544,
+        },
+    )
+
+
+    assert response.status_code == 200
+
+    assert response.json()[0]["culture"] == "en-US"
+    assert response.json()[0]["is_active"] is True
+    assert response.json()[0]["is_reference"] is True
+
+    assert response.json()[1]["culture"] == "de-DE"
+    assert response.json()[1]["is_active"] is False
+
+
+def test_add_project_language_response(
+    monkeypatch,
+):
+    calls = []
+
+
+    def fake_run_adapter(
+        *arguments,
+    ):
+        calls.append(
+            arguments
+        )
+
+        return [
+            "LANGUAGE_ADDED|de-DE",
+            "PROJECT_SAVED|OpennessTests",
+        ]
+
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+
+    response = client.post(
+        "/api/v1/tia/languages",
+        json={
+            "process_id": 3544,
+            "culture": "de-DE",
+        },
+    )
+
+
+    assert response.status_code == 200
+
+    assert calls == [
+        (
+            "add-project-language",
+            "3544",
+            "de-DE",
+        )
+    ]
+
+    assert response.json() == {
+        "status": "added",
+        "culture": "de-DE",
+        "project_saved": "OpennessTests",
     }
