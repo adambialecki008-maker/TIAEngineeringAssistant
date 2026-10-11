@@ -58,6 +58,9 @@ def adapter_error_status(
         or normalized.startswith("PROGRAM_BLOCK_EXPORT_ARGUMENT_REQUIRED")
         or normalized.startswith("INVALID_CULTURE|")
         or normalized.startswith("LANGUAGE_NOT_SUPPORTED|")
+        or normalized.startswith("INVALID_PROJECT_TEXT_CULTURE")
+        or normalized.startswith("PROJECT_TEXT_LANGUAGES_MUST_DIFFER")
+        or normalized.startswith("PROJECT_TEXT_FILE_NOT_FOUND|")
     ):
         return 422
 
