@@ -179,9 +179,12 @@ def _translate_texts(
     texts: list[str],
     target_culture: str,
     model_name: str | None = None,
+    progress=None,
 ) -> dict[str, str]:
     """Translate exclusively through the local Ollama server."""
-    return translate_ollama_texts(texts, target_culture, model_name)
+    return translate_ollama_texts(
+        texts, target_culture, model_name, progress=progress
+    )
 
 
 def _preview_workbook(workbook, request):
