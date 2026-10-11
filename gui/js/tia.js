@@ -1424,6 +1424,10 @@ export function initTiaUi(
                         : "");
             }
             hmiReviewResults?.classList.remove("hidden");
+            hmiReviewResults?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+            });
             setHmiTranslationStatus(
                 "Translations prepared. TIA project was not changed. "
                 + "Review the Proposed target column, then choose Import reviewed texts.",
