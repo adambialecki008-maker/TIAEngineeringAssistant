@@ -75,6 +75,11 @@ export function initTiaUi(
             "tia-plc-tags-type-filter"
         );
 
+    const plcTagsCategoryFilter =
+        document.getElementById(
+            "tia-plc-tags-category-filter"
+        );
+
     const plcTagsBreakdown =
         document.getElementById(
             "tia-plc-tags-breakdown"
@@ -734,6 +739,11 @@ export function initTiaUi(
 
 
     function resetPlcTagFilters() {
+        if (plcTagsCategoryFilter) {
+            plcTagsCategoryFilter.value = "";
+        }
+
+
         if (plcTagsTableFilter) {
             plcTagsTableFilter.replaceChildren();
 
@@ -899,6 +909,11 @@ export function initTiaUi(
             ??
             "";
 
+        const selectedCategory =
+            plcTagsCategoryFilter?.value
+            ??
+            "";
+
 
         return tags.filter(
             (tag) => {
@@ -911,6 +926,11 @@ export function initTiaUi(
                     tag.data_type
                     ||
                     "(unknown)";
+
+                const category =
+                    plcTagCategory(
+                        tag
+                    );
 
 
                 return (
@@ -929,11 +949,18 @@ export function initTiaUi(
                         ===
                         selectedType
                     )
+                    &&
+                    (
+                        !selectedCategory
+                        ||
+                        category
+                        ===
+                        selectedCategory
+                    )
                 );
             }
         );
     }
-
 
     function sortedPlcTags(
         tags
@@ -1030,9 +1057,66 @@ export function initTiaUi(
             /(^|[\s/_-])f[_-]/i.test(
                 text
             )
+            ||
+            /(^|[\s/_-])(fdi|fdq)(?=$|[\s/_-]|\d)/i.test(
+                text
+            )
         );
     }
 
+
+    function plcTagCategory(
+        tag
+    ) {
+        if (
+            isSafetyTag(
+                tag
+            )
+        ) {
+            return "safety";
+        }
+
+
+        const address =
+            String(
+                tag.logical_address
+                ??
+                ""
+            )
+            .replace(
+                /\s+/g,
+                ""
+            )
+            .toUpperCase();
+
+
+        if (/^%IW\d+$/.test(address)) {
+            return "iw";
+        }
+
+        if (/^%QW\d+$/.test(address)) {
+            return "qw";
+        }
+
+        if (
+            /^%I(?:B)?\d+(?:\.\d+)?$/.test(
+                address
+            )
+        ) {
+            return "input";
+        }
+
+        if (
+            /^%Q(?:B)?\d+(?:\.\d+)?$/.test(
+                address
+            )
+        ) {
+            return "output";
+        }
+
+
+        return "other";
+    }
 
     function classifyPlcTags(
         tags
@@ -1065,54 +1149,34 @@ export function initTiaUi(
             const tag
             of tags
         ) {
-            if (
-                isSafetyTag(
+            const category =
+                plcTagCategory(
                     tag
-                )
-            ) {
-                counts.safety +=
-                    1;
-
-                continue;
-            }
+                );
 
 
-            const address =
-                String(
-                    tag.logical_address
-                    ??
-                    ""
-                )
-                .replace(
-                    /\s+/g,
-                    ""
-                )
-                .toUpperCase();
-
-
-            if (/^%IW\d+$/.test(address)) {
-                counts.iw += 1;
-
-            } else if (
-                /^%QW\d+$/.test(
-                    address
-                )
-            ) {
-                counts.qw += 1;
-
-            } else if (
-                /^%I(?:B)?\d+(?:\.\d+)?$/.test(
-                    address
-                )
-            ) {
+            if (category === "input") {
                 counts.inputs += 1;
 
             } else if (
-                /^%Q(?:B)?\d+(?:\.\d+)?$/.test(
-                    address
-                )
+                category === "output"
             ) {
                 counts.outputs += 1;
+
+            } else if (
+                category === "safety"
+            ) {
+                counts.safety += 1;
+
+            } else if (
+                category === "iw"
+            ) {
+                counts.iw += 1;
+
+            } else if (
+                category === "qw"
+            ) {
+                counts.qw += 1;
 
             } else {
                 counts.other += 1;
@@ -1122,7 +1186,6 @@ export function initTiaUi(
 
         return counts;
     }
-
 
     function renderPlcTagSummary(
         tags
@@ -2910,6 +2973,17 @@ export function initTiaUi(
 
     if (plcTagsTypeFilter) {
         plcTagsTypeFilter.addEventListener(
+            "change",
+            () =>
+                renderPlcTags(
+                    loadedPlcTags
+                )
+        );
+    }
+
+
+    if (plcTagsCategoryFilter) {
+        plcTagsCategoryFilter.addEventListener(
             "change",
             () =>
                 renderPlcTags(
