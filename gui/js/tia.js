@@ -4714,7 +4714,7 @@ export function initTiaUi(
         }
 
         setPlcProgramBlockDetailStatus(
-            "Select a program block."
+            "Select a program block or data block."
         );
     }
 
@@ -4939,73 +4939,70 @@ export function initTiaUi(
     }
 
 
-    async function readPlcProgramBlockDetail(
-        block
-    ) {
-        const processId =
-            selectedProcessId();
-
-        const target =
-            projectConfig.tia_target;
-
-
-        if (
-            !processId
-            ||
-            !target
-        ) {
+    async function readPlcProgramBlockDetail(block) {
+        const processId = selectedProcessId();
+        const target = projectConfig.tia_target;
+        if (!processId || !target || !plcProgramBlockDetail) {
+            setPlcProgramBlocksStatus(
+                "Select an Active PLC and a TIA process before inspecting blocks.",
+                "error"
+            );
             return;
         }
 
-
-        plcProgramBlockDetail.classList.remove(
-            "hidden"
-        );
-
+        // Detail appears ABOVE both potentially long block inventories.
+        // Move to it immediately so Inspect always produces visible feedback.
+        plcProgramBlockDetail.classList.remove("hidden");
+        plcProgramBlockDetailTitle.textContent =
+            (block.kind || "Block") + " " + block.name;
+        plcProgramBlockDetailBody?.replaceChildren();
+        plcProgramBlockDetailMeta?.replaceChildren();
+        plcProgramBlockDetail.scrollIntoView({
+            behavior: "smooth", block: "start"
+        });
         setPlcProgramBlockDetailStatus(
-            `Exporting ${block.name} from TIA Portal...`
+            "Loading " + block.kind + " " + block.name
+            + (block.kind === "DB"
+                ? " structure via TIA Openness..."
+                : " interface via TIA Openness...")
         );
 
-
+        const query = new URLSearchParams({
+            process_id: String(processId),
+            device_name: target.device_name,
+            plc_name: target.plc_name,
+            group_path: block.group_path || "",
+            name: block.name,
+        });
         try {
-            const query =
-                new URLSearchParams({
-                    process_id:
-                        String(
-                            processId
-                        ),
-
-                    device_name:
-                        target.device_name,
-
-                    plc_name:
-                        target.plc_name,
-
-                    group_path:
-                        block.group_path
-                        ||
-                        "",
-
-                    name:
-                        block.name,
-                });
-
-
-            const detail =
-                await getJson(
-                    "/api/v1/tia/plc-program-block?"
-                    +
-                    query.toString()
+            let detail;
+            if (block.kind === "DB") {
+                // DBs are data structures, not executable OB/FB/FC blocks.
+                // Use the existing structure export/parser, never the
+                // executable block exporter.
+                query.set("kind", "db");
+                const structure = await getJson(
+                    "/api/v1/tia/plc-structure?" + query.toString()
                 );
-
-
-            renderPlcProgramBlockDetail(
-                detail
-            );
-
+                detail = { ...block, members: structure.members || [] };
+            } else {
+                detail = await getJson(
+                    "/api/v1/tia/plc-program-block?" + query.toString()
+                );
+            }
+            renderPlcProgramBlockDetail(detail);
         } catch (error) {
+            // Preserve the read-only inventory metadata even if TIA refuses
+            // XML export (e.g. inconsistent blocks/UDTs). Never imply a
+            // successful structure/interface read in that situation.
+            renderPlcProgramBlockDetail({ ...block, members: [] });
             setPlcProgramBlockDetailStatus(
-                error.message,
+                "Cannot export " + block.kind + " " + block.name + ": "
+                + error.message
+                + (block.is_consistent === false
+                    ? " The block is marked inconsistent in TIA. Compile/check"
+                        + " the PLC blocks and UDTs in TIA before retrying."
+                    : ""),
                 "error"
             );
         }
