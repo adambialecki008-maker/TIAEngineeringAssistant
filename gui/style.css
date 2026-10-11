@@ -864,3 +864,301 @@ summary {
     font-family: Consolas, "Courier New", monospace;
     font-size: 12px;
 }
+
+
+/* Dark theme */
+
+:root {
+    color-scheme: dark;
+    background: #0f1318;
+    color: #e6edf3;
+}
+
+body {
+    background: #0f1318;
+    color: #e6edf3;
+}
+
+.app-header,
+.tab-bar {
+    border-color: #303842;
+    background: #14191f;
+}
+
+.app-subtitle,
+.panel-description,
+.hint,
+.overview-label,
+.empty-message,
+.empty-table-cell,
+.type-cell,
+.plc-resource-note,
+#hardware-items-body td:last-child {
+    color: #8f9ba7;
+}
+
+.active-plc-summary,
+.target-summary,
+.read-only-value,
+.manual-selection,
+.status-box {
+    border-color: #303a45;
+    background: #1a2027;
+    color: #dce5ec;
+}
+
+.card {
+    border-color: #2c343d;
+    background: #171c22;
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.28),
+        0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.overview-value {
+    color: #f0f5f9;
+}
+
+button {
+    border-color: #3a4550;
+    background: #222932;
+    color: #dfe7ed;
+}
+
+button:hover:not(:disabled) {
+    border-color: #4b5966;
+    background: #2a333d;
+}
+
+button:disabled {
+    color: #77828c;
+    opacity: 0.55;
+}
+
+.primary-button {
+    border-color: #347fa8;
+    background: #28688c;
+    color: #ffffff;
+}
+
+.primary-button:hover:not(:disabled) {
+    border-color: #4593bc;
+    background: #327ba2;
+}
+
+.danger-button {
+    border-color: #8b464b;
+    background: #2a1d20;
+    color: #ef9da2;
+}
+
+.danger-button:hover:not(:disabled) {
+    border-color: #a9555b;
+    background: #3a2327;
+}
+
+input,
+select {
+    border-color: #37414c;
+    background: #11161c;
+    color: #e3eaf0;
+}
+
+input::placeholder {
+    color: #707b85;
+}
+
+option {
+    background: #151b21;
+    color: #e3eaf0;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+    outline-color: #4f91ba;
+}
+
+.tab-button {
+    color: #aeb9c3;
+}
+
+.tab-button:hover:not(:disabled) {
+    background: #1b2229;
+    color: #e7edf2;
+}
+
+.tab-button.active {
+    border-bottom-color: #4f9ac5;
+    color: #f2f6f9;
+}
+
+details {
+    border-color: #303944;
+    background: #141a20;
+}
+
+summary {
+    background: #1c232b;
+    color: #dce5ec;
+}
+
+summary:hover {
+    background: #222b34;
+}
+
+th,
+td {
+    border-bottom-color: #2d3640;
+}
+
+th {
+    background: #1b2229;
+    color: #cbd5dd;
+}
+
+td {
+    color: #d8e0e6;
+}
+
+.management-table tbody tr:hover {
+    background: #1b242c;
+}
+
+.management-table tbody tr.selected-row {
+    background: #173247;
+}
+
+.source-preview,
+.device-config-preview {
+    border-color: #303a44;
+    background: #0b0f13;
+    color: #d9e2e8;
+}
+
+.status-box.error {
+    border-color: #704247;
+    background: #2b1b1f;
+    color: #f0a0a5;
+}
+
+.status-box.success {
+    border-color: #3e674c;
+    background: #18271e;
+    color: #91d2a2;
+}
+
+.plc-state-badge {
+    border-color: #3b4650;
+    background: #20272e;
+    color: #b9c4cc;
+}
+
+.plc-state-badge[data-state="online"] {
+    border-color: #3c7250;
+    background: #17291d;
+    color: #8dd2a0;
+}
+
+.plc-state-badge[data-state="offline"] {
+    border-color: #454e57;
+    background: #20262c;
+    color: #aeb8c0;
+}
+
+.plc-state-badge[data-state="notreachable"],
+.plc-state-badge[data-state="not reachable"],
+.plc-state-badge[data-state="incompatible"],
+.plc-state-badge[data-state="protected"] {
+    border-color: #75474b;
+    background: #2c1c20;
+    color: #eda0a4;
+}
+
+.plc-resource-details summary {
+    color: #76b6dc;
+}
+
+.plc-resource-counter {
+    border-color: #313b45;
+    background: #1b2229;
+}
+
+.plc-resource-counter span {
+    color: #8d99a4;
+}
+
+.plc-resource-counter strong {
+    color: #edf2f6;
+}
+
+.plc-resource-table {
+    border-color: #313b45;
+    background: #141a20;
+}
+
+.plc-resource-table th,
+.plc-resource-table td {
+    border-color: #313b45;
+}
+
+.plc-resource-table th {
+    background: #1e252d;
+    color: #cbd5dd;
+}
+
+.plc-resource-used-row td {
+    background: #202932;
+}
+
+.table-sort-button {
+    color: #cbd5dd;
+}
+
+.table-sort-button:hover,
+.table-sort-button.active {
+    color: #76b6dc;
+}
+
+.tia-tag-summary-table {
+    border-color: #303a45;
+    background: #141a20;
+}
+
+.tia-tag-summary-table th {
+    background: #1c232b;
+    color: #aebac4;
+}
+
+.tia-tag-summary-table td {
+    background: #151b21;
+    color: #edf2f6;
+}
+
+.tia-structure-detail {
+    border-top-color: #303944;
+}
+
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #10151a;
+}
+
+::-webkit-scrollbar-thumb {
+    border: 3px solid #10151a;
+    border-radius: 999px;
+    background: #3b4650;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4b5966;
+}
+
+::selection {
+    background: #285b78;
+    color: #ffffff;
+}
