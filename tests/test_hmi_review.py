@@ -280,3 +280,29 @@ def test_preparation_progress_rejects_bad_identifier():
         "/api/v1/tia/hmis/translation-progress/not-valid",
     )
     assert response.status_code == 400
+
+
+def test_manual_prepare_rejects_unbounded_requests_before_export(monkeypatch):
+    def forbidden(*arguments):
+        raise AssertionError("Invalid manual batch must never export or change TIA")
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", forbidden)
+    for amount in (None, 51):
+        response = client.post(
+            "/api/v1/tia/hmis/prepare-translations",
+            json={**REQUEST, "max_rows": amount},
+        )
+        assert response.status_code == 422, response.text
+        assert "max_rows from 1 to 50" in response.json()["detail"]
+
+
+def test_manual_prepare_uses_requested_batch_size(monkeypatch):
+    _, commands, _ = _setup(monkeypatch)
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations",
+        json={**REQUEST, "max_rows": 1},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["selected_rows"] == 1
+    assert response.json()["unique_texts"] == 1
+    assert commands == ["export-project-texts"]
