@@ -57,6 +57,16 @@ class ProjectPlc(
 
     plc_type_identifier: str = ""
 
+    online_state: str = "Unavailable"
+
+    block_count: int = 0
+
+    data_block_count: int = 0
+
+    udt_count: int = 0
+
+    tag_count: int = 0
+
 
 class TiaProjectInfo(BaseModel):
     project_name: str
@@ -766,6 +776,9 @@ def get_project_context(
     plcs = []
 
 
+    metrics_by_target = {}
+
+
     for line in lines:
         if line.startswith(
             "PROJECT|"
@@ -783,6 +796,54 @@ def get_project_context(
             ):
                 project_name =
                     parts[1].strip()
+
+
+        elif line.startswith(
+            "PLC_METRICS|"
+        ):
+            parts = line.split(
+                "|",
+                7,
+            )
+
+
+            if len(parts) != 8:
+                continue
+
+
+            try:
+                metrics_by_target[
+                    (
+                        parts[1].casefold(),
+                        parts[2].casefold(),
+                    )
+                ] = {
+                    "online_state":
+                        parts[3],
+
+                    "block_count":
+                        int(
+                            parts[4]
+                        ),
+
+                    "data_block_count":
+                        int(
+                            parts[5]
+                        ),
+
+                    "udt_count":
+                        int(
+                            parts[6]
+                        ),
+
+                    "tag_count":
+                        int(
+                            parts[7]
+                        ),
+                }
+
+            except ValueError:
+                continue
 
 
         elif line.startswith(
@@ -806,6 +867,35 @@ def get_project_context(
                     plc_type_identifier=parts[4],
                 )
             )
+
+
+    for plc in plcs:
+        metrics = metrics_by_target.get(
+            (
+                plc.device_name.casefold(),
+                plc.plc_name.casefold(),
+            )
+        )
+
+
+        if not metrics:
+            continue
+
+
+        plc.online_state =
+            metrics["online_state"]
+
+        plc.block_count =
+            metrics["block_count"]
+
+        plc.data_block_count =
+            metrics["data_block_count"]
+
+        plc.udt_count =
+            metrics["udt_count"]
+
+        plc.tag_count =
+            metrics["tag_count"]
 
 
     if not project_name:
