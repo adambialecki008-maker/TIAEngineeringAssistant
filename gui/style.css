@@ -1364,3 +1364,32 @@ td {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* Readable source/current/proposed HMI translation comparison. */
+#tia-hmi-review-results {
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid #30404d;
+}
+#tia-hmi-review-results .table-wrapper {
+    max-width: 100%;
+    overflow-x: auto;
+}
+#tia-hmi-review-results table {
+    min-width: 1040px;
+    table-layout: fixed;
+}
+#tia-hmi-review-results th:nth-child(1),
+#tia-hmi-review-results td:nth-child(1) { width: 19%; }
+#tia-hmi-review-results th:nth-child(2),
+#tia-hmi-review-results td:nth-child(2) { width: 17%; }
+#tia-hmi-review-results th:nth-child(3),
+#tia-hmi-review-results td:nth-child(3) { width: 22%; }
+#tia-hmi-review-results th:nth-child(4),
+#tia-hmi-review-results td:nth-child(4) { width: 42%; }
+#tia-hmi-review-results td {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
