@@ -27,6 +27,8 @@ export function initTiaUi(
         document.getElementById(
             "tia-process"
         );
+    const tiaConnectionStatus =
+        document.getElementById("tia-connection-status");
 
     const refreshPlcsButton =
         document.getElementById(
@@ -493,6 +495,15 @@ export function initTiaUi(
         );
     }
 
+
+    function setTiaConnectionStatus(message, type = "normal") {
+        if (!tiaConnectionStatus) {
+            return;
+        }
+        tiaConnectionStatus.textContent = message;
+        tiaConnectionStatus.classList.toggle("error", type === "error");
+        tiaConnectionStatus.classList.toggle("success", type === "success");
+    }
 
     function selectedProcessId() {
         const value =
@@ -5951,6 +5962,7 @@ export function initTiaUi(
         setStatus(
             "Looking for running TIA Portal V21 processes..."
         );
+        setTiaConnectionStatus("Detecting TIA Portal processes through Openness...");
 
 
         try {
@@ -5958,8 +5970,20 @@ export function initTiaUi(
                 await getJson(
                     "/api/v1/tia/processes"
                 );
+            if (!Array.isArray(processes)) {
+                throw new Error(
+                    "TIA processes API returned an invalid response "
+                    + "(expected a list). Check the backend at "
+                    + "/api/v1/tia/processes."
+                );
+            }
 
-
+            setTiaConnectionStatus(
+                processes.length
+                    ? processes.length + " TIA process(es) detected."
+                    : "No running TIA Portal process was detected.",
+                processes.length ? "success" : "normal"
+            );
             processSelect.replaceChildren();
 
 
@@ -6066,6 +6090,12 @@ export function initTiaUi(
 
             setStatus(
                 error.message,
+                "error"
+            );
+            setTiaConnectionStatus(
+                "TIA process discovery failed: " + error.message
+                + ". Verify that TIA Portal V21 is open, then click Refresh TIA. "
+                + "For the backend error response open /api/v1/tia/processes.",
                 "error"
             );
 
