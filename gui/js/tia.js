@@ -103,9 +103,19 @@ export function initTiaUi(
                 "tia-tag-count-outputs"
             ),
 
-        safety:
+        fdi:
             document.getElementById(
-                "tia-tag-count-safety"
+                "tia-tag-count-fdi"
+            ),
+
+        fdq:
+            document.getElementById(
+                "tia-tag-count-fdq"
+            ),
+
+        safety_other:
+            document.getElementById(
+                "tia-tag-count-safety-other"
             ),
 
         iw:
@@ -960,9 +970,27 @@ export function initTiaUi(
                     (
                         !selectedCategory
                         ||
-                        category
-                        ===
-                        selectedCategory
+                        (
+                            selectedCategory
+                            ===
+                            "safety"
+                                ? (
+                                    category
+                                    ===
+                                    "fdi"
+                                    ||
+                                    category
+                                    ===
+                                    "fdq"
+                                    ||
+                                    category
+                                    ===
+                                    "safety-other"
+                                )
+                                : category
+                                ===
+                                selectedCategory
+                        )
                     )
                 );
             }
@@ -1144,23 +1172,58 @@ export function initTiaUi(
         );
     }
 
+    function tagSafetyText(
+        tag
+    ) {
+        return `${tag.table_path ?? ""} ${tag.name ?? ""}`;
+    }
+
+
+    function isFdiTag(
+        tag
+    ) {
+        return /(^|[\s/_-])fdi(?=$|[\s/_-]|\d)/i.test(
+            tagSafetyText(
+                tag
+            )
+        );
+    }
+
+
+    function isFdqTag(
+        tag
+    ) {
+        return /(^|[\s/_-])fdq(?=$|[\s/_-]|\d)/i.test(
+            tagSafetyText(
+                tag
+            )
+        );
+    }
+
+
     function isSafetyTag(
         tag
     ) {
         const text =
-            `${tag.table_path ?? ""} ${tag.name ?? ""}`;
+            tagSafetyText(
+                tag
+            );
 
 
         return (
+            isFdiTag(
+                tag
+            )
+            ||
+            isFdqTag(
+                tag
+            )
+            ||
             /(^|[\s/_-])(safety|failsafe|safe)([\s/_-]|$)/i.test(
                 text
             )
             ||
             /(^|[\s/_-])f[_-]/i.test(
-                text
-            )
-            ||
-            /(^|[\s/_-])(fdi|fdq)(?=$|[\s/_-]|\d)/i.test(
                 text
             )
         );
@@ -1171,11 +1234,27 @@ export function initTiaUi(
         tag
     ) {
         if (
+            isFdiTag(
+                tag
+            )
+        ) {
+            return "fdi";
+        }
+
+        if (
+            isFdqTag(
+                tag
+            )
+        ) {
+            return "fdq";
+        }
+
+        if (
             isSafetyTag(
                 tag
             )
         ) {
-            return "safety";
+            return "safety-other";
         }
 
 
@@ -1233,7 +1312,13 @@ export function initTiaUi(
             outputs:
                 0,
 
-            safety:
+            fdi:
+                0,
+
+            fdq:
+                0,
+
+            safety_other:
                 0,
 
             iw:
@@ -1266,9 +1351,19 @@ export function initTiaUi(
                 counts.outputs += 1;
 
             } else if (
-                category === "safety"
+                category === "fdi"
             ) {
-                counts.safety += 1;
+                counts.fdi += 1;
+
+            } else if (
+                category === "fdq"
+            ) {
+                counts.fdq += 1;
+
+            } else if (
+                category === "safety-other"
+            ) {
+                counts.safety_other += 1;
 
             } else if (
                 category === "iw"
