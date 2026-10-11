@@ -265,7 +265,26 @@ def _translate_batch(
             items,
             ensure_ascii=False,
         ),
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "hmi_text_translations",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        key: {"type": "string"} for key in items
+                    },
+                    "required": list(items),
+                    "additionalProperties": False,
+                },
+            },
+        },
     }
+
+    # This low-cost model supports 'none' reasoning and deterministic JSON.
+    if model == "gpt-6-luna":
+        payload["reasoning"] = {"effort": "none"}
 
     http_request = urllib_request.Request(
         "https://api.openai.com/v1/responses",
@@ -287,16 +306,38 @@ def _translate_batch(
             )
 
     except urllib_error.HTTPError as exc:
-        detail = exc.read().decode(
-            "utf-8",
-            errors="replace",
-        )
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            error_info = json.loads(raw).get("error") or {}
+        except (ValueError, AttributeError):
+            error_info = {}
+        code = str(error_info.get("code") or "")
+        message = str(error_info.get("message") or raw)[:500]
+        status = exc.code
+
+        if status == 401:
+            explanation = "API key rejected. Check OPENAI_API_KEY in .env."
+        elif status == 429 and code == "insufficient_quota":
+            explanation = (
+                "OpenAI API billing/quota exhausted. "
+                "ChatGPT Plus does not include API credits."
+            )
+        elif status == 429:
+            explanation = "OpenAI API rate limit reached."
+        elif status in (403, 404):
+            explanation = (
+                "The API project does not have access to model "
+                + model + ", or the model ID is invalid."
+            )
+        else:
+            explanation = "OpenAI API rejected the translation request."
 
         raise HTTPException(
-            status_code=502,
+            status_code=status if 400 <= status < 500 else 502,
             detail=(
-                "OpenAI translation request failed: "
-                + detail[:800]
+                explanation + " HTTP " + str(status)
+                + (" (" + code + ")" if code else "")
+                + ": " + message
             ),
         ) from exc
 
@@ -309,9 +350,27 @@ def _translate_batch(
             ),
         ) from exc
 
-    raw_text = _clean_json_text(
-        _output_text(response_data)
-    )
+    if response_data.get("status") not in (None, "completed"):
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "OpenAI model " + model
+                + " did not finish translation: "
+                + str(response_data.get("status")) + ". "
+                + str(response_data.get("incomplete_details") or "")
+            ),
+        )
+    try:
+        raw_text = _clean_json_text(_output_text(response_data))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "OpenAI model " + model
+                + " returned no translated text. "
+                "Check API response status and model configuration."
+            ),
+        ) from exc
 
     try:
         translated = json.loads(raw_text)
