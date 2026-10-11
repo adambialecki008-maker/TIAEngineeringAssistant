@@ -12,6 +12,7 @@ from openpyxl import load_workbook
 from engine.tia.adapter import read_project_saved
 from engine.tia.compat import run_adapter
 from engine.tia.models import (
+    HmiTranslationExample,
     HmiProjectTextPreviewRow,
     HmiProjectTextRoot,
     HmiProjectTextSheetDiagnostic,
@@ -550,6 +551,16 @@ def translate_hmi_texts(
             ),
         )
 
+    # Do not activate a new project language when no API key is configured.
+    if not os.getenv("OPENAI_API_KEY", "").strip():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OPENAI_API_KEY is not configured. "
+                "No project language was added and no translation was started."
+            ),
+        )
+
     run_adapter(
         "add-project-language",
         str(request.process_id),
@@ -748,6 +759,26 @@ def translate_hmi_texts(
             target_culture,
         )
 
+        translated_examples = []
+        for source_text, target_cell in matching_cells[:10]:
+            columns = _project_text_columns(
+                target_cell.parent, source_culture, target_culture,
+            )
+            reference_column = columns[4] if columns else None
+            ref_text = (
+                str(target_cell.parent.cell(
+                    target_cell.row, reference_column
+                ).value or "")
+                if reference_column else ""
+            )
+            translated_examples.append(
+                HmiTranslationExample(
+                    view_path=ref_text,
+                    source_text=source_text,
+                    target_text=translations[source_text],
+                )
+            )
+
         for source_text, target_cell in matching_cells:
             target_cell.value = translations[
                 source_text
@@ -827,6 +858,7 @@ def translate_hmi_texts(
             unique_texts=len(
                 unique_texts
             ),
+            translated_examples=translated_examples,
             import_state=import_state,
             import_log=import_log,
             project_saved=read_project_saved(
