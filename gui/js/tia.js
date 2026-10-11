@@ -43,26 +43,6 @@ export function initTiaUi(
             "tia-existing-hmis-body"
         );
 
-    const languageSelect =
-        document.getElementById(
-            "tia-language-select"
-        );
-
-    const addLanguageButton =
-        document.getElementById(
-            "tia-add-language-button"
-        );
-
-    const languagesStatus =
-        document.getElementById(
-            "tia-languages-status"
-        );
-
-    const activeLanguagesElement =
-        document.getElementById(
-            "tia-active-languages"
-        );
-
     const hmiTranslationPanel =
         document.getElementById(
             "tia-hmi-translation-panel"
@@ -2271,297 +2251,28 @@ export function initTiaUi(
     }
 
 
-    function setLanguagesStatus(
-        message,
-        type = "normal"
-    ) {
-        if (!languagesStatus) {
-            return;
-        }
-
-        languagesStatus.textContent =
-            message;
-
-        languagesStatus.classList.toggle(
-            "error",
-            type === "error"
-        );
-
-        languagesStatus.classList.toggle(
-            "success",
-            type === "success"
-        );
-    }
-
-
-    function renderProjectLanguages() {
-        if (
-            !languageSelect
-            ||
-            !activeLanguagesElement
-        ) {
-            return;
-        }
-
-        activeLanguagesElement.replaceChildren();
-        languageSelect.replaceChildren();
-
-        const active =
-            projectLanguages.filter(
-                language =>
-                    language.is_active
-            );
-
-        const inactive =
-            projectLanguages.filter(
-                language =>
-                    !language.is_active
-            );
-
-        for (
-            const language
-            of active
-        ) {
-            const chip =
-                document.createElement(
-                    "span"
-                );
-
-            chip.className =
-                "language-chip";
-
-            const roles = [];
-
-            if (language.is_reference) {
-                roles.push(
-                    "Reference"
-                );
-            }
-
-            if (language.is_editing) {
-                roles.push(
-                    "Editing"
-                );
-            }
-
-            chip.textContent =
-                language.culture
-                +
-                (
-                    roles.length
-                        ? " · " + roles.join(" / ")
-                        : ""
-                );
-
-            chip.title =
-                language.english_name
-                +
-                (
-                    language.native_name
-                        ? " / " + language.native_name
-                        : ""
-                );
-
-            activeLanguagesElement.appendChild(
-                chip
-            );
-        }
-
-        const placeholder =
-            document.createElement(
-                "option"
-            );
-
-        placeholder.value = "";
-
-        placeholder.textContent =
-            inactive.length
-                ? "Select language"
-                : "All supported languages are active";
-
-        languageSelect.appendChild(
-            placeholder
-        );
-
-        for (
-            const language
-            of inactive
-        ) {
-            const option =
-                document.createElement(
-                    "option"
-                );
-
-            option.value =
-                language.culture;
-
-            option.textContent =
-                language.english_name
-                +
-                " ("
-                +
-                language.culture
-                +
-                ")";
-
-            languageSelect.appendChild(
-                option
-            );
-        }
-
-        languageSelect.disabled =
-            inactive.length === 0;
-
-        addLanguageButton.disabled =
-            inactive.length === 0;
-
-        populateHmiTranslationLanguages();
-
-        setLanguagesStatus(
-            String(active.length)
-            +
-            " active project language(s).",
-            "success"
-        );
-    }
-
-
     async function refreshProjectLanguages() {
-        const processId =
-            selectedProcessId();
-
+        const processId = selectedProcessId();
         if (!processId) {
             projectLanguages = [];
-
-            if (languageSelect) {
-                languageSelect.replaceChildren();
-
-                const option =
-                    document.createElement(
-                        "option"
-                    );
-
-                option.value = "";
-                option.textContent =
-                    "Select a TIA process first";
-
-                languageSelect.appendChild(
-                    option
-                );
-
-                languageSelect.disabled =
-                    true;
-            }
-
-            if (addLanguageButton) {
-                addLanguageButton.disabled =
-                    true;
-            }
-
-            if (activeLanguagesElement) {
-                activeLanguagesElement.replaceChildren();
-            }
-
-            setLanguagesStatus(
-                "Select a TIA process first."
-            );
-
+            populateHmiTranslationLanguages();
             return;
         }
-
-        setLanguagesStatus(
-            "Reading project languages from TIA Portal..."
-        );
-
         try {
-            const query =
-                new URLSearchParams({
-                    process_id:
-                        String(
-                            processId
-                        ),
-                });
-
-            projectLanguages =
-                await getJson(
-                    "/api/v1/tia/languages?"
-                    +
-                    query.toString()
-                );
-
-            renderProjectLanguages();
-
+            projectLanguages = await getJson(
+                "/api/v1/tia/languages?process_id=" + encodeURIComponent(processId)
+            );
         } catch (error) {
             projectLanguages = [];
-
-            setLanguagesStatus(
-                error.message,
+            // This is still relevant to HMI translation; its selectors need
+            // the current project languages even though the separate language
+            // management panel has been removed.
+            setHmiTranslationStatus(
+                "Cannot read TIA project languages: " + error.message,
                 "error"
             );
         }
-    }
-
-
-    async function addProjectLanguage() {
-        const processId =
-            selectedProcessId();
-
-        const culture =
-            languageSelect
-                ?.value
-                ?.trim();
-
-        if (
-            !processId
-            ||
-            !culture
-        ) {
-            return;
-        }
-
-        addLanguageButton.disabled =
-            true;
-
-        languageSelect.disabled =
-            true;
-
-        setLanguagesStatus(
-            "Adding "
-            +
-            culture
-            +
-            " to the TIA project..."
-        );
-
-        try {
-            await postJson(
-                "/api/v1/tia/languages",
-                {
-                    process_id:
-                        processId,
-
-                    culture:
-                        culture,
-                }
-            );
-
-            await refreshProjectLanguages();
-
-            setLanguagesStatus(
-                culture
-                +
-                " added to the project. It is now available for HMI/project text translation.",
-                "success"
-            );
-
-        } catch (error) {
-            setLanguagesStatus(
-                error.message,
-                "error"
-            );
-
-            renderProjectLanguages();
-        }
+        populateHmiTranslationLanguages();
     }
 
 
@@ -7437,13 +7148,6 @@ export function initTiaUi(
         modelChanged
     );
 
-
-    if (addLanguageButton) {
-        addLanguageButton.addEventListener(
-            "click",
-            addProjectLanguage
-        );
-    }
 
 
     if (hmiSourceLanguageSelect) {
