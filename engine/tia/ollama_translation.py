@@ -179,10 +179,11 @@ def translate_ollama_batch(
 def translation_batch_size() -> int:
     """Number of source texts per local model request (1-50).
 
-    Larger batches reduce overhead but may increase JSON-format errors on
-    smaller models. Defaults to the existing safe batch size (15).
+    Small local GPUs can time out on large JSON-schema responses.
+    Default to one text per Ollama request; advanced users may increase
+    it after verifying model throughput and output reliability.
     """
-    raw = os.getenv("OLLAMA_TRANSLATION_BATCH_SIZE", "15").strip()
+    raw = os.getenv("OLLAMA_TRANSLATION_BATCH_SIZE", "1").strip()
     try:
         size = int(raw)
     except ValueError as exc:
