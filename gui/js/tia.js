@@ -943,6 +943,93 @@ export function initTiaUi(
                 [];
 
 
+            const counters =
+                document.createElement(
+                    "div"
+                );
+
+            counters.className =
+                "plc-resource-counters";
+
+
+            for (
+                const [
+                    label,
+                    value,
+                ]
+                of [
+                    [
+                        "Blocks",
+                        plc.block_count
+                        ??
+                        0,
+                    ],
+                    [
+                        "DB",
+                        plc.data_block_count
+                        ??
+                        0,
+                    ],
+                    [
+                        "UDT",
+                        plc.udt_count
+                        ??
+                        0,
+                    ],
+                    [
+                        "Tags",
+                        plc.tag_count
+                        ??
+                        0,
+                    ],
+                ]
+            ) {
+                const counter =
+                    document.createElement(
+                        "div"
+                    );
+
+                counter.className =
+                    "plc-resource-counter";
+
+
+                const labelElement =
+                    document.createElement(
+                        "span"
+                    );
+
+                labelElement.textContent =
+                    label;
+
+
+                const valueElement =
+                    document.createElement(
+                        "strong"
+                    );
+
+                valueElement.textContent =
+                    String(
+                        value
+                    );
+
+
+                counter.append(
+                    labelElement,
+                    valueElement
+                );
+
+                counters.appendChild(
+                    counter
+                );
+            }
+
+
+            resourcesDetails.append(
+                resourcesSummary,
+                counters
+            );
+
+
             if (resourceRows.length > 0) {
                 const wrapper =
                     document.createElement(
@@ -1086,8 +1173,7 @@ export function initTiaUi(
                     table
                 );
 
-                resourcesDetails.append(
-                    resourcesSummary,
+                resourcesDetails.appendChild(
                     wrapper
                 );
 
@@ -1103,8 +1189,7 @@ export function initTiaUi(
                 empty.textContent =
                     "No compiled PLC memory resource data available.";
 
-                resourcesDetails.append(
-                    resourcesSummary,
+                resourcesDetails.appendChild(
                     empty
                 );
             }
