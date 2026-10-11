@@ -1484,3 +1484,44 @@ td {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+
+/* Read-only HMI scan workflow beside batch controls. */
+.hmi-translation-batch-controls {
+    margin-top: 16px;
+}
+.hmi-translation-batch-controls > h4 {
+    margin: 0 0 10px;
+}
+.hmi-translation-batch-controls > strong {
+    display: block;
+    margin-top: 16px;
+}
+.hmi-scan-help {
+    padding: 12px 14px;
+    background: #192630;
+    border: 1px solid #344957;
+    border-radius: 7px;
+}
+.hmi-scan-help p {
+    margin: 8px 0;
+    color: #c4d2dd;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.hmi-scan-help .action-row {
+    margin-top: 12px;
+}
+.hmi-scan-result {
+    padding: 12px 14px;
+    border-left: 3px solid #608fa8;
+    background: #101c25;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+#tia-hmi-use-scan-total {
+    align-self: flex-start;
+    width: auto;
+    margin-top: 8px;
+}
