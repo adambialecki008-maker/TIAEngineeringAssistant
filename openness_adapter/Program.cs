@@ -435,10 +435,18 @@ namespace TiaOpennessAdapter
             }
 
 
+            bool programOnly =
+                args.Length >= 5
+                && string.Equals(
+                    args[4], "program-only",
+                    StringComparison.OrdinalIgnoreCase
+                );
+
             return TiaService.ListPlcProgramBlocks(
                 processId,
                 args[2],
-                args[3]
+                args[3],
+                programOnly
             );
         }
 
