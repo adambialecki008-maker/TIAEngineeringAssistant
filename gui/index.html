@@ -472,6 +472,21 @@
                         </p>
                     </div>
 
+                    <div class="field-group">
+                        <label for="tia-hmi-translation-scope">
+                            Import scope:
+                        </label>
+                        <select id="tia-hmi-translation-scope">
+                            <option value="10">Pilot — 10 unique texts (recommended first)</option>
+                            <option value="all">All matched texts (only after pilot verification)</option>
+                        </select>
+                        <p class="hint">
+                            Pilot imports at most 10 different text values, not all
+                            rows shown in the preview. Check them in TIA Portal before
+                            selecting all.
+                        </p>
+                    </div>
+
                     <div class="action-row hmi-translation-actions">
 
                         <button
