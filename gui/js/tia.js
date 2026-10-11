@@ -94,6 +94,8 @@ export function initTiaUi(
     const hmiBatchResumeButton = document.getElementById("tia-hmi-batch-resume");
     const hmiBatchPauseButton = document.getElementById("tia-hmi-batch-pause");
     const hmiBatchStatus = document.getElementById("tia-hmi-batch-status");
+    const hmiBatchReadiness =
+        document.getElementById("tia-hmi-batch-readiness");
     const hmiBatchPlan = document.getElementById("tia-hmi-batch-plan");
     const hmiBatchAutoRepeat = document.getElementById("tia-hmi-batch-auto-repeat");
     const hmiBatchProgress = document.getElementById("tia-hmi-batch-progress");
@@ -1178,9 +1180,39 @@ export function initTiaUi(
                 busy || !preparedHmiReview || preparedHmiReview.selectionKey !== key;
         }
         if (hmiBatchStartButton) {
-            hmiBatchStartButton.disabled = busy || !isVerified
+            const cannotStart = busy || !isVerified
                 || !selection?.view_path_root || !hasTranslationEngine
                 || !latestHmiScan?.missingUnique;
+            hmiBatchStartButton.disabled = cannotStart;
+            if (hmiBatchReadiness) {
+                const total = Number(hmiBatchTotalInput?.value);
+                let hint = "";
+                if (!selection) {
+                    hint = "Select an HMI and distinct source/target languages.";
+                } else if (busy) {
+                    hint = "An HMI operation is in progress.";
+                } else if (!isVerified) {
+                    hint = "Click Scan HMI / Count texts to confirm the selection.";
+                } else if (!selection.view_path_root) {
+                    hint = "Select an explicit HMI ViewPath root above, then scan again. "
+                        + "Automatic matching is read-only; importing needs one verified root.";
+                } else if (!latestHmiScan?.missingUnique) {
+                    hint = "No missing or placeholder target texts found in this HMI.";
+                } else if (!hasTranslationEngine) {
+                    hint = "Select an Ollama model, or choose Copy source (no AI).";
+                } else if (
+                    hmiBatchTotalInput?.value?.trim()
+                    && (!Number.isInteger(total) || total < 1
+                        || total > latestHmiScan.missingUnique)
+                ) {
+                    hint = "Total to translate must be between 1 and "
+                        + latestHmiScan.missingUnique + ".";
+                } else {
+                    hint = "Ready: " + latestHmiScan.missingUnique
+                        + " unique missing-target texts. Start batch import is enabled.";
+                }
+                hmiBatchReadiness.textContent = hint;
+            }
         }
         if (hmiBatchResumeButton) {
             hmiBatchResumeButton.disabled = busy || !savedHmiBatchJobId();
@@ -1662,6 +1694,29 @@ export function initTiaUi(
                 if ([...hmiViewPathRootSelect.options].some(option => option.value === currentRoot)) {
                     hmiViewPathRootSelect.value = currentRoot;
                 }
+                // Automatic matching is sufficient for a read-only scan but
+                // batch import requires a specific HMI root. Promote the
+                // result only if EVERY matched row has the same exact root.
+                const matchedRoots = result.matched_view_path_roots || [];
+                if (!currentRoot && matchedRoots.length === 1
+                    && matchedRoots[0].rows === result.matched_text_rows) {
+                    const root = matchedRoots[0].root;
+                    if (![...hmiViewPathRootSelect.options].some(
+                        option => option.value === root
+                    )) {
+                        const explicit = document.createElement("option");
+                        explicit.value = root;
+                        explicit.textContent = root + " (matched HMI root)";
+                        hmiViewPathRootSelect.appendChild(explicit);
+                    }
+                    hmiViewPathRootSelect.value = root;
+                    if (hmiScanInstruction) {
+                        hmiScanInstruction.textContent =
+                            "Read-only scan finished. Verified root "
+                            + root + " selected automatically; batch import "
+                            + "can now use this HMI only.";
+                    }
+                }
             }
             if (hmiPreviewReferences) {
                 const sheets = (result.sheet_diagnostics || [])
@@ -1674,7 +1729,24 @@ export function initTiaUi(
             }
             hmiPreviewResults?.classList.remove("hidden");
             if (result.matched_text_rows > 0) {
-                verifiedHmiPreviewKey = previewKey;
+                // The dropdown may have been promoted from Automatic match
+                // to its uniquely scanned root. Trust the result only if
+                // the remaining selection is identical to the scanned one.
+                const confirmed = hmiTranslationSelection();
+                if (confirmed?.view_path_root !== selection.view_path_root) {
+                    const roots = result.matched_view_path_roots || [];
+                    const exact = roots.length === 1
+                        && roots[0].root === confirmed?.view_path_root
+                        && roots[0].rows === result.matched_text_rows;
+                    if (!exact) {
+                        setHmiTranslationStatus(
+                            "The selected HMI root changed during scan. "
+                            + "Scan HMI / Count texts again before importing.", "error"
+                        );
+                        return false;
+                    }
+                }
+                verifiedHmiPreviewKey = hmiTranslationKey(confirmed);
                 setHmiTranslationStatus(
                     `Preview found ${result.matched_text_rows} matching text row(s). `
                     + "Check the sample references before translating.", "success"
