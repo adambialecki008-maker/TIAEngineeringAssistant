@@ -116,12 +116,6 @@ class PlcProgramBlockInfo(BaseModel):
 
 
 
-class PlcProgramBlockDetail(PlcProgramBlockInfo):
-    members: list["PlcStructureMemberInfo"] = Field(
-        default_factory=list
-    )
-
-
 class PlcDataBlockInfo(BaseModel):
     group_path: str
     name: str
@@ -150,6 +144,12 @@ class PlcStructureMemberInfo(BaseModel):
     level: int = 0
     offset: str = ""
     comment: str = ""
+
+
+class PlcProgramBlockDetail(PlcProgramBlockInfo):
+    members: list[PlcStructureMemberInfo] = Field(
+        default_factory=list
+    )
 
 
 class PlcStructureDetail(BaseModel):
