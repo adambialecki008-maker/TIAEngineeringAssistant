@@ -594,13 +594,14 @@
                                         <th>DB number</th>
                                         <th>Kind</th>
                                         <th>Consistent</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
 
                                 <tbody id="tia-plc-dbs-body">
                                     <tr>
                                         <td
-                                            colspan="5"
+                                            colspan="6"
                                             class="empty-table-cell"
                                         >
                                             No Data Blocks loaded.
@@ -648,13 +649,14 @@
                                         <th>Name</th>
                                         <th>Kind</th>
                                         <th>Consistent</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
 
                                 <tbody id="tia-plc-udts-body">
                                     <tr>
                                         <td
-                                            colspan="4"
+                                            colspan="5"
                                             class="empty-table-cell"
                                         >
                                             No UDTs loaded.
@@ -668,6 +670,56 @@
                     </div>
 
                 </details>
+
+
+                <div
+                    id="tia-plc-structure-detail"
+                    class="tia-structure-detail hidden"
+                >
+
+                    <div class="tia-structure-detail-header">
+                        <h4 id="tia-plc-structure-detail-title">
+                            Structure detail
+                        </h4>
+                    </div>
+
+
+                    <p
+                        id="tia-plc-structure-detail-status"
+                        class="status-box"
+                    >
+                        Select a DB or UDT.
+                    </p>
+
+
+                    <div class="table-wrapper tia-structure-member-table-wrapper">
+
+                        <table class="management-table">
+                            <thead>
+                                <tr>
+                                    <th>Section</th>
+                                    <th>Member</th>
+                                    <th>Data type</th>
+                                    <th>Offset</th>
+                                    <th>Comment</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="tia-plc-structure-detail-body">
+                                <tr>
+                                    <td
+                                        colspan="5"
+                                        class="empty-table-cell"
+                                    >
+                                        No structure loaded.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                    </div>
+
+                </div>
 
             </div>
 
