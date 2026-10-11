@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import subprocess
 
@@ -68,6 +69,40 @@ def adapter_error_status(
     return 502
 
 
+# Large TIA project-text XLSX exports/imports can exceed the ordinary
+# adapter timeout. Do not raise the limit for inventory or other commands.
+DEFAULT_ADAPTER_TIMEOUT_SECONDS = 180
+DEFAULT_PROJECT_TEXT_TIMEOUT_SECONDS = 900
+PROJECT_TEXT_COMMANDS = frozenset({
+    "export-project-texts",
+    "import-project-texts",
+})
+
+
+def adapter_timeout_seconds(command: str) -> int:
+    if command not in PROJECT_TEXT_COMMANDS:
+        return DEFAULT_ADAPTER_TIMEOUT_SECONDS
+
+    configured = os.getenv("TIA_PROJECT_TEXT_TIMEOUT_SECONDS", "").strip()
+    if not configured:
+        return DEFAULT_PROJECT_TEXT_TIMEOUT_SECONDS
+
+    try:
+        value = int(configured)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="TIA_PROJECT_TEXT_TIMEOUT_SECONDS must be an integer.",
+        ) from exc
+
+    if value < DEFAULT_ADAPTER_TIMEOUT_SECONDS or value > 3600:
+        raise HTTPException(
+            status_code=422,
+            detail="TIA_PROJECT_TEXT_TIMEOUT_SECONDS must be between 180 and 3600.",
+        )
+    return value
+
+
 def run_adapter(
     *arguments: str,
 ) -> list[str]:
@@ -80,6 +115,9 @@ def run_adapter(
             ),
         )
 
+
+    command = arguments[0] if arguments else "(missing)"
+    timeout_seconds = adapter_timeout_seconds(command)
 
     creation_flags = 0
 
@@ -102,15 +140,26 @@ def run_adapter(
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=180,
+            timeout=timeout_seconds,
             creationflags=creation_flags,
         )
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         raise HTTPException(
             status_code=504,
-            detail="TIA Openness adapter timed out.",
-        )
+            detail=(
+                "TIA Openness command '" + command
+                + "' timed out after " + str(timeout_seconds)
+                + " seconds. Check TIA Portal for blocking dialogs, "
+                + "busy project-text operations or an unresponsive session. "
+                + (
+                    "You can configure TIA_PROJECT_TEXT_TIMEOUT_SECONDS "
+                    + "(180-3600) if this export/import normally takes longer."
+                    if command in PROJECT_TEXT_COMMANDS else
+                    "The ordinary adapter timeout is 180 seconds."
+                )
+            ),
+        ) from exc
 
 
     stdout = (result.stdout or "").strip()
