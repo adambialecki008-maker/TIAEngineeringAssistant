@@ -83,6 +83,11 @@ export function initTiaUi(
             "tia-hmi-target-language"
         );
 
+    const hmiViewPathRootSelect =
+        document.getElementById(
+            "tia-hmi-view-path-root"
+        );
+
     const hmiTranslateButton =
         document.getElementById(
             "tia-hmi-translate-button"
@@ -975,6 +980,7 @@ export function initTiaUi(
             process_id: processId,
             device_name: hmi.device_name,
             hmi_name: hmi.hmi_name,
+            view_path_root: hmiViewPathRootSelect?.value || null,
             source_culture: sourceCulture,
             target_culture: targetCulture,
         };
@@ -1042,9 +1048,31 @@ export function initTiaUi(
                     + `across ${result.worksheets_found} sheet(s). `
                     + "Rows below are samples, not the entire export.";
             }
+            if (hmiViewPathRootSelect) {
+                const currentRoot = hmiViewPathRootSelect.value;
+                hmiViewPathRootSelect.replaceChildren();
+                const automatic = document.createElement("option");
+                automatic.value = "";
+                automatic.textContent = "Automatic match (inventory device/HMI name)";
+                hmiViewPathRootSelect.appendChild(automatic);
+                for (const candidate of result.view_path_roots || []) {
+                    const option = document.createElement("option");
+                    option.value = candidate.root;
+                    option.textContent = candidate.root + " (" + candidate.rows + " HMI row(s))";
+                    hmiViewPathRootSelect.appendChild(option);
+                }
+                if ([...hmiViewPathRootSelect.options].some(option => option.value === currentRoot)) {
+                    hmiViewPathRootSelect.value = currentRoot;
+                }
+            }
             if (hmiPreviewReferences) {
+                const sheets = (result.sheet_diagnostics || [])
+                    .map(sheet => "Sheet " + sheet.sheet_name + "\n"
+                        + sheet.sample_rows.join("\n"));
+                const references = (result.reference_examples || []);
                 hmiPreviewReferences.textContent =
-                    (result.reference_examples || []).join("\n");
+                    "Raw sheet samples:\n" + sheets.join("\n\n")
+                    + "\n\nFirst 50 ViewPaths:\n" + references.join("\n");
             }
             hmiPreviewResults?.classList.remove("hidden");
             if (result.matched_text_rows > 0) {
@@ -1055,8 +1083,8 @@ export function initTiaUi(
                 );
             } else {
                 setHmiTranslationStatus(
-                    "No matching HMI text rows. Inspect the Reference diagnostics; "
-                    + "translation remains disabled.", "error"
+                    "No matching HMI rows. Select the correct exported ViewPath root "
+                    + "above, then click Preview texts again.", "error"
                 );
             }
         } catch (error) {
@@ -1231,6 +1259,13 @@ export function initTiaUi(
     ) {
         selectedHmiForTranslation =
             hmi;
+        if (hmiViewPathRootSelect) {
+            hmiViewPathRootSelect.replaceChildren();
+            const option = document.createElement("option");
+            option.value = "";
+            option.textContent = "Automatic match (inventory device/HMI name)";
+            hmiViewPathRootSelect.appendChild(option);
+        }
         invalidateHmiPreview();
 
         if (hmiTranslationPanel) {
@@ -6588,6 +6623,13 @@ export function initTiaUi(
 
     if (hmiTargetLanguageSelect) {
         hmiTargetLanguageSelect.addEventListener(
+            "change",
+            invalidateHmiPreview
+        );
+    }
+
+    if (hmiViewPathRootSelect) {
+        hmiViewPathRootSelect.addEventListener(
             "change",
             invalidateHmiPreview
         );
