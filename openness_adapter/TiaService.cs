@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -228,6 +229,237 @@ namespace TiaOpennessAdapter
 
                 WriteProjectHmis(
                     project
+                );
+            }
+
+
+            return 0;
+        }
+
+
+        public static int ListProjectLanguages(
+            int processId
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                var settings =
+                    project.LanguageSettings;
+
+                var activeLanguages =
+                    settings.ActiveLanguages;
+
+                string editingCulture =
+                    settings.EditingLanguage
+                    != null
+                        ? settings
+                            .EditingLanguage
+                            .Culture
+                            .Name
+                        : "";
+
+                string referenceCulture =
+                    settings.ReferenceLanguage
+                    != null
+                        ? settings
+                            .ReferenceLanguage
+                            .Culture
+                            .Name
+                        : "";
+
+
+                foreach (
+                    var language
+                    in settings.Languages
+                )
+                {
+                    CultureInfo culture =
+                        language.Culture;
+
+                    bool isActive =
+                        activeLanguages.Find(
+                            culture
+                        )
+                        != null;
+
+
+                    Console.WriteLine(
+                        "PROJECT_LANGUAGE|" +
+                        SanitizeOutput(
+                            culture.Name
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            culture.EnglishName
+                        ) +
+                        "|" +
+                        SanitizeOutput(
+                            culture.NativeName
+                        ) +
+                        "|" +
+                        isActive +
+                        "|" +
+                        string.Equals(
+                            culture.Name,
+                            editingCulture,
+                            StringComparison.OrdinalIgnoreCase
+                        ) +
+                        "|" +
+                        string.Equals(
+                            culture.Name,
+                            referenceCulture,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    );
+                }
+            }
+
+
+            return 0;
+        }
+
+
+        public static int AddProjectLanguage(
+            int processId,
+            string cultureName
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            CultureInfo culture;
+
+
+            try
+            {
+                culture =
+                    CultureInfo.GetCultureInfo(
+                        cultureName
+                    );
+            }
+            catch
+            {
+                Console.Error.WriteLine(
+                    "INVALID_CULTURE|" +
+                    SanitizeOutput(
+                        cultureName
+                    )
+                );
+
+                return 3;
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                var settings =
+                    project.LanguageSettings;
+
+                var language =
+                    settings
+                        .Languages
+                        .Find(
+                            culture
+                        );
+
+
+                if (language == null)
+                {
+                    Console.Error.WriteLine(
+                        "LANGUAGE_NOT_SUPPORTED|" +
+                        SanitizeOutput(
+                            culture.Name
+                        )
+                    );
+
+                    return 7;
+                }
+
+
+                if (
+                    settings
+                        .ActiveLanguages
+                        .Find(
+                            culture
+                        )
+                    ==
+                    null
+                )
+                {
+                    settings
+                        .ActiveLanguages
+                        .Add(
+                            language
+                        );
+
+                    SaveProject(
+                        project
+                    );
+                }
+
+
+                Console.WriteLine(
+                    "LANGUAGE_ADDED|" +
+                    SanitizeOutput(
+                        culture.Name
+                    )
                 );
             }
 
