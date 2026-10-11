@@ -35,17 +35,26 @@ echo Building TIA Openness adapter...
 if errorlevel 1 (
     echo.
     echo ERROR: TIA Openness adapter build failed.
-    echo Copy the build error from this window.
+    echo.
     pause
     exit /b 1
 )
 
 echo.
-echo Starting TIA Engineering Assistant on http://127.0.0.1:8005/
-start "" "%PYTHON_EXE%" -m uvicorn engine.main:app --host 127.0.0.1 --port 8005
+echo Starting TIA Engineering Assistant...
+echo URL: http://127.0.0.1:8005/
+echo.
+echo Keep this window open while the application is running.
+echo Press Ctrl+C to stop the server.
+echo.
 
-timeout /t 2 /nobreak >nul
 start "" "http://127.0.0.1:8005/"
+
+"%PYTHON_EXE%" -m uvicorn engine.main:app --host 127.0.0.1 --port 8005
+
+echo.
+echo Server stopped.
+pause
 
 endlocal
 exit /b 0
