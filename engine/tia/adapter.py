@@ -30,6 +30,7 @@ def adapter_error_status(
     if (
         normalized.startswith("PLC_TYPE_NOT_FOUND|")
         or normalized.startswith("PLC_STRUCTURE_NOT_FOUND|")
+        or normalized.startswith("PLC_PROGRAM_BLOCK_NOT_FOUND|")
         or normalized.startswith("PLC_NOT_FOUND|")
         or (
             "process" in normalized.lower()
@@ -54,6 +55,9 @@ def adapter_error_status(
         normalized.startswith("Unsupported PLC family:")
         or normalized.startswith("NO_TAGS_TO_CREATE")
         or normalized.startswith("TAG_TABLE_NAME_REQUIRED")
+        or normalized.startswith("PROGRAM_BLOCK_EXPORT_ARGUMENT_REQUIRED")
+        or normalized.startswith("INVALID_CULTURE|")
+        or normalized.startswith("LANGUAGE_NOT_SUPPORTED|")
     ):
         return 422
 
