@@ -131,8 +131,11 @@ Prepare currently samples the first N unique source values on each run;
 for progressive processing across the entire HMI use the automatic
 checkpointed import workflow.
 
-**Total to translate** applies **only to the automatic job**. Leave it blank
-to process all eligible unique source texts, or enter an explicit smaller
-number. This value is **not** the number of HMI XLSX rows; repeated strings
-can correspond to many different HMI elements. Confirm the counted values
-from Preview texts before starting any TIA import.
+**Total to translate** controls the overall automatic job and also caps
+a single manual Prepare. For example, **Batch size 15 / Total 1** prepares
+**one unique text** in the manual workflow; in automatic mode it likewise
+limits the entire job to one text. Leave Total blank to select all eligible
+unique strings for automatic import, while manual Prepare still processes
+only one batch (max 50). This value is **not** the number of HMI XLSX rows;
+repeated strings can correspond to many HMI elements. Confirm the scan
+counts before starting any import.
