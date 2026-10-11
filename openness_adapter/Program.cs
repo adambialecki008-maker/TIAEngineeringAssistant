@@ -71,6 +71,10 @@ namespace TiaOpennessAdapter
                         return ListStructures(args);
 
 
+                    case "export-structure":
+                        return ExportStructure(args);
+
+
                     case "create-tags":
                         return CreateTags(args);
 
@@ -253,6 +257,41 @@ namespace TiaOpennessAdapter
                 processId,
                 args[2],
                 args[3]
+            );
+        }
+
+
+        private static int ExportStructure(
+            string[] args
+        )
+        {
+            if (args.Length < 8)
+            {
+                Console.Error.WriteLine(
+                    "PID, device name, PLC name, structure kind, group path, name and output file are required."
+                );
+
+                return 1;
+            }
+
+
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ExportPlcStructure(
+                processId,
+                args[2],
+                args[3],
+                args[4],
+                args[5],
+                args[6],
+                args[7]
             );
         }
 
@@ -498,6 +537,10 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  list-structures <PID> <DEVICE_NAME> <PLC_NAME>"
+            );
+
+            Console.WriteLine(
+                "  export-structure <PID> <DEVICE_NAME> <PLC_NAME> <db|udt> <GROUP_PATH> <NAME> <OUTPUT_FILE>"
             );
 
             Console.WriteLine(
