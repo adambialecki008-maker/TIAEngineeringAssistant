@@ -88,6 +88,11 @@ export function initTiaUi(
             "tia-hmi-view-path-root"
         );
 
+    const hmiTranslationScopeSelect =
+        document.getElementById(
+            "tia-hmi-translation-scope"
+        );
+
     const hmiTranslateButton =
         document.getElementById(
             "tia-hmi-translate-button"
@@ -1325,116 +1330,79 @@ export function initTiaUi(
 
 
     async function translateSelectedHmi() {
-        if (hmiTranslationKey(hmiTranslationSelection()) !== verifiedHmiPreviewKey
-            || !verifiedHmiPreviewKey) {
-            setHmiTranslationStatus("Preview this HMI selection before importing.", "error");
-            return;
-        }
-        const processId =
-            selectedProcessId();
-
-        const hmi =
-            selectedHmiForTranslation;
-
-        const sourceCulture =
-            hmiSourceLanguageSelect
-                ?.value
-                ?.trim();
-
-        const targetCulture =
-            hmiTargetLanguageSelect
-                ?.value
-                ?.trim();
-
-        if (
-            !processId
-            ||
-            !hmi
-            ||
-            !sourceCulture
-            ||
-            !targetCulture
-        ) {
+        const selection = hmiTranslationSelection();
+        if (!selection || hmiTranslationKey(selection) !== verifiedHmiPreviewKey) {
             setHmiTranslationStatus(
-                "Select HMI, TIA source slot and target language.",
+                "Run Preview texts for the selected HMI and ViewPath root first.",
                 "error"
             );
-
             return;
         }
 
-        hmiTranslateButton.disabled =
-            true;
+        const scope = hmiTranslationScopeSelect?.value || "10";
+        const maxRows = scope === "all" ? null : 10;
+        if (scope === "all") {
+            const confirmed = confirm(
+                "Translate and import ALL matched rows for "
+                + (selection.view_path_root || selection.hmi_name)
+                + "?\\n\\nThis may require many billable API calls. "
+                + "Verify a 10-text pilot in TIA Portal first."
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
 
+        hmiTranslateButton.disabled = true;
+        if (hmiPreviewButton) {
+            hmiPreviewButton.disabled = true;
+        }
         setHmiTranslationStatus(
-            "Exporting Project texts, filtering "
-            +
-            hmi.hmi_name
-            +
-            ", translating and importing back to TIA Portal..."
+            "Translating and importing "
+            + (scope === "all" ? "all matching rows" : "a 10-text pilot")
+            + " for "
+            + (selection.view_path_root || selection.hmi_name)
+            + "..."
         );
 
         try {
-            const result =
-                await postJson(
-                    "/api/v1/tia/hmis/translate-texts",
-                    {
-                        process_id:
-                            processId,
-
-                        device_name:
-                            hmi.device_name,
-
-                        hmi_name:
-                            hmi.hmi_name,
-
-                        source_culture:
-                            sourceCulture,
-
-                        target_culture:
-                            targetCulture,
-                    }
-                );
+            // Reuse the exact selection that passed Preview texts.
+            // In particular, view_path_root MUST be sent to the backend.
+            const result = await postJson(
+                "/api/v1/tia/hmis/translate-texts",
+                {
+                    ...selection,
+                    max_rows: maxRows,
+                }
+            );
 
             await refreshProjectLanguages();
             invalidateHmiPreview();
 
-            setHmiTranslationStatus(
-                "Translated "
-                +
-                String(
-                    result.translated_rows
-                )
-                +
-                " HMI text row(s), "
-                +
-                String(
-                    result.unique_texts
-                )
-                +
-                " unique text(s). Import state: "
-                +
-                (
-                    result.import_state
-                    ||
-                    "completed"
-                )
-                +
-                ".",
-                "success"
-            );
+            const status = (result.import_state || "").trim();
+            const importOk = status.toLowerCase() === "success";
+            const message =
+                "Processed "
+                + String(result.translated_rows)
+                + " row(s), "
+                + String(result.unique_texts)
+                + " unique text(s) for "
+                + (selection.view_path_root || selection.hmi_name)
+                + ". TIA import state: "
+                + (status || "missing")
+                + ". "
+                + (importOk
+                    ? "Reopen Project texts in TIA and verify the target column."
+                    : "Check the import log: " + (result.import_log || "not returned"));
+            setHmiTranslationStatus(message, importOk ? "success" : "error");
 
         } catch (error) {
-            setHmiTranslationStatus(
-                error.message,
-                "error"
-            );
+            setHmiTranslationStatus(error.message, "error");
 
         } finally {
             updateHmiTranslateButtonState();
         }
     }
-
 
     function setLanguagesStatus(
         message,
