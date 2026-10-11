@@ -1114,6 +1114,7 @@ export function initTiaUi(
         }
         if (hmiBatchTotalInput) {
             hmiBatchTotalInput.placeholder = "Scan HMI to see total";
+            renderHmiBatchPlan();
         }
         if (hmiScanInstruction) {
             hmiScanInstruction.textContent =
@@ -1169,8 +1170,8 @@ export function initTiaUi(
         if (hmiUseScanTotalButton) {
             hmiUseScanTotalButton.disabled =
                 busy || !isVerified || !latestHmiScan
-                || latestHmiScan.eligible < 1
-                || latestHmiScan.eligible > 100000;
+                || latestHmiScan.missingUnique < 1
+                || latestHmiScan.missingUnique > 100000;
         }
         if (hmiImportReviewedButton) {
             hmiImportReviewedButton.disabled =
@@ -1625,13 +1626,14 @@ export function initTiaUi(
             }
             if (hmiBatchTotalInput) {
                 hmiBatchTotalInput.placeholder =
-                    "Scanned total: " + latestHmiScan.eligible;
+                    "Missing target values: " + latestHmiScan.missingUnique;
             }
             if (hmiScanInstruction) {
                 hmiScanInstruction.textContent =
-                    "Read-only scan finished. Use scanned total to fill the field, "
+                    "Read-only scan finished. Use missing-target count to fill the field, "
                     + "or enter a smaller limit.";
             }
+            renderHmiBatchPlan();
             renderHmiPreviewRows();
 
             if (hmiPreviewSummary) {
@@ -7447,14 +7449,15 @@ export function initTiaUi(
     );
     hmiUseScanTotalButton?.addEventListener("click", () => {
         if (!latestHmiScan || !latestHmiScan.eligible
-            || latestHmiScan.eligible > 100000
+            || latestHmiScan.missingUnique > 100000
             || hmiTranslationKey(hmiTranslationSelection())
                 !== verifiedHmiPreviewKey) {
             return;
         }
         if (hmiBatchTotalInput) {
-            hmiBatchTotalInput.value = String(latestHmiScan.eligible);
+            hmiBatchTotalInput.value = String(latestHmiScan.missingUnique);
             discardHmiReview();
+            renderHmiBatchPlan();
             updateHmiTranslateButtonState();
         }
     });
