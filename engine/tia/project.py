@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from engine.tia.compat import run_adapter
 from engine.tia.models import (
+    PlcResourceAttribute,
     PlcResourceRow,
     ProjectHmi,
     ProjectPlc,
@@ -85,6 +86,7 @@ def get_project_context(
     hmis = []
     metrics_by_target = {}
     resources_by_target = {}
+    resource_attributes_by_target = {}
 
 
     for line in lines:
@@ -175,6 +177,34 @@ def get_project_context(
                 [],
             ).append(
                 row
+            )
+
+
+        elif line.startswith(
+            "PLC_RESOURCE_ATTR|"
+        ):
+            parts = line.split(
+                "|",
+                5,
+            )
+
+
+            if len(parts) != 6:
+                continue
+
+
+            resource_attributes_by_target.setdefault(
+                (
+                    parts[1].casefold(),
+                    parts[2].casefold(),
+                ),
+                [],
+            ).append(
+                PlcResourceAttribute(
+                    source=parts[3],
+                    name=parts[4],
+                    value=parts[5],
+                )
             )
 
 
@@ -284,6 +314,14 @@ def get_project_context(
 
         plc.resource_rows = (
             resources_by_target.get(
+                key,
+                [],
+            )
+        )
+
+
+        plc.resource_attributes = (
+            resource_attributes_by_target.get(
                 key,
                 [],
             )
