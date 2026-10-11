@@ -276,6 +276,93 @@ def test_delete_plc_response(
     )
 
 
+def test_plc_structures_are_parsed(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_adapter(
+        *arguments,
+    ):
+        calls.append(
+            arguments
+        )
+
+        return [
+            (
+                "PLC_DB||GlobalData|12|GlobalDB|True"
+            ),
+            (
+                "PLC_DB|Process|MotorDb|20|InstanceDB|False"
+            ),
+            (
+                "PLC_UDT||MotorType|PlcStruct|True"
+            ),
+            (
+                "PLC_UDT|Common|AlarmType|PlcStruct|True"
+            ),
+        ]
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+    response = client.get(
+        "/api/v1/tia/plc-structures",
+        params={
+            "process_id": 3544,
+            "device_name": "S7-1500 Station_1",
+            "plc_name": "PLC_1",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert calls == [
+        (
+            "list-structures",
+            "3544",
+            "S7-1500 Station_1",
+            "PLC_1",
+        )
+    ]
+
+    assert response.json() == {
+        "data_blocks": [
+            {
+                "group_path": "",
+                "name": "GlobalData",
+                "number": 12,
+                "block_kind": "GlobalDB",
+                "is_consistent": True,
+            },
+            {
+                "group_path": "Process",
+                "name": "MotorDb",
+                "number": 20,
+                "block_kind": "InstanceDB",
+                "is_consistent": False,
+            },
+        ],
+        "udts": [
+            {
+                "group_path": "",
+                "name": "MotorType",
+                "type_kind": "PlcStruct",
+                "is_consistent": True,
+            },
+            {
+                "group_path": "Common",
+                "name": "AlarmType",
+                "type_kind": "PlcStruct",
+                "is_consistent": True,
+            },
+        ],
+    }
+
+
 def test_existing_plc_tags_are_parsed(
     monkeypatch,
 ):
