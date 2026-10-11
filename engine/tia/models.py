@@ -312,6 +312,12 @@ class HmiProjectTextsPreviewResponse(BaseModel):
     sample_rows: list[HmiProjectTextPreviewRow]
 
 
+class HmiTranslationExample(BaseModel):
+    view_path: str
+    source_text: str
+    target_text: str
+
+
 class TranslateHmiTextsResponse(BaseModel):
     status: str
     hmi_name: str
@@ -319,6 +325,7 @@ class TranslateHmiTextsResponse(BaseModel):
     target_culture: str
     translated_rows: int
     unique_texts: int
+    translated_examples: list[HmiTranslationExample] = Field(default_factory=list)
     import_state: str = ""
     import_log: str = ""
     project_saved: str | None = None
