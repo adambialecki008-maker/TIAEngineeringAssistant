@@ -200,10 +200,10 @@ def test_pilot_preserves_unreviewed_sibling_texts_in_same_hmi(monkeypatch):
     )
     assert response.status_code == 200, response.text
     assert response.json()["verified_rows"] == 1
-    # Parent-object/sibling rows are preserved, but never retranslated.
+    # Parent-object/sibling rows remain in the XLSX with unchanged target.
     assert imported == [
         ("main-1", "212BP2 Za zaworem"),
-        ("main-2", "Zgniatarka"),
+        ("main-2", "Text"),
     ]
 
 
