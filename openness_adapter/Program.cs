@@ -98,6 +98,9 @@ namespace TiaOpennessAdapter
                     case "export-program-block":
                         return ExportProgramBlock(args);
 
+                    case "plc-cross-references":
+                        return PlcCrossReferences(args);
+
 
                     case "create-tags":
                         return CreateTags(args);
@@ -520,6 +523,19 @@ namespace TiaOpennessAdapter
         }
 
 
+        private static int PlcCrossReferences(string[] args)
+        {
+            if (args.Length < 8)
+            {
+                Console.Error.WriteLine(
+                    "PID, device, PLC, kind, group, block name and member path are required.");
+                return 1;
+            }
+            if (!TryReadProcessId(args, out int processId)) return 1;
+            return TiaService.GetPlcCrossReferences(
+                processId, args[2], args[3], args[4], args[5], args[6], args[7]);
+        }
+
         private static int CreateTags(
             string[] args
         )
@@ -789,6 +805,9 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  export-program-block <PID> <DEVICE_NAME> <PLC_NAME> <GROUP_PATH> <BLOCK_NAME> <OUTPUT_FILE>"
+            );
+            Console.WriteLine(
+                "  plc-cross-references <PID> <DEVICE_NAME> <PLC_NAME> <OB|FB|FC|DB|UDT> <GROUP_PATH> <NAME> <MEMBER_PATH>"
             );
 
             Console.WriteLine(

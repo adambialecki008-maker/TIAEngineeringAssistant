@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 
 using Siemens.Engineering;
+using Siemens.Engineering.CrossReference;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.Online;
@@ -1380,6 +1381,143 @@ namespace TiaOpennessAdapter
             return 0;
         }
 
+
+
+        // Read-only Step7 V21 CrossReferenceService, scoped to ONE selected
+        // block or UDT. No full-project export or approximate XML matching.
+        public static int GetPlcCrossReferences(
+            int processId, string deviceName, string plcName,
+            string kind, string groupPath, string name, string memberPath)
+        {
+            TiaPortalProcess process = FindProcess(processId);
+            if (process == null) return WriteProcessNotFound(processId);
+
+            using (TiaPortal portal = process.Attach())
+            {
+                Project project = GetSingleOpenProject(portal, out int errorCode);
+                if (project == null) return errorCode;
+                PlcTarget target = FindPlcTarget(project, deviceName, plcName);
+                if (target == null)
+                {
+                    Console.Error.WriteLine("PLC_NOT_FOUND");
+                    return 7;
+                }
+
+                CrossReferenceService service;
+                if (string.Equals(kind, "udt", StringComparison.OrdinalIgnoreCase))
+                {
+                    PlcType type = FindPlcType(target.Software, groupPath, name);
+                    if (type == null)
+                    {
+                        Console.Error.WriteLine("PLC_TYPE_NOT_FOUND");
+                        return 7;
+                    }
+                    service = type.GetService<CrossReferenceService>();
+                }
+                else
+                {
+                    PlcBlock block = FindPlcBlock(target.Software, groupPath, name);
+                    if (block == null)
+                    {
+                        Console.Error.WriteLine("PLC_BLOCK_NOT_FOUND");
+                        return 7;
+                    }
+                    service = block.GetService<CrossReferenceService>();
+                }
+
+                if (service == null)
+                {
+                    Console.Error.WriteLine("CROSS_REFERENCE_SERVICE_NOT_SUPPORTED");
+                    return 8;
+                }
+
+                CrossReferenceResult results =
+                    service.GetCrossReferences(CrossReferenceFilter.AllObjects);
+                int count = 0;
+                bool truncated = false;
+                if (results != null && results.Sources != null)
+                {
+                    foreach (SourceObject source in results.Sources)
+                    {
+                        WritePlcCrossRefSource(
+                            source, memberPath ?? "", "", ref count, ref truncated);
+                        if (truncated) break;
+                    }
+                }
+                Console.WriteLine(
+                    "PLC_CROSS_REFERENCE_TOTAL|" + count + "|" +
+                    (truncated ? "true" : "false"));
+                return 0;
+            }
+        }
+
+        private static string CrossRefEncoded(object value)
+        {
+            string text = Convert.ToString(
+                value, CultureInfo.InvariantCulture) ?? "";
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
+        }
+
+        private static string NormalizeCrossRefPath(string path)
+        {
+            return (path ?? "").Trim().Trim('"')
+                .Replace('\\', '.').Replace('/', '.').Trim('.');
+        }
+
+        private static bool CrossRefPathMatches(string candidate, string wanted)
+        {
+            string path = NormalizeCrossRefPath(candidate);
+            string search = NormalizeCrossRefPath(wanted);
+            return path.Equals(search, StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("." + search, StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith(search + ".", StringComparison.OrdinalIgnoreCase)
+                || path.IndexOf("." + search + ".",
+                    StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void WritePlcCrossRefSource(
+            SourceObject source, string memberPath, string ancestry,
+            ref int count, ref bool truncated)
+        {
+            string sourceName = source.Name ?? "";
+            string current = string.IsNullOrEmpty(ancestry)
+                ? sourceName : ancestry + "." + sourceName;
+            bool selected = string.IsNullOrWhiteSpace(memberPath)
+                || CrossRefPathMatches(source.Path, memberPath)
+                || CrossRefPathMatches(current, memberPath);
+            if (selected && source.References != null)
+            {
+                foreach (ReferenceObject reference in source.References)
+                {
+                    if (reference.Locations == null) continue;
+                    foreach (Location location in reference.Locations)
+                    {
+                        if (count >= 200)
+                        {
+                            truncated = true;
+                            return;
+                        }
+                        string[] fields = {
+                            sourceName, source.Path, reference.Name,
+                            reference.Path, location.Name,
+                            location.ReferenceLocation,
+                            location.ReferenceType.ToString(),
+                            location.Access.ToString(),
+                        };
+                        Console.WriteLine("PLC_CROSS_REFERENCE|" +
+                            string.Join("|", fields.Select(CrossRefEncoded)));
+                        count++;
+                    }
+                }
+            }
+            if (source.Children == null) return;
+            foreach (SourceObject child in source.Children)
+            {
+                WritePlcCrossRefSource(child, memberPath, current,
+                    ref count, ref truncated);
+                if (truncated) return;
+            }
+        }
 
         public static int ExportPlcProgramBlock(
             int processId,

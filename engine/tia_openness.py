@@ -32,6 +32,9 @@ from engine.tia.project import (
 from engine.tia.program import (
     router as program_router,
 )
+from engine.tia.cross_references import (
+    router as cross_references_router,
+)
 from engine.tia.structures import (
     router as structures_router,
 )
@@ -58,6 +61,7 @@ for subrouter in (
     hmi_review_router,
     hmi_batches_router,
     program_router,
+    cross_references_router,
     structures_router,
     tags_router,
     hardware_router,

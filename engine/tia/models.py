@@ -160,6 +160,22 @@ class PlcStructureDetail(BaseModel):
     members: list[PlcStructureMemberInfo]
 
 
+class PlcCrossReferenceRow(BaseModel):
+    source_name: str = ""
+    source_path: str = ""
+    reference_name: str = ""
+    reference_path: str = ""
+    location_name: str = ""
+    reference_location: str = ""
+    reference_type: str = ""
+    access: str = ""
+
+
+class PlcCrossReferenceResult(BaseModel):
+    references: list[PlcCrossReferenceRow] = Field(default_factory=list)
+    truncated: bool = False
+
+
 class PlcTagSpec(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     data_type: str = Field(min_length=1, max_length=64)
