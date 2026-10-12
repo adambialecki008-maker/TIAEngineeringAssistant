@@ -554,6 +554,7 @@ def test_skipped_manager_manual_prepare_then_verified_import(monkeypatch, tmp_pa
     )
     assert skipped.status_code == 200, skipped.text
     assert skipped.json()["items"][0]["source"] == source
+    assert skipped.json()["items"][0]["rejected_proposal"] == "(Pneumatyczny"
     assert skipped.json()["items"][0]["resolved"] is False
 
     prepared = client.post(
