@@ -189,6 +189,67 @@ def translate_ollama_batch(
     return translations
 
 
+def repair_ollama_translation(
+    source: str, rejected: str, validation_error: str,
+    target_culture: str, model_name: str,
+) -> str:
+    """One targeted repair attempt. Never import or bypass safety validation.
+
+    Called only after the original model output fails HMI structural checks.
+    The caller validates this result separately and may still reject it.
+    """
+    schema = {
+        "type": "object",
+        "properties": {"translation": {"type": "string"}},
+        "required": ["translation"],
+        "additionalProperties": False,
+    }
+    instructions = (
+        "You are correcting ONE rejected Siemens HMI/SCADA translation "
+        "into " + target_culture + ". Only the SOURCE is authoritative. "
+        "The PREVIOUS PROPOSAL is unsafe and must NOT be copied unchanged. "
+        "Remove every invented annotation, word, prefix or suffix. "
+        "Do not add explanatory text or mention machine technology unless "
+        "it appears in the SOURCE. Preserve identifiers, numbers, units, "
+        "line breaks, placeholders, and source punctuation. In particular, "
+        "preserve all parentheses/brackets/braces at their original locations "
+        "and do not introduce any extra delimiters. If the text is already "
+        "in the target language, return it unchanged rather than paraphrase. "
+        "Return only the JSON field translation."
+    )
+    payload = {
+        "model": model_name,
+        "stream": False,
+        "format": schema,
+        "options": {"temperature": 0},
+        "messages": [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": json.dumps({
+                "source": source,
+                "unsafe_previous_proposal": rejected,
+                "validation_error": validation_error[:300],
+            }, ensure_ascii=False)},
+        ],
+    }
+    result = _ollama_json("/api/chat", payload, timeout=DEFAULT_TIMEOUT)
+    if result.get("done") is False:
+        raise HTTPException(502, "Ollama repair response was incomplete.")
+    message = result.get("message")
+    output = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(output, str) or not output.strip():
+        raise HTTPException(502, "Ollama returned an empty repair response.")
+    try:
+        data = json.loads(output)
+    except ValueError as exc:
+        raise HTTPException(502, "Ollama repair returned invalid JSON.") from exc
+    if not isinstance(data, dict) or set(data) != {"translation"}:
+        raise HTTPException(502, "Ollama repair returned an unexpected JSON shape.")
+    translation = data["translation"]
+    if not isinstance(translation, str) or not translation.strip():
+        raise HTTPException(502, "Ollama repair returned an empty translation.")
+    return translation
+
+
 def translation_batch_size() -> int:
     """Number of source texts per local model request (1-50).
 
