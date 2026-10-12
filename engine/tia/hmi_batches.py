@@ -9,6 +9,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from typing import Literal
 from threading import Lock
 from uuid import uuid4
 
@@ -39,6 +40,12 @@ class StartBatchJobRequest(TranslateHmiTextsRequest):
 
 class BatchJobAction(BaseModel):
     retry_failed_batch: bool = False
+
+
+class PrepareSkippedRequest(BaseModel):
+    mode: Literal["ollama", "manual"] = "ollama"
+    proposal: str | None = Field(default=None, max_length=50000)
+    ollama_model: str | None = Field(default=None, max_length=128)
 
 
 def _job_path(job_id: str) -> Path:
@@ -85,7 +92,10 @@ def _load_job(job_id: str) -> dict:
 def _public_job(job: dict) -> dict:
     done = job["next_offset"]
     skipped = job.get("skipped", [])
-    verified = max(0, done - len(skipped))
+    recovered = job.get("recovered", {})
+    pending = [item for item in skipped
+               if str(item["offset"]) not in recovered]
+    verified = max(0, done - len(skipped) + len(recovered))
     total = len(job["candidates"])
     state = job["status"]
     if state == "processing" and job["job_id"] not in _ACTIVE_JOBS:
@@ -100,8 +110,10 @@ def _public_job(job: dict) -> dict:
         "total_unique": total,
         "completed_unique": verified,
         "processed_unique": done,
-        "skipped_unique": len(skipped),
-        "skipped_examples": skipped[-5:],
+        "skipped_unique": len(pending),
+        "skipped_total": len(skipped),
+        "recovered_unique": len(recovered),
+        "skipped_examples": pending[-5:],
         "completed_rows": job.get("completed_rows", 0),
         "batch_index": (done // job["batch_size"]) + 1
         if done < total else (total + job["batch_size"] - 1) // job["batch_size"],
@@ -171,6 +183,7 @@ def start_hmi_batch_job(request: StartBatchJobRequest):
         "next_offset": 0,
         "completed_rows": 0,
         "skipped": [],
+        "recovered": {},
         "status": "ready",
         "error": None,
         "last_verified_batch": None,
@@ -185,6 +198,162 @@ def start_hmi_batch_job(request: StartBatchJobRequest):
 def get_hmi_batch_job(job_id: str):
     with _JOB_LOCK:
         return _public_job(_load_job(job_id))
+
+
+
+
+def _skipped_entry(job: dict, offset: int) -> dict:
+    """Use the complete original candidate, not the 160-char log excerpt."""
+    skipped = next(
+        (item for item in job.get("skipped", [])
+         if item.get("offset") == offset),
+        None,
+    )
+    if skipped is None or offset < 0 or offset >= job["next_offset"]:
+        raise HTTPException(404, "This offset was not skipped in this job.")
+    recovered = job.get("recovered", {}).get(str(offset))
+    return {
+        "offset": offset,
+        "source": job["candidates"][offset],
+        "reason": skipped["reason"],
+        "resolved": recovered is not None,
+        "verified_rows": recovered.get("verified_rows", 0) if recovered else 0,
+    }
+
+
+@router.get("/hmis/batch-translations/{job_id}/skipped")
+def list_skipped_hmi_translations(job_id: str):
+    with _JOB_LOCK:
+        job = _load_job(job_id)
+        return {
+            "job_id": job_id,
+            "status": _public_job(job)["status"],
+            "model": job["model"],
+            "items": [
+                _skipped_entry(job, item["offset"])
+                for item in job.get("skipped", [])
+            ],
+        }
+
+
+def _check_skipped_recovery_allowed(job: dict, offset: int) -> dict:
+    if _ACTIVE_JOBS or job["status"] != "completed":
+        raise HTTPException(
+            409, "Finish the original batch job and confirm its TIA state "
+            "before recovering skipped translations."
+        )
+    item = _skipped_entry(job, offset)
+    if item["resolved"]:
+        raise HTTPException(409, "This skipped text was already verified in TIA.")
+    return item
+
+
+@router.post("/hmis/batch-translations/{job_id}/skipped/{offset}/prepare")
+def prepare_skipped_hmi_translation(
+    job_id: str, offset: int, request: PrepareSkippedRequest,
+):
+    with _JOB_LOCK:
+        job = _load_job(job_id)
+        item = _check_skipped_recovery_allowed(job, offset)
+
+    requested = TranslateHmiTextsRequest(**job["request"])
+    source = item["source"]
+    # Always fresh export; never trust a stale checkpoint as a TIA target state.
+    matching = [
+        row for row in _matching_source_rows(requested)
+        if row["source"] == source
+        and needs_target_fill(row["source"], row["current_target"])
+    ]
+    if not matching:
+        raise HTTPException(
+            409, "The target is no longer missing or its source changed. "
+            "Check TIA and create a new job if necessary."
+        )
+
+    if request.mode == "manual":
+        if request.proposal is None:
+            raise HTTPException(422, "Enter a proposed translation first.")
+        model = "manual-reviewed"
+        proposal = request.proposal
+    else:
+        # Explicit model selection is allowed for a NEW single-text retry;
+        # original batch model and checkpoint are never modified.
+        model = resolve_ollama_model(request.ollama_model or job["model"])
+        proposals = review._translate_texts(
+            [source], requested.target_culture, model
+        )
+        proposal = proposals.get(source)
+
+    proposal = normalize_hmi_translation(source, proposal)
+    validate_hmi_translation(source, proposal)
+    for row in matching:
+        row["proposal"] = proposal
+
+    token = uuid4().hex
+    review._prune_expired_reviews()
+    review._REVIEWS[token] = {
+        "created": time.monotonic(),
+        "request": requested.model_dump(),
+        "model": model,
+        "rows": matching,
+        "skip_origin": {"job_id": job_id, "offset": offset},
+    }
+    return {
+        "job_id": job_id,
+        "offset": offset,
+        "review_id": token,
+        "source": source,
+        "proposal": proposal,
+        "model": model,
+        "rows": len(matching),
+        "note": "Review the proposal. TIA has NOT been modified.",
+    }
+
+
+@router.post("/hmis/batch-translations/{job_id}/skipped/{offset}/import")
+def import_skipped_hmi_translation(
+    job_id: str, offset: int, request: review.ImportReviewRequest,
+):
+    with _JOB_LOCK:
+        job = _load_job(job_id)
+        _check_skipped_recovery_allowed(job, offset)
+        review._prune_expired_reviews()
+        prepared = review._REVIEWS.get(request.review_id)
+        if prepared is None or prepared.get("skip_origin") != {
+            "job_id": job_id, "offset": offset,
+        }:
+            raise HTTPException(
+                409, "This review does not belong to the selected skipped text. "
+                "Prepare it again."
+            )
+        _ACTIVE_JOBS.add(job_id)
+
+    try:
+        # The existing reviewed-import path validates each source and target,
+        # imports ONLY selected-HMI rows, then checks a fresh TIA XLSX export.
+        verified = review.import_reviewed_hmi_translations(request)
+        with _JOB_LOCK:
+            current = _load_job(job_id)
+            _skipped_entry(current, offset)
+            current.setdefault("recovered", {})[str(offset)] = {
+                "verified_rows": verified.verified_rows,
+                "timestamp": time.time(),
+                "mode": prepared["model"],
+            }
+            current["completed_rows"] += verified.verified_rows
+            current["updated_at"] = time.time()
+            _save_job(current)
+            result = _public_job(current)
+        return {
+            "status": "verified",
+            "verified_rows": verified.verified_rows,
+            "import_state": verified.import_state,
+            "import_log": verified.import_log,
+            "job": result,
+        }
+    finally:
+        with _JOB_LOCK:
+            _ACTIVE_JOBS.discard(job_id)
 
 
 @router.post("/hmis/batch-translations/{job_id}/pause")
