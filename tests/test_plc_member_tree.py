@@ -18,9 +18,9 @@ def test_both_plc_member_tables_use_shared_renderer():
     assert 'from "./plc_member_tree.js"' in source
     assert "renderPlcMemberRows(plcProgramBlockDetailBody, members, detail)" in source
     assert "renderPlcMemberRows(plcStructureDetailBody, detail.members, detail)" in source
-    assert 'row.hidden = !tree.isVisible(index)' in source
-    assert 'button.setAttribute("aria-expanded", String(expanded))' in source
-    assert 'button?.addEventListener("click"' in source
+    assert 'row.hidden = results ? !results.visible.has(index)' in source
+    assert 'toggle.setAttribute("aria-expanded", String(expanded))' in source
+    assert 'toggle?.addEventListener("click"' in source
 
 
 def test_nested_ton_and_struct_toggle_without_hiding_siblings():
