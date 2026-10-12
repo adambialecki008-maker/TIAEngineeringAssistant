@@ -97,7 +97,10 @@ def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
     monkeypatch.setattr(
         review, "_translate_texts",
         lambda texts, target, model, progress=None: {
-            source: "Przetłumaczone " + source for source in texts
+            source: (
+                source if source == "Za zaworem"
+                else "Przetłumaczone " + source
+            ) for source in texts
         },
     )
     return live, commands, imports
@@ -146,7 +149,7 @@ def test_two_batches_import_each_to_tia_and_save_checkpoint(monkeypatch, tmp_pat
     assert second_result["status"] == "completed"
     assert len(imports) == 2
     assert live["main-1"] == "Przetłumaczone Zgniatarka"
-    assert live["main-2"] == "Przetłumaczone Za zaworem"
+    assert live["main-2"] == "Za zaworem"
     assert live["other-1"] == "Original"
     assert commands.count("import-project-texts") == 2
     assert commands.count("export-project-texts") == 7

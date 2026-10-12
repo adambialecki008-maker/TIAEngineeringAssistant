@@ -42,6 +42,8 @@ _POLISH_HMI_WORDS = frozenset({
     "naped", "napedu", "wrotny", "podnoszenie", "opuszczanie",
     "podnies", "opusc", "przenosnik", "transport", "przyciski",
     "panel", "aktywny", "blokada", "zabezpieczenie", "poczatek",
+    "wysun", "wciagnij", "warunki", "pracy", "silownikow",
+    "sterowanie", "zalaczone", "wciaganie", "klatki", "schodowej",
     "koniec", "ustaw", "pozycjonowanie", "wymagane",
 })
 _ENGLISH_MARKERS = frozenset({

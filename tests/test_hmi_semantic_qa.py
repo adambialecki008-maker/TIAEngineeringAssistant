@@ -167,3 +167,24 @@ def test_new_translation_quality_guards_reject_linka_linia_and_hydraulic_halluci
             validate_hmi_translation_quality(source, proposed, "pl-PL")
         assert error.value.status_code == 502
     validate_hmi_translation_quality("Hydraulic pressure", "Ciśnienie hydrauliczne", "pl-PL")
+
+
+
+def test_operator_commands_and_carousel_position_are_not_paraphrased(monkeypatch):
+    sources = [
+        "Od strony karuzeli",
+        "Wciagnij",
+        "Wysun",
+        "Warunki do pracy silownikow i blokad",
+        "Sterowanie zalaczone",
+    ]
+    for source in sources:
+        assert qa.is_likely_polish_hmi_source(source, "pl-PL")
+
+    examples = [
+        ("Od strony karuzeli", "Od stronki klatki schodowej"),
+        ("Wciagnij", "Wczytaj"),
+        ("Wysun", "Wysun pudelko"),
+    ]
+    for source, proposed in examples:
+        assert qa.semantic_qa_warnings(source, proposed, "pl-PL")
