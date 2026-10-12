@@ -13,6 +13,8 @@ from urllib import request as urllib_request
 from dotenv import load_dotenv
 from fastapi import HTTPException
 
+from engine.tia.hmi_semantic_qa import is_likely_polish_hmi_source
+
 load_dotenv()
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
@@ -277,16 +279,26 @@ def translate_ollama_texts(
     progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, str]:
     model = resolve_ollama_model(model_name)
-    translations = {}
+    # TIA's en-US* slot can already contain Polish operator text. A strong
+    # Polish vocabulary match is copied EXACTLY instead of being paraphrased
+    # by the local model. Ambiguous/mixed-language strings go to Ollama.
+    preserved = {
+        source: source for source in texts
+        if is_likely_polish_hmi_source(source, target_culture)
+    }
+    to_translate = [source for source in texts if source not in preserved]
+    translations = dict(preserved)
     batch_size = translation_batch_size()
     total = len(texts)
     if progress is not None:
         progress(0, total)
-    for start in range(0, total, batch_size):
-        batch = texts[start:start + batch_size]
+        if preserved:
+            progress(len(preserved), total)
+    for start in range(0, len(to_translate), batch_size):
+        batch = to_translate[start:start + batch_size]
         translations.update(
             translate_ollama_batch(batch, target_culture, model)
         )
         if progress is not None:
-            progress(min(start + len(batch), total), total)
+            progress(len(preserved) + start + len(batch), total)
     return translations
