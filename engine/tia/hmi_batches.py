@@ -216,6 +216,7 @@ def _skipped_entry(job: dict, offset: int) -> dict:
         "offset": offset,
         "source": job["candidates"][offset],
         "reason": skipped["reason"],
+        "rejected_proposal": skipped.get("proposal", ""),
         "resolved": recovered is not None,
         "verified_rows": recovered.get("verified_rows", 0) if recovered else 0,
     }
@@ -504,6 +505,7 @@ def _perform_one_batch(job: dict) -> dict:
             skipped.append({
                 "offset": offset + index,
                 "source": source[:160],
+                "proposal": proposal[:2000] if isinstance(proposal, str) else "",
                 "reason": str(exc.detail).split(". Source:", 1)[0][:240],
             })
         else:
