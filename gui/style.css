@@ -1832,3 +1832,46 @@ td {
     min-height: 30px;
     font-size: 12px;
 }
+
+
+/* Manual HMI Prepare: rejected proposals remain visible, never importable. */
+.hmi-review-skipped {
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid #775342;
+    border-radius: 6px;
+    background: #211c1a;
+}
+.hmi-review-skipped summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #f1c29f;
+}
+.hmi-review-skipped-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+    max-height: 450px;
+    overflow: auto;
+}
+.hmi-review-skipped-item {
+    padding: 9px;
+    border: 1px solid #534439;
+    border-radius: 5px;
+    background: #171d22;
+    overflow-wrap: anywhere;
+}
+.hmi-review-skipped-item strong {
+    display: block;
+    margin-top: 5px;
+    color: #e4c9b4;
+    font-size: 12px;
+}
+.hmi-review-skipped-item pre {
+    margin: 4px 0;
+    padding: 6px;
+    color: #e4edf3;
+    font: 12px Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
