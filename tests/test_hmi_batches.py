@@ -847,3 +847,32 @@ def test_batch_failed_auto_repair_preserves_skip_and_no_import(
     assert calls == ["Pneumatyczny"]
     assert not imports
     assert live["main-1"] == "Text"
+
+
+
+def test_source_literal_newline_semantic_guard_is_not_skipped(
+    monkeypatch, tmp_path,
+):
+    source = r"Awaria \\nPLC"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: r"Awaria\\npompy" for text in texts
+        },
+    )
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    assert created.status_code == 200, created.text
+    result = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{created.json()['job_id']}/next",
+        json={},
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["skipped_unique"] == 1
+    assert not imports
+    assert live["main-1"] == "Text"

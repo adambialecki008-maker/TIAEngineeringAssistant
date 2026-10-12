@@ -137,7 +137,10 @@ def semantic_qa_warnings(source: str, target: str,
         # literal backslash-n versus a real line break.
         def canonical(text: str) -> str:
             return " ".join(
-                _fold(text.replace(r"\\n", " ").replace("ł", "l")).split()
+                _fold(
+                    text.replace(r"\n", " ").replace(r"\r", " ")
+                    .replace("ł", "l")
+                ).split()
             )
         if canonical(source) != canonical(target):
             reasons.append(

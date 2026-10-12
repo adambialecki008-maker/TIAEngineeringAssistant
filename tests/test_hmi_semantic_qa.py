@@ -188,3 +188,27 @@ def test_operator_commands_and_carousel_position_are_not_paraphrased(monkeypatch
     ]
     for source, proposed in examples:
         assert qa.semantic_qa_warnings(source, proposed, "pl-PL")
+
+
+
+@pytest.mark.parametrize("source, translated", [
+    (r"Awaria \nPLC", "Awaria\nPLC"),
+    (r"Awaria\nPLC", "Awaria\nPLC"),
+    ("Awaria\nPLC", "Awaria\nPLC"),
+    (r"Awaria \r\nPLC", "Awaria\nPLC"),
+])
+def test_tia_literal_line_break_and_real_newline_are_semantically_equivalent(
+    source, translated,
+):
+    from engine.tia.hmi_review import validate_hmi_translation_quality
+    from engine.tia.hmi_text_safety import normalize_hmi_translation
+
+    normalized = normalize_hmi_translation(source, translated)
+    assert qa.semantic_qa_warnings(source, normalized) == []
+    validate_hmi_translation_quality(source, normalized, "pl-PL")
+
+
+def test_literal_newline_equivalence_does_not_allow_polish_paraphrase():
+    assert qa.semantic_qa_warnings(
+        r"Awaria \nPLC", "Awaria\npompy", "pl-PL"
+    )
