@@ -18,6 +18,46 @@ def _tokens(value: str) -> list[str]:
     return re.findall(r"[a-ząćęłńóśźż]+", _fold(value or "").replace("ł", "l"))
 
 
+# High-confidence Polish operator/HMI vocabulary. A positive match must not
+# result in a machine translation request when the target culture is pl-PL:
+# many TIA exports use en-US* as a slot while containing Polish text.
+_POLISH_HMI_WORDS = frozenset({
+    "awaria", "awarii", "alarmowy", "ostrzezenie", "ostrzezenia",
+    "pneumatyczna", "pneumatyczne", "pneumatyczny", "pneumatycznego",
+    "hydrauliczna", "hydrauliczne", "hydrauliczny", "hydraulicznego",
+    "wozek", "wozka", "wozku", "poprzeczny", "poprzeczna",
+    "naciagnij", "naciaganie", "napnij", "linke", "linka", "linki",
+    "poziom", "oleju", "agregacie", "glownym", "uzupelnij",
+    "czujnik", "czujnika", "szafce", "zaworem", "zaworu",
+    "brak", "cisnienia", "napiecia", "niski", "wysoki",
+    "glowna", "szafa", "szafie", "podajnik", "przesuw", "przesun",
+    "zamkniety", "otwarty", "otworz", "zamknij", "przy",
+    "uszkodzony", "uruchom", "wylacz", "wlacz", "sprawdz",
+    "maszyna", "maszyny", "silnika", "pompy", "pompa", "pompe",
+    "chlodnicy", "hydrauliki", "sygnal", "nieaktywny",
+})
+_ENGLISH_MARKERS = frozenset({
+    "the", "and", "with", "without", "please", "press", "pull",
+    "pressure", "temperature", "sensor", "warning", "error",
+    "fault", "hydraulic", "pneumatic", "cable", "rope", "line",
+    "ready", "valve", "conveyor", "open", "closed", "low", "high",
+})
+
+
+def is_likely_polish_hmi_source(source: str, target_culture: str = "pl-PL") -> bool:
+    """High-precision source-copy guard, not a general language detector.
+
+    Avoid rewriting Polish user text that TIA exports in the en-US* slot.
+    Ambiguous or mixed-language sources still go to Ollama for translation.
+    """
+    if not target_culture.casefold().startswith("pl") or not isinstance(source, str):
+        return False
+    words = set(_tokens(source))
+    return bool(words & _POLISH_HMI_WORDS) and not bool(
+        words & _ENGLISH_MARKERS
+    )
+
+
 def semantic_qa_warnings(source: str, target: str,
                          target_culture: str = "pl-PL") -> list[str]:
     """Return review-worthy reasons, never automatically modify text.
@@ -76,5 +116,15 @@ def semantic_qa_warnings(source: str, target: str,
     # Known hallucinated malformed label seen in exported TIA targets.
     if "cykliski" in target_words and "cykliski" not in source_words:
         reasons.append("Unexpected malformed word: 'cykliski'.")
+
+    # The source is already recognizably Polish. Large lexical drift in
+    # an existing Polish target can be legitimate, so this is a warning
+    # only and never triggers automatic rewriting of the TIA workbook.
+    if is_likely_polish_hmi_source(source, target_culture) and not reasons:
+        shared = source_words & target_words
+        if len(shared) * 2 < len(source_words) and len(source_words) >= 2:
+            reasons.append(
+                "Polish source was substantially reworded; check semantic drift."
+            )
 
     return reasons
