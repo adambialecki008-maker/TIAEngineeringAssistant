@@ -94,6 +94,7 @@ class SkippedReviewTranslation(BaseModel):
 
 class TranslationReviewResponse(BaseModel):
     review_id: str | None = None
+    prepare_id: str | None = None
     hmi_name: str
     view_path_root: str
     source_culture: str
@@ -104,6 +105,12 @@ class TranslationReviewResponse(BaseModel):
     skipped_unique: int = 0
     skipped: list[SkippedReviewTranslation] = Field(default_factory=list)
     examples: list[TranslationReviewItem]
+
+
+class RepairPreparedTranslationRequest(BaseModel):
+    prepare_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    source_text: str = Field(min_length=1, max_length=50000)
+    proposal: str = Field(min_length=1, max_length=50000)
 
 
 class ImportReviewRequest(BaseModel):
@@ -321,6 +328,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
 
     safe_rows = []
     skipped = []
+    skipped_rows = {}
     for row in rows:
         source = row["source"]
         proposal = translated.get(source)
@@ -332,40 +340,82 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         except HTTPException as exc:
             if exc.status_code != 502:
                 raise
-            skipped.append(SkippedReviewTranslation(
+            rejected = SkippedReviewTranslation(
                 source_text=source,
                 proposed_target=proposal if isinstance(proposal, str) else "",
                 reason=str(exc.detail).split(". Source:", 1)[0],
-            ))
+            )
+            skipped.append(rejected)
+            skipped_rows[source] = row
             continue
         row["proposal"] = proposal
         safe_rows.append(row)
 
-    # A review token is created ONLY for individually validated proposals.
-    # Invalid proposals remain visible in Preview but can never reach TIA.
-    token = None
-    if safe_rows:
-        token = uuid4().hex
-        _REVIEWS[token] = {
-            "created": time.monotonic(),
-            "request": request.model_dump(),
-            "model": model,
-            "rows": safe_rows,
-        }
+    # Persist ALL rows in an ephemeral review. Invalid rows are held
+    # separately and can only be moved into importable rows after an explicit
+    # user edit and a fresh validation. A zero-safe preview has NO import token.
+    token = uuid4().hex
+    _REVIEWS[token] = {
+        "created": time.monotonic(),
+        "request": request.model_dump(),
+        "model": model,
+        "rows": safe_rows,
+        "skipped_rows": skipped_rows,
+        "skipped": skipped,
+    }
     _record_progress(request.progress_id, "ready", len(unique), len(unique))
+    return _prepared_review_response(token, _REVIEWS[token])
+
+
+def _prepared_review_response(token: str, prepared: dict) -> TranslationReviewResponse:
+    request = TranslateHmiTextsRequest(**prepared["request"])
+    safe_rows = prepared["rows"]
+    skipped = prepared.get("skipped", [])
     return TranslationReviewResponse(
-        review_id=token,
+        review_id=token if safe_rows else None,
+        prepare_id=token,
         hmi_name=request.hmi_name,
         view_path_root=request.view_path_root or request.device_name,
         source_culture=request.source_culture,
         target_culture=request.target_culture,
-        ollama_model=model,
+        ollama_model=prepared["model"],
         selected_rows=len(safe_rows),
-        unique_texts=len(safe_rows),
+        unique_texts=len({row["source"] for row in safe_rows}),
         skipped_unique=len(skipped),
         skipped=skipped,
         examples=_samples(safe_rows),
     )
+
+
+@router.post(
+    "/hmis/repair-prepared-translation",
+    response_model=TranslationReviewResponse,
+)
+def repair_prepared_hmi_translation(request: RepairPreparedTranslationRequest):
+    """Validate a user-edited rejected proposal; NEVER import in this step."""
+    _prune_expired_reviews()
+    prepared = _REVIEWS.get(request.prepare_id)
+    if prepared is None or prepared.get("skip_origin"):
+        raise HTTPException(404, "HMI prepare review not found or expired.")
+    source = request.source_text
+    row = prepared.get("skipped_rows", {}).get(source)
+    if row is None:
+        raise HTTPException(
+            409, "The selected source is not an unresolved skipped proposal."
+        )
+    proposal = normalize_hmi_translation(source, request.proposal)
+    validate_hmi_translation(source, proposal)
+    # Do not accept a repair when it could conflict with a safe candidate.
+    if any(existing["source"] == source for existing in prepared["rows"]):
+        raise HTTPException(409, "Text already exists in the validated review.")
+
+    row["proposal"] = proposal
+    prepared["rows"].append(row)
+    del prepared["skipped_rows"][source]
+    prepared["skipped"] = [
+        item for item in prepared["skipped"] if item.source_text != source
+    ]
+    return _prepared_review_response(request.prepare_id, prepared)
 
 
 @router.post(
@@ -386,6 +436,8 @@ def _import_reviewed_hmi_translations(
             409, "Skipped-translation review must be imported through "
             "its original batch job, so the verified checkpoint is updated."
         )
+    if review and not review["rows"]:
+        raise HTTPException(409, "No validated HMI translations to import.")
     review = _REVIEWS.pop(request.review_id, None)
     if review is None:
         raise HTTPException(
