@@ -110,6 +110,26 @@ class TranslationReviewResponse(BaseModel):
     examples: list[TranslationReviewItem]
 
 
+
+class ExistingHmiQaFinding(BaseModel):
+    sheet: str
+    row: int
+    view_path: str
+    source_text: str
+    target_text: str
+    reasons: list[str]
+
+
+class ExistingHmiQaAuditResponse(BaseModel):
+    hmi_name: str
+    scanned_rows: int
+    filled_target_rows: int
+    suspicious_rows: int
+    shown_rows: int
+    limit: int
+    findings: list[ExistingHmiQaFinding]
+
+
 class RepairPreparedTranslationRequest(BaseModel):
     prepare_id: str = Field(pattern=r"^[a-f0-9]{32}$")
     source_text: str = Field(min_length=1, max_length=50000)
@@ -224,6 +244,90 @@ def _samples(rows):
         )
         for row in rows[:50]
     ]
+
+
+
+@router.post(
+    "/hmis/audit-existing-translations",
+    response_model=ExistingHmiQaAuditResponse,
+)
+def audit_existing_hmi_translations(request: TranslateHmiTextsRequest):
+    """Read-only semantic audit of ALL existing selected-HMI target rows.
+
+    No Ollama calls, language activation, workbook imports or project saves.
+    Samples are capped for UI responsiveness; aggregate counts are complete.
+    """
+    if not request.view_path_root:
+        raise HTTPException(
+            422, "Choose an explicit HMI ViewPath root and scan it first."
+        )
+    if request.source_culture.casefold() == request.target_culture.casefold():
+        raise HTTPException(422, "Source and target languages must differ.")
+
+    path = _project_export(
+        request.process_id, request.source_culture, request.target_culture
+    )
+    scanned = 0
+    filled = 0
+    suspicious = 0
+    findings = []
+    limit = 200
+    try:
+        workbook = load_workbook(path, data_only=True)
+        try:
+            valid_header = False
+            for sheet in workbook.worksheets:
+                columns = _source_target_columns(
+                    sheet, request.source_culture, request.target_culture
+                )
+                if columns is None:
+                    continue
+                valid_header = True
+                if columns[1].casefold() != request.target_culture.casefold():
+                    raise HTTPException(
+                        409, "TIA export does not contain the requested target "
+                        "language column; audit cannot compare existing translations."
+                    )
+            if not valid_header:
+                raise HTTPException(409, "No supported project-text sheets to audit.")
+
+            for row in _matching_rows(workbook, request):
+                scanned += 1
+                target = row["current_target"]
+                if needs_target_fill(row["source"], target):
+                    continue
+                if not target.strip():
+                    continue
+                filled += 1
+                reasons = semantic_qa_warnings(
+                    row["source"], target, request.target_culture
+                )
+                if not reasons:
+                    continue
+                suspicious += 1
+                if len(findings) < limit:
+                    findings.append(ExistingHmiQaFinding(
+                        sheet=row["sheet"],
+                        row=row["row_index"],
+                        view_path=row["key"][1],
+                        source_text=row["source"],
+                        target_text=target,
+                        reasons=reasons,
+                    ))
+        finally:
+            workbook.close()
+    finally:
+        path.unlink(missing_ok=True)
+
+    return ExistingHmiQaAuditResponse(
+        hmi_name=request.hmi_name,
+        scanned_rows=scanned,
+        filled_target_rows=filled,
+        suspicious_rows=suspicious,
+        shown_rows=len(findings),
+        limit=limit,
+        findings=findings,
+    )
 
 
 @router.get("/hmis/translation-models")
