@@ -1695,3 +1695,52 @@ td {
         flex: 1 1 180px;
     }
 }
+
+
+/* Collapsible nested PLC interface and DB/UDT members (dark UI). */
+.plc-member-row[hidden] {
+    display: none;
+}
+
+.plc-member-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.plc-member-toggle,
+.plc-member-leaf-spacer {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+}
+
+.plc-member-toggle {
+    display: inline-grid;
+    place-items: center;
+    min-height: 22px;
+    padding: 0;
+    border: 1px solid #364653;
+    border-radius: 4px;
+    background: #202b34;
+    color: #92c6e6;
+    font-size: 17px;
+    line-height: 1;
+}
+
+.plc-member-toggle:hover:not(:disabled) {
+    border-color: #5794b9;
+    background: #293d4b;
+    color: #e4f3fd;
+}
+
+.plc-member-toggle:focus-visible {
+    outline: 2px solid #76b6dc;
+    outline-offset: 2px;
+}
+
+.plc-member-parent-row td:nth-child(2) {
+    font-weight: 600;
+}

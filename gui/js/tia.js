@@ -10,6 +10,8 @@ import {
     saveProjectConfig,
 } from "./state.js";
 
+import { createPlcMemberTree } from "./plc_member_tree.js";
+
 
 const MANUAL_SELECTION =
     "__manual__";
@@ -4751,6 +4753,81 @@ export function initTiaUi(
     }
 
 
+    // Shared read-only hierarchical member table for OB/FB/FC and DB/UDT.
+    // Nested TIA XML members are flattened with level/path metadata.
+    function renderPlcMemberRows(body, members) {
+        const tree = createPlcMemberTree(members);
+        const rendered = [];
+
+        members.forEach((member, index) => {
+            const row = document.createElement("tr");
+            row.className = "plc-member-row";
+            const section = document.createElement("td");
+            section.textContent = member.section || "—";
+
+            const nameCell = document.createElement("td");
+            nameCell.title = member.path || member.name || "";
+            const nameContainer = document.createElement("span");
+            nameContainer.className = "plc-member-name";
+            nameContainer.style.paddingLeft =
+                `${12 + Math.min(12, Math.max(0, Number(member.level) || 0)) * 18}px`;
+
+            let button = null;
+            if (tree.hasChildren(index)) {
+                row.classList.add("plc-member-parent-row");
+                button = document.createElement("button");
+                button.type = "button";
+                button.className = "plc-member-toggle";
+                nameContainer.appendChild(button);
+            } else {
+                const spacer = document.createElement("span");
+                spacer.className = "plc-member-leaf-spacer";
+                spacer.setAttribute("aria-hidden", "true");
+                nameContainer.appendChild(spacer);
+            }
+
+            const name = document.createElement("span");
+            name.textContent = member.name || "—";
+            nameContainer.appendChild(name);
+            nameCell.appendChild(nameContainer);
+
+            const dataType = document.createElement("td");
+            dataType.textContent = member.data_type || "—";
+            const offset = document.createElement("td");
+            offset.textContent = member.offset || "—";
+            const comment = document.createElement("td");
+            comment.textContent = member.comment || "—";
+            row.append(section, nameCell, dataType, offset, comment);
+            body.appendChild(row);
+            rendered.push({row, button});
+        });
+
+        const updateVisibility = () => {
+            rendered.forEach(({row, button}, index) => {
+                row.hidden = !tree.isVisible(index);
+                if (button) {
+                    const expanded = tree.isExpanded(index);
+                    const label = members[index].path || members[index].name;
+                    button.textContent = expanded ? "▾" : "▸";
+                    button.setAttribute("aria-expanded", String(expanded));
+                    button.setAttribute(
+                        "aria-label",
+                        (expanded ? "Collapse " : "Expand ") + label
+                    );
+                }
+            });
+        };
+
+        rendered.forEach(({button}, index) => {
+            button?.addEventListener("click", () => {
+                tree.toggle(index);
+                updateVisibility();
+            });
+        });
+        updateVisibility();
+    }
+
+
     function renderPlcProgramBlockDetail(
         detail
     ) {
@@ -4897,75 +4974,11 @@ export function initTiaUi(
             );
 
         } else {
-            for (
-                const member
-                of members
-            ) {
-                const row =
-                    document.createElement(
-                        "tr"
-                    );
-
-
-                const values = [
-                    member.section
-                    ||
-                    "—",
-
-                    member.name
-                    ||
-                    "—",
-
-                    member.data_type
-                    ||
-                    "—",
-
-                    member.offset
-                    ||
-                    "—",
-
-                    member.comment
-                    ||
-                    "—",
-                ];
-
-
-                values.forEach(
-                    (value, index) => {
-                        const cell =
-                            document.createElement(
-                                "td"
-                            );
-
-                        cell.textContent =
-                            value;
-
-                        if (index === 1) {
-                            cell.style.paddingLeft =
-                                `${12 + (member.level || 0) * 18}px`;
-
-                            cell.title =
-                                member.path
-                                ||
-                                member.name;
-                        }
-
-                        row.appendChild(
-                            cell
-                        );
-                    }
-                );
-
-
-                plcProgramBlockDetailBody.appendChild(
-                    row
-                );
-            }
+            renderPlcMemberRows(plcProgramBlockDetailBody, members);
         }
 
-
         setPlcProgramBlockDetailStatus(
-            `${members.length} interface member(s) loaded.`,
+            `${members.length} interface member(s) loaded. Expand branches with ▸.`,
             "success"
         );
     }
@@ -5387,93 +5400,10 @@ export function initTiaUi(
         }
 
 
-        for (
-            const member
-            of detail.members
-        ) {
-            const row =
-                document.createElement(
-                    "tr"
-                );
-
-
-            const sectionCell =
-                document.createElement(
-                    "td"
-                );
-
-            sectionCell.textContent =
-                member.section
-                ||
-                "—";
-
-
-            const memberCell =
-                document.createElement(
-                    "td"
-                );
-
-            memberCell.textContent =
-                member.name;
-
-            memberCell.title =
-                member.path
-                ||
-                member.name;
-
-            memberCell.style.paddingLeft =
-                `${12 + (member.level || 0) * 18}px`;
-
-
-            const typeCell =
-                document.createElement(
-                    "td"
-                );
-
-            typeCell.textContent =
-                member.data_type
-                ||
-                "—";
-
-
-            const offsetCell =
-                document.createElement(
-                    "td"
-                );
-
-            offsetCell.textContent =
-                member.offset
-                ||
-                "—";
-
-
-            const commentCell =
-                document.createElement(
-                    "td"
-                );
-
-            commentCell.textContent =
-                member.comment
-                ||
-                "—";
-
-
-            row.append(
-                sectionCell,
-                memberCell,
-                typeCell,
-                offsetCell,
-                commentCell
-            );
-
-            plcStructureDetailBody.appendChild(
-                row
-            );
-        }
-
+        renderPlcMemberRows(plcStructureDetailBody, detail.members);
 
         setPlcStructureDetailStatus(
-            `${detail.members.length} member(s) loaded.`,
+            `${detail.members.length} member(s) loaded. Expand branches with ▸.`,
             "success"
         );
     }
