@@ -35,6 +35,14 @@ _POLISH_HMI_WORDS = frozenset({
     "uszkodzony", "uruchom", "wylacz", "wlacz", "sprawdz",
     "maszyna", "maszyny", "silnika", "pompy", "pompa", "pompe",
     "chlodnicy", "hydrauliki", "sygnal", "nieaktywny",
+    "od", "strony", "strona", "stronie", "karuzela", "karuzeli",
+    "stanowisko", "stanowiska", "pozycja", "pozycje", "pozycji",
+    "wózek", "wózka", "tor", "toru", "powrot", "powrotu",
+    "lewy", "lewa", "prawej", "prawy", "stacji", "skladania",
+    "naped", "napedu", "wrotny", "podnoszenie", "opuszczanie",
+    "podnies", "opusc", "przenosnik", "transport", "przyciski",
+    "panel", "aktywny", "blokada", "zabezpieczenie", "poczatek",
+    "koniec", "ustaw", "pozycjonowanie", "wymagane",
 })
 _ENGLISH_MARKERS = frozenset({
     "the", "and", "with", "without", "please", "press", "pull",
@@ -120,11 +128,19 @@ def semantic_qa_warnings(source: str, target: str,
     # The source is already recognizably Polish. Large lexical drift in
     # an existing Polish target can be legitimate, so this is a warning
     # only and never triggers automatic rewriting of the TIA workbook.
-    if is_likely_polish_hmi_source(source, target_culture) and not reasons:
-        shared = source_words & target_words
-        if len(shared) * 2 < len(source_words) and len(source_words) >= 2:
+    if is_likely_polish_hmi_source(source, target_culture):
+        # Once we can establish the source is already Polish, an AI rewrite
+        # has no translation benefit and can corrupt technical meaning.
+        # Permit only diacritic/case/whitespace normalization, including TIA's
+        # literal backslash-n versus a real line break.
+        def canonical(text: str) -> str:
+            return " ".join(
+                _fold(text.replace(r"\\n", " ").replace("ł", "l")).split()
+            )
+        if canonical(source) != canonical(target):
             reasons.append(
-                "Polish source was substantially reworded; check semantic drift."
+                "Source is already Polish; unexpected paraphrase. "
+                "Copy the source unchanged or correct only diacritics/spacing."
             )
 
     return reasons
