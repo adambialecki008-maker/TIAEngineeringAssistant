@@ -184,13 +184,28 @@ def _hmi_project_text_kind(category: str, reference: str) -> str:
     Graphic lists contain image references, not translatable HMI labels.
     Classification never overrides the required selected-HMI ViewPath root.
     """
-    details = re.sub(
-        r"[^a-z0-9]+", " ",
-        " ".join((str(category or ""), str(reference or ""))).casefold(),
-    )
-    if "graphic list" in details or "graphiclist" in details:
+    def normalize(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").casefold()).strip()
+
+    # Never mistake the common parent "Text and graphic lists" for an
+    # actual graphic-list entry. Only category or a dedicated list segment
+    # can classify a row; a generic parent folder is not enough.
+    category_text = normalize(category)
+    if "graphic list" in category_text or "graphiclist" in category_text:
         return "graphic_list"
-    if "text list" in details or "textlist" in details:
+    if "text list" in category_text or "textlist" in category_text:
+        return "text_list"
+    segments = [
+        normalize(part)
+        for part in str(reference or "").replace("/", "\\").split("\\")
+    ]
+    if any(part == "graphic lists" or part == "graphic list"
+           or part.startswith("graphic list entry")
+           or part.startswith("graphiclist") for part in segments):
+        return "graphic_list"
+    if any(part == "text lists" or part == "text list"
+           or part.startswith("text list entry")
+           or part.startswith("textlist") for part in segments):
         return "text_list"
     return "other"
 
