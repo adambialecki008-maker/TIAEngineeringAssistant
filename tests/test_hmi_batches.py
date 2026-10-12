@@ -298,3 +298,132 @@ def test_numbered_polish_instruction_imports_after_identifier_guard_fix(
     assert live["main-1"] == target
     assert commands.count("import-project-texts") == 1
     assert commands.count("export-project-texts") == 4
+
+
+
+def test_unsafe_ollama_proposal_is_skipped_but_valid_sibling_is_imported(
+    monkeypatch, tmp_path,
+):
+    source = (
+        "Dalmierz z intuicyjna nastawa punktu przelaczania\n"
+        "OID251 IFM\nDomyslna nastawa powinna byc ok 170cm d"
+    )
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    unsafe = "(Pneumatyczna) " + source[:-9]
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, culture, model, progress=None: {
+            text: unsafe if text == source else "Za zaworem" for text in texts
+        },
+    )
+    started = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 2},
+    )
+    assert started.status_code == 200, started.text
+    job_id = started.json()["job_id"]
+    response = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert response.status_code == 200, response.text
+    job = response.json()
+    assert job["status"] == "completed"
+    assert job["processed_unique"] == 2
+    assert job["completed_unique"] == 1
+    assert job["skipped_unique"] == 1
+    assert job["last_batch"]["skipped_unique"] == 1
+    assert job["last_verified_batch"]["verified_unique"] == 1
+    assert job["skipped_examples"][0]["source"] == source[:160]
+    assert "changed count of '('" in job["skipped_examples"][0]["reason"]
+    assert live["main-1"] == "Text"
+    assert live["main-2"] == "Za zaworem"
+    assert len(imports) == 1
+    assert commands.count("import-project-texts") == 1
+
+    persisted = client.get(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}"
+    ).json()
+    assert persisted["skipped_unique"] == 1
+    assert persisted["completed_unique"] == 1
+
+
+def test_whole_unsafe_batch_is_skipped_and_later_batch_continues(
+    monkeypatch, tmp_path,
+):
+    source = "(Hydrauliczna)"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, culture, model, progress=None: {
+            text: "(cykliski)" if text == source else "Za zaworem"
+            for text in texts
+        },
+    )
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start", json=REQUEST
+    )
+    assert created.status_code == 200, created.text
+    job_id = created.json()["job_id"]
+    first = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert first.status_code == 200, first.text
+    state = first.json()
+    assert state["status"] == "ready"
+    assert state["processed_unique"] == 1
+    assert state["completed_unique"] == 0
+    assert state["skipped_unique"] == 1
+    assert state["last_verified_batch"] is None
+    assert len(imports) == 0
+    assert "import-project-texts" not in commands
+    assert live["main-1"] == "Text"
+
+    next_batch = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert next_batch.status_code == 200, next_batch.text
+    finished = next_batch.json()
+    assert finished["status"] == "completed"
+    assert finished["processed_unique"] == 2
+    assert finished["completed_unique"] == 1
+    assert finished["skipped_unique"] == 1
+    assert finished["last_verified_batch"]["verified_unique"] == 1
+    assert len(imports) == 1
+    assert live["main-1"] == "Text"
+    assert live["main-2"] == "Za zaworem"
+
+
+def test_entire_job_can_finish_with_only_skips_without_import(monkeypatch, tmp_path):
+    source = "(Hydrauliczna)"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, culture, model, progress=None: {
+            text: "({Hydrauliczna})" for text in texts
+        },
+    )
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "total_to_translate": 1},
+    )
+    assert created.status_code == 200, created.text
+    job_id = created.json()["job_id"]
+    finished = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert finished.status_code == 200, finished.text
+    data = finished.json()
+    assert data["status"] == "completed"
+    assert data["completed_unique"] == 0
+    assert data["processed_unique"] == 1
+    assert data["skipped_unique"] == 1
+    assert data["last_verified_batch"] is None
+    assert not imports
+    assert "import-project-texts" not in commands
+    assert live["main-1"] == "Text"

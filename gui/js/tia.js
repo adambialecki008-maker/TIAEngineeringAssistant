@@ -1383,14 +1383,24 @@ export function initTiaUi(
         renderHmiBatchProgress(job.completed_unique, job.total_unique);
         const last = job.last_verified_batch;
         let message = "Job: " + job.status + " — "
-            + job.completed_unique + " / " + job.total_unique
-            + " unique texts; " + job.completed_rows + " TIA rows verified. "
+            + "processed " + (job.processed_unique ?? job.completed_unique)
+            + " / " + job.total_unique + " unique texts; "
+            + "verified " + job.completed_unique + "; skipped "
+            + (job.skipped_unique ?? 0) + "; "
+            + job.completed_rows + " TIA rows verified. "
             + "Batch " + Math.min(job.batch_index, job.total_batches)
             + " / " + job.total_batches + ".";
-        if (last) {
-            message += " Last batch: " + last.verified_unique
-                + " unique texts, " + last.verified_rows
-                + " HMI rows verified.";
+        if (job.last_batch) {
+            message += " Last batch: " + job.last_batch.verified_unique
+                + " verified, " + job.last_batch.skipped_unique + " skipped.";
+        } else if (last) {
+            message += " Last verified batch: " + last.verified_unique
+                + " unique texts, " + last.verified_rows + " HMI rows.";
+        }
+        if (job.skipped_unique && job.skipped_examples?.length) {
+            const recent = job.skipped_examples[job.skipped_examples.length - 1];
+            message += " Last skipped: " + recent.source.slice(0, 80)
+                + " (" + recent.reason + ").";
         }
         if (job.error) {
             message += " ERROR: " + job.error;
@@ -1415,6 +1425,7 @@ export function initTiaUi(
                 translating: "Ollama: translating",
                 importing_to_tia: "TIA: importing and verifying this batch",
                 verified: "TIA: batch verified",
+                skipped: "Unsafe translations skipped (no TIA import)",
             };
             const label = labels[progress.stage] || progress.stage;
             setHmiBatchStatus(label + " — " + progress.completed
@@ -1452,7 +1463,7 @@ export function initTiaUi(
                 if (job.status !== "ready" || !hmiBatchAutoRepeat?.checked) {
                     if (job.status === "ready") {
                         setHmiBatchStatus(
-                            "One batch imported and verified. Auto-continue is OFF. "
+                            "Batch processed. Auto-continue is OFF. "
                             + "Click Resume saved job for the next batch."
                         );
                     }

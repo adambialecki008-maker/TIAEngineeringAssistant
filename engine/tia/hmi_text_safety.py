@@ -29,12 +29,9 @@ def _reject_unsafe_proposal(source: str, translated: str, problem: str) -> None:
             "Unsafe Ollama translation rejected BEFORE TIA import: "
             + problem + ". Source: " + repr(source[:100])
             + "; proposed: " + repr(translated[:100])
-            + ". Do not import this result. If the source label is already "
-            + "in the target language (for example Polish -> pl-PL), "
-            + "select Text handling: 'Copy original Polish labels into "
-            + "missing target cells (no AI)', then scan/prepare again. "
-            + "For text in another language, select a suitable model and "
-            + "prepare a new, corrected proposal for review before importing."
+            + ". Do not import this result. Automatic batch jobs skip and "
+            + "count unsafe proposals while continuing with valid texts. "
+            + "For manual review, prepare a corrected proposal before importing."
         ),
     )
 

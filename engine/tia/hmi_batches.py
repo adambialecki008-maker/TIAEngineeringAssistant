@@ -84,6 +84,8 @@ def _load_job(job_id: str) -> dict:
 
 def _public_job(job: dict) -> dict:
     done = job["next_offset"]
+    skipped = job.get("skipped", [])
+    verified = max(0, done - len(skipped))
     total = len(job["candidates"])
     state = job["status"]
     if state == "processing" and job["job_id"] not in _ACTIVE_JOBS:
@@ -96,12 +98,16 @@ def _public_job(job: dict) -> dict:
         "model": job["model"],
         "batch_size": job["batch_size"],
         "total_unique": total,
-        "completed_unique": done,
+        "completed_unique": verified,
+        "processed_unique": done,
+        "skipped_unique": len(skipped),
+        "skipped_examples": skipped[-5:],
         "completed_rows": job.get("completed_rows", 0),
         "batch_index": (done // job["batch_size"]) + 1
         if done < total else (total + job["batch_size"] - 1) // job["batch_size"],
         "total_batches": (total + job["batch_size"] - 1) // job["batch_size"],
         "last_verified_batch": job.get("last_verified_batch"),
+        "last_batch": job.get("last_batch"),
         "error": job.get("error"),
         "started_at": job["started_at"],
         "updated_at": job["updated_at"],
@@ -164,6 +170,7 @@ def start_hmi_batch_job(request: StartBatchJobRequest):
         "candidates": selected,
         "next_offset": 0,
         "completed_rows": 0,
+        "skipped": [],
         "status": "ready",
         "error": None,
         "last_verified_batch": None,
@@ -226,13 +233,21 @@ def run_next_hmi_batch(job_id: str, action: BatchJobAction):
                 raise HTTPException(409, "Batch checkpoint changed unexpectedly.")
             current["next_offset"] = result["next_offset"]
             current["completed_rows"] += result["verified_rows"]
-            current["last_verified_batch"] = {
+            current.setdefault("skipped", []).extend(result["skipped"])
+            current["last_batch"] = {
                 "batch_index": result["batch_index"],
                 "verified_unique": result["verified_unique"],
                 "verified_rows": result["verified_rows"],
-                "import_state": result["import_state"],
-                "import_log": result["import_log"],
+                "skipped_unique": len(result["skipped"]),
             }
+            if result["verified_unique"]:
+                current["last_verified_batch"] = {
+                    "batch_index": result["batch_index"],
+                    "verified_unique": result["verified_unique"],
+                    "verified_rows": result["verified_rows"],
+                    "import_state": result["import_state"],
+                    "import_log": result["import_log"],
+                }
             current["status"] = (
                 "completed" if current["next_offset"] >= len(current["candidates"])
                 else "paused" if current.get("pause_requested") else "ready"
@@ -304,37 +319,65 @@ def _perform_one_batch(job: dict) -> dict:
             selected, requested.target_culture, job["model"],
             progress=progress,
         )
+    # Check every UNIQUE source before building the import workbook. Bad model
+    # proposals are skipped, not copied, retried, or sent to TIA.
+    valid_proposals = {}
+    skipped = []
+    for index, source in enumerate(selected):
+        proposal = translations.get(source)
+        try:
+            validate_hmi_translation(source, proposal)
+        except HTTPException as exc:
+            if exc.status_code != 502:
+                raise
+            skipped.append({
+                "offset": offset + index,
+                "source": source[:160],
+                "reason": str(exc.detail).split(". Source:", 1)[0][:240],
+            })
+        else:
+            valid_proposals[source] = proposal
+
+    safe_rows = []
     for row in matching:
-        proposed = translations.get(row["source"])
-        validate_hmi_translation(row["source"], proposed)
-        row["proposal"] = proposed
+        if row["source"] in valid_proposals:
+            row["proposal"] = valid_proposals[row["source"]]
+            safe_rows.append(row)
+
+    verified_rows = 0
+    import_state = "skipped_no_import"
+    import_log = None
+    if safe_rows:
+        review._record_progress(
+            job["job_id"], "importing_to_tia", offset + len(selected),
+            len(job["candidates"]),
+        )
+        token = uuid4().hex
+        review._REVIEWS[token] = {
+            "created": time.monotonic(),
+            "request": requested.model_dump(),
+            "model": job["model"],
+            "rows": safe_rows,
+        }
+        # Existing verified import logic re-exports TIA text values, checks
+        # siblings, imports only the selected HMI, then re-exports to verify.
+        verified = review.import_reviewed_hmi_translations(
+            review.ImportReviewRequest(review_id=token)
+        )
+        verified_rows = verified.verified_rows
+        import_state = verified.import_state
+        import_log = verified.import_log
 
     review._record_progress(
-        job["job_id"], "importing_to_tia", offset + len(selected),
-        len(job["candidates"]),
-    )
-    token = uuid4().hex
-    review._REVIEWS[token] = {
-        "created": time.monotonic(),
-        "request": requested.model_dump(),
-        "model": job["model"],
-        "rows": matching,
-    }
-    # Existing verified import logic checks source/current values against a
-    # fresh export, retains all sibling rows of the selected HMI, imports
-    # only that HMI, and verifies actual targets via another TIA export.
-    verified = review.import_reviewed_hmi_translations(
-        review.ImportReviewRequest(review_id=token)
-    )
-    review._record_progress(
-        job["job_id"], "verified", offset + len(selected),
-        len(job["candidates"]),
+        job["job_id"], "verified" if safe_rows else "skipped",
+        offset + len(selected), len(job["candidates"]),
     )
     return {
         "next_offset": offset + len(selected),
-        "verified_unique": len(selected),
-        "verified_rows": verified.verified_rows,
-        "import_state": verified.import_state,
-        "import_log": verified.import_log,
+        "verified_unique": len(valid_proposals),
+        "verified_rows": verified_rows,
+        "skipped": skipped,
+        "import_state": import_state,
+        "import_log": import_log,
         "batch_index": batch_index,
     }

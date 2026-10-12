@@ -46,7 +46,8 @@ def test_corrupted_polish_proposal_shows_safe_recovery():
         validate_hmi_translation(source, "({Pneumatyczna})")
     message = error.value.detail
     assert "BEFORE TIA import" in message
-    assert "Copy original Polish labels" in message
+    assert "Automatic batch jobs skip" in message
+    assert "Text handling" not in message
     assert repr(source) in message
     assert repr("({Pneumatyczna})") in message
 
