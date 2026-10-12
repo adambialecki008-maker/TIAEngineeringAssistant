@@ -476,6 +476,7 @@ export function initTiaUi(
     let hmiPreviewInProgress = false;
     let hmiAuditInProgress = false;
     let lastHmiPreviewRows = [];
+    let lastHmiTextListRows = [];
     let latestHmiScan = null;
     let hmiBatchRunning = false;
     let hmiBatchStarting = false;
@@ -1120,10 +1121,11 @@ export function initTiaUi(
     function renderHmiPreviewRows() {
         hmiPreviewRows?.replaceChildren();
         const selected = hmiPreviewFilter?.value || "matched";
-        const matching = selected === "matched";
-        const subset = lastHmiPreviewRows.filter(
-            item => Boolean(item.matches_hmi) === matching
-        );
+        const subset = selected === "text_lists"
+            ? lastHmiTextListRows
+            : lastHmiPreviewRows.filter(item =>
+                Boolean(item.matches_hmi) === (selected === "matched")
+            );
         for (const item of subset) {
             const row = document.createElement("tr");
             addHmiTextCell(row, item.source_text);
@@ -1172,6 +1174,7 @@ export function initTiaUi(
         }
         hmiPreviewResults?.classList.add("hidden");
         lastHmiPreviewRows = [];
+        lastHmiTextListRows = [];
         renderHmiPreviewRows();
         discardHmiReview();
     }
@@ -1774,12 +1777,16 @@ export function initTiaUi(
                 return false;
             }
             lastHmiPreviewRows = result.sample_rows || [];
+            lastHmiTextListRows = result.text_list_sample_rows || [];
             latestHmiScan = {
                 rows: result.matched_text_rows ?? 0,
                 unique: result.matched_unique_texts ?? 0,
                 eligible: result.matched_eligible_unique_texts ?? 0,
                 missingRows: result.matched_missing_target_rows ?? 0,
                 missingUnique: result.matched_missing_target_unique_texts ?? 0,
+                textListRows: result.matched_text_list_rows ?? 0,
+                missingTextListRows: result.matched_missing_text_list_rows ?? 0,
+                excludedGraphics: result.excluded_graphic_list_rows ?? 0,
             };
             if (hmiScanSummary) {
                 hmiScanSummary.textContent =
@@ -1792,6 +1799,10 @@ export function initTiaUi(
                     + latestHmiScan.missingUnique
                     + " unique texts have an empty or 'Text' target "
                     + "(recommended Total to translate). "
+                    + "Text lists: " + latestHmiScan.textListRows + " entries ("
+                    + latestHmiScan.missingTextListRows
+                    + " missing/placeholder targets). "
+                    + "Graphic lists: not translated. "
                     + "Missing-target counts are estimates, not confirmed "
                     + "untranslated-text counts.";
             }
@@ -1813,6 +1824,8 @@ export function initTiaUi(
                     + `target column: ${result.target_column_header || "unknown"}. `
                     + `${result.matched_text_rows} matched of ${result.total_text_rows} text rows `
                     + `across ${result.worksheets_found} sheet(s). `
+                    + "Includes text-list entries from this HMI only; "
+                    + "graphic lists are excluded. "
                     + "Rows below are samples, not the entire export.";
             }
             if (hmiViewPathRootSelect) {
