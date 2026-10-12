@@ -46,7 +46,7 @@ def test_ollama_model_change_keeps_scan_but_discards_prepared_review():
 
     model_handler = script.split(
         'hmiOllamaModelSelect.addEventListener(', 1
-    )[1].split(');', 1)[0]
+    )[1].split('if (hmiRefreshOllamaModels)', 1)[0]
     assert "discardHmiReview()" in model_handler
     assert "invalidateHmiPreview()" not in model_handler
 
