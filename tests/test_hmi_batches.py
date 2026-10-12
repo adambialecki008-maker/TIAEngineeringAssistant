@@ -458,3 +458,34 @@ def test_batch_normalizes_literal_ollama_newline_before_import(
     assert live["main-1"] == "Awaria PLC"
     assert "import-project-texts" in commands
     assert len(imports) == 1
+
+
+
+def test_batch_repairs_literal_newline_already_present_in_source(
+    monkeypatch, tmp_path,
+):
+    source = r"Awaria \nPLC"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: text for text in texts
+        },
+    )
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    assert created.status_code == 200, created.text
+    finished = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{created.json()['job_id']}/next",
+        json={},
+    )
+    assert finished.status_code == 200, finished.text
+    assert finished.json()["status"] == "completed"
+    assert finished.json()["skipped_unique"] == 0
+    assert live["main-1"] == "Awaria PLC"
+    assert len(imports) == 1
+    assert "import-project-texts" in commands

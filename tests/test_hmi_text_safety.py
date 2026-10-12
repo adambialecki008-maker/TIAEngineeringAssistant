@@ -111,7 +111,7 @@ def test_numbered_steps_and_real_plc_addresses_can_coexist():
     ("Awaria PLC", r"Awaria\n PLC", "Awaria PLC"),
     ("Awaria PLC", "Awaria PLC", "Awaria PLC"),
     ("Awaria\nPLC", r"Awaria\nPLC", "Awaria\nPLC"),
-    (r"Awaria\nPLC", r"Awaria\nPLC", r"Awaria\nPLC"),
+    (r"Awaria\nPLC", r"Awaria\nPLC", "Awaria PLC"),
 ])
 def test_literal_ai_backslash_n_preserves_source_line_break_semantics(
     source, proposed, expected,
