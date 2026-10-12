@@ -190,7 +190,8 @@ def test_prepare_skips_placeholder_without_creating_import_token(monkeypatch):
     assert result["skipped_unique"] == 2
     assert len(result["skipped"]) == 2
     assert all("placeholder" in item["reason"] for item in result["skipped"])
-    assert not review_module._REVIEWS
+    assert result["prepare_id"] in review_module._REVIEWS
+    assert review_module._REVIEWS[result["prepare_id"]]["rows"] == []
     assert commands == ["export-project-texts"]
     assert not imported
 
@@ -527,7 +528,8 @@ def test_manual_prepare_all_unsafe_does_not_offer_review_token(monkeypatch):
     assert live == {}
     assert imported == []
     assert commands == ["export-project-texts"]
-    assert not review_module._REVIEWS
+    assert result["prepare_id"] in review_module._REVIEWS
+    assert review_module._REVIEWS[result["prepare_id"]]["rows"] == []
 
 
 def test_exact_reported_oil_level_proposal_rejected_and_previewed(monkeypatch):
@@ -573,3 +575,150 @@ def test_exact_reported_oil_level_proposal_rejected_and_previewed(monkeypatch):
     assert data["selected_rows"] == 0
     assert data["review_id"] is None
     assert not imported
+
+
+
+def test_repair_skipped_prepare_item_requires_validation_before_import(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: ("(212BP2 Za zaworem)" if source == "212BP2 Za zaworem"
+                     else source)
+            for source in texts
+        },
+    )
+    prepared = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert prepared.status_code == 200, prepared.text
+    state = prepared.json()
+    assert state["selected_rows"] == 1
+    assert state["skipped_unique"] == 1
+    assert state["prepare_id"]
+    assert len(imported) == 0
+
+    invalid = client.post(
+        "/api/v1/tia/hmis/repair-prepared-translation",
+        json={
+            "prepare_id": state["prepare_id"],
+            "source_text": "212BP2 Za zaworem",
+            "proposal": "(212BP2 Za zaworem)",
+        },
+    )
+    assert invalid.status_code == 502, invalid.text
+    assert review_module._REVIEWS[state["prepare_id"]]["skipped_rows"]
+    assert len(imported) == 0
+
+    repaired = client.post(
+        "/api/v1/tia/hmis/repair-prepared-translation",
+        json={
+            "prepare_id": state["prepare_id"],
+            "source_text": "212BP2 Za zaworem",
+            "proposal": "212BP2 Za zaworem",
+        },
+    )
+    assert repaired.status_code == 200, repaired.text
+    data = repaired.json()
+    assert data["review_id"] == state["prepare_id"]
+    assert data["selected_rows"] == 2
+    assert data["skipped_unique"] == 0
+    assert len(data["examples"]) == 2
+    assert not imported
+
+    result = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": data["review_id"]},
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["verified_rows"] == 2
+    assert live["main-1"] == "212BP2 Za zaworem"
+    assert live["main-2"] == "Zgniatarka"
+    assert "import-project-texts" in commands
+
+
+def test_repair_all_skipped_prepare_remains_read_only_until_approval(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: "(" + source for source in texts
+        },
+    )
+    prepared = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert prepared.status_code == 200
+    state = prepared.json()
+    assert state["review_id"] is None
+    assert state["selected_rows"] == 0
+    assert state["skipped_unique"] == 2
+    assert state["prepare_id"] is not None
+    assert not imported
+
+    impossible = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": state["prepare_id"]},
+    )
+    assert impossible.status_code == 409
+    assert not imported
+
+    fixed = client.post(
+        "/api/v1/tia/hmis/repair-prepared-translation",
+        json={
+            "prepare_id": state["prepare_id"],
+            "source_text": "Zgniatarka",
+            "proposal": "Zgniatarka",
+        },
+    )
+    assert fixed.status_code == 200, fixed.text
+    data = fixed.json()
+    assert data["review_id"] == state["prepare_id"]
+    assert data["selected_rows"] == 1
+    assert data["skipped_unique"] == 1
+    assert not imported
+
+    duplicated = client.post(
+        "/api/v1/tia/hmis/repair-prepared-translation",
+        json={
+            "prepare_id": state["prepare_id"],
+            "source_text": "Zgniatarka",
+            "proposal": "Zgniatarka",
+        },
+    )
+    assert duplicated.status_code == 409
+    assert not imported
+
+    approved = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": data["review_id"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["verified_rows"] == 1
+    assert live["main-1"] == "Text"
+    assert live["main-2"] == "Zgniatarka"
+    assert len(imported) > 0
+
+
+def test_repair_rejects_source_outside_selected_review(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: "(" + source for source in texts
+        },
+    )
+    state = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    ).json()
+    forbidden = client.post(
+        "/api/v1/tia/hmis/repair-prepared-translation",
+        json={
+            "prepare_id": state["prepare_id"],
+            "source_text": "PLC_DO_NOT_EXIST",
+            "proposal": "Unrelated",
+        },
+    )
+    assert forbidden.status_code == 409
+    assert not imported
+    assert live == {}
