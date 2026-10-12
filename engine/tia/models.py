@@ -333,6 +333,12 @@ class HmiProjectTextsPreviewResponse(BaseModel):
     matched_eligible_unique_texts: int
     matched_missing_target_rows: int
     matched_missing_target_unique_texts: int
+    matched_text_list_rows: int = 0
+    matched_text_list_unique_texts: int = 0
+    matched_missing_text_list_rows: int = 0
+    matched_missing_text_list_unique_texts: int = 0
+    excluded_graphic_list_rows: int = 0
+    text_list_sample_rows: list[HmiProjectTextPreviewRow] = Field(default_factory=list)
     reference_examples: list[str]
     sample_rows: list[HmiProjectTextPreviewRow]
 
