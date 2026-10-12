@@ -11,6 +11,7 @@ import {
 } from "./state.js";
 
 import { createPlcMemberTree } from "./plc_member_tree.js";
+import { createHmiSkippedManager } from "./hmi_skipped_manager.js";
 
 
 const MANUAL_SELECTION =
@@ -78,6 +79,10 @@ export function initTiaUi(
     const hmiBatchResumeButton = document.getElementById("tia-hmi-batch-resume");
     const hmiBatchPauseButton = document.getElementById("tia-hmi-batch-pause");
     const hmiBatchStatus = document.getElementById("tia-hmi-batch-status");
+    const hmiSkippedOpen = document.getElementById("tia-hmi-skipped-open");
+    const hmiSkippedPanel = document.getElementById("tia-hmi-skipped-panel");
+    const hmiSkippedStatus = document.getElementById("tia-hmi-skipped-status");
+    const hmiSkippedList = document.getElementById("tia-hmi-skipped-list");
     const hmiBatchReadiness =
         document.getElementById("tia-hmi-batch-readiness");
     const hmiBatchPlan = document.getElementById("tia-hmi-batch-plan");
@@ -458,6 +463,17 @@ export function initTiaUi(
     let hmiBatchJobId = null;
     let hmiReviewInProgress = false;
     let preparedHmiReview = null;
+
+    const hmiSkippedManager = createHmiSkippedManager({
+        openButton: hmiSkippedOpen,
+        panel: hmiSkippedPanel,
+        status: hmiSkippedStatus,
+        list: hmiSkippedList,
+        getJson,
+        postJson,
+        getModel: () => hmiOllamaModelSelect?.value || null,
+        onJobUpdate: job => showHmiBatchJob(job),
+    });
 
     let currentProjectName = "";
 
@@ -1110,6 +1126,7 @@ export function initTiaUi(
     }
 
     function invalidateHmiPreview() {
+        hmiSkippedManager.reset();
         verifiedHmiScanKey = null;
         latestHmiScan = null;
         if (hmiScanSummary) {
@@ -1402,6 +1419,7 @@ export function initTiaUi(
 
     function showHmiBatchJob(job) {
         renderHmiBatchProgress(job.completed_unique, job.total_unique);
+        hmiSkippedManager.updateJob(job);
         const last = job.last_verified_batch;
         let message = "Job: " + job.status + " — "
             + "processed " + (job.processed_unique ?? job.completed_unique)
