@@ -4933,7 +4933,8 @@ export function initTiaUi(
                 row.hidden = results ? !results.visible.has(index)
                     : !tree.isVisible(index);
                 if (toggle) {
-                    const expanded = tree.isExpanded(index);
+                    const expanded = results
+                        ? results.expanded.has(index) : tree.isExpanded(index);
                     const path = members[index].path || members[index].name;
                     toggle.textContent = expanded ? "▾" : "▸";
                     toggle.setAttribute("aria-expanded", String(expanded));

@@ -85,6 +85,7 @@ export function createPlcMemberTree(members) {
                 return null;
             }
             const visible = new Set();
+            const expanded = new Set();
             let matches = 0;
             entries.forEach((entry, index) => {
                 const member = members[index] || {};
@@ -99,9 +100,10 @@ export function createPlcMemberTree(members) {
                 for (let parent = entry.parent; parent !== null;
                     parent = entries[parent].parent) {
                     visible.add(parent);
+                    expanded.add(parent);
                 }
             });
-            return {visible, matches};
+            return {visible, expanded, matches};
         },
     };
 }

@@ -96,6 +96,7 @@ assert.equal(tree.isVisible(2),false);
 const result=tree.search(members,"timer.et");
 assert.equal(result.matches,1);
 assert.deepEqual([...result.visible].sort(),[0,2]);
+assert.deepEqual([...result.expanded],[0]);
 assert.equal(tree.isVisible(2),false);
 assert.equal(tree.search(members,"missing").matches,0);
 assert.equal(tree.search(members,""),null);
