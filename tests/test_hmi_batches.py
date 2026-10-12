@@ -359,7 +359,7 @@ def test_whole_unsafe_batch_is_skipped_and_later_batch_continues(
     monkeypatch.setattr(
         review, "_translate_texts",
         lambda texts, culture, model, progress=None: {
-            text: "(cykliski)" if text == source else "Za zaworem"
+            text: "(cykliski" if text == source else "Za zaworem"
             for text in texts
         },
     )
