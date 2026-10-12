@@ -27,6 +27,7 @@ from engine.tia.hmi_text_safety import (
 )
 from engine.tia.ollama_translation import (
     list_ollama_models, resolve_ollama_model, translation_batch_size,
+    repair_ollama_translation,
 )
 
 router = APIRouter()
@@ -103,6 +104,7 @@ class TranslationReviewResponse(BaseModel):
     selected_rows: int
     unique_texts: int
     skipped_unique: int = 0
+    auto_repaired_unique: int = 0
     skipped: list[SkippedReviewTranslation] = Field(default_factory=list)
     examples: list[TranslationReviewItem]
 
@@ -241,6 +243,26 @@ def get_hmi_translation_models():
     }
 
 
+def try_repair_unsafe_translation(
+    source: str, rejected: str, validation_error: str,
+    target_culture: str, model: str,
+) -> str | None:
+    """Attempt one isolated Ollama repair; never accept invalid output.
+
+    Failed repair or unavailable Ollama means the original proposal is
+    still skipped, not that the entire HMI batch fails. Never mutate TIA.
+    """
+    try:
+        candidate = repair_ollama_translation(
+            source, rejected, validation_error, target_culture, model,
+        )
+        candidate = normalize_hmi_translation(source, candidate)
+        validate_hmi_translation(source, candidate)
+    except HTTPException:
+        return None
+    return candidate
+
+
 @router.post(
     "/hmis/prepare-translations",
     response_model=TranslationReviewResponse,
@@ -329,6 +351,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
     safe_rows = []
     skipped = []
     skipped_rows = {}
+    auto_repaired = 0
     for row in rows:
         source = row["source"]
         proposal = translated.get(source)
@@ -340,6 +363,20 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         except HTTPException as exc:
             if exc.status_code != 502:
                 raise
+            # One targeted Ollama correction only for structural failures.
+            # The repair itself must pass the SAME validator before approval.
+            fixed = (
+                try_repair_unsafe_translation(
+                    source, proposal if isinstance(proposal, str) else "",
+                    str(exc.detail), request.target_culture, model,
+                )
+                if request.translation_strategy == "ollama" else None
+            )
+            if fixed is not None:
+                row["proposal"] = fixed
+                safe_rows.append(row)
+                auto_repaired += 1
+                continue
             rejected = SkippedReviewTranslation(
                 source_text=source,
                 proposed_target=proposal if isinstance(proposal, str) else "",
@@ -362,6 +399,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         "rows": safe_rows,
         "skipped_rows": skipped_rows,
         "skipped": skipped,
+        "auto_repaired_unique": auto_repaired,
     }
     _record_progress(request.progress_id, "ready", len(unique), len(unique))
     return _prepared_review_response(token, _REVIEWS[token])
@@ -382,6 +420,7 @@ def _prepared_review_response(token: str, prepared: dict) -> TranslationReviewRe
         selected_rows=len(safe_rows),
         unique_texts=len({row["source"] for row in safe_rows}),
         skipped_unique=len(skipped),
+        auto_repaired_unique=prepared.get("auto_repaired_unique", 0),
         skipped=skipped,
         examples=_samples(safe_rows),
     )
