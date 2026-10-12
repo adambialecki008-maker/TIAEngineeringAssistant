@@ -630,8 +630,7 @@ def test_plc_program_block_detail_is_parsed(
             arguments[:-1]
         )
 
-        xml_file =
-            arguments[-1]
+        xml_file = arguments[-1]
 
         with open(
             xml_file,
@@ -829,8 +828,7 @@ def test_plc_structure_detail_is_parsed(
             arguments[:-1]
         )
 
-        xml_file =
-            arguments[-1]
+        xml_file = arguments[-1]
 
         with open(
             xml_file,

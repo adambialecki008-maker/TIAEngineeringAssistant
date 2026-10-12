@@ -4,6 +4,7 @@ from fastapi import HTTPException
 
 from engine.tia.hmi_text_safety import (
     needs_target_fill,
+    normalize_hmi_translation,
     validate_hmi_translation,
 )
 
@@ -102,3 +103,25 @@ def test_numbered_steps_and_real_plc_addresses_can_coexist():
         "1.Sprawdz M10.0\n2.Nacisnij start",
         "1.Sprawdź M10.0\n2.Naciśnij start",
     )
+
+
+
+@pytest.mark.parametrize("source,proposed,expected", [
+    ("Awaria PLC", r"Awaria \nPLC", "Awaria PLC"),
+    ("Awaria PLC", r"Awaria\n PLC", "Awaria PLC"),
+    ("Awaria PLC", "Awaria PLC", "Awaria PLC"),
+    ("Awaria\nPLC", r"Awaria\nPLC", "Awaria\nPLC"),
+    (r"Awaria\nPLC", r"Awaria\nPLC", r"Awaria\nPLC"),
+])
+def test_literal_ai_backslash_n_preserves_source_line_break_semantics(
+    source, proposed, expected,
+):
+    normalized = normalize_hmi_translation(source, proposed)
+    assert normalized == expected
+    validate_hmi_translation(source, normalized)
+
+
+def test_unprocessed_literal_backslash_n_cannot_reach_tia():
+    with pytest.raises(HTTPException) as error:
+        validate_hmi_translation("Awaria PLC", r"Awaria\nPLC")
+    assert "literal" in str(error.value.detail)

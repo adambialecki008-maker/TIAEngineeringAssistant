@@ -427,3 +427,34 @@ def test_entire_job_can_finish_with_only_skips_without_import(monkeypatch, tmp_p
     assert not imports
     assert "import-project-texts" not in commands
     assert live["main-1"] == "Text"
+
+
+
+def test_batch_normalizes_literal_ollama_newline_before_import(
+    monkeypatch, tmp_path,
+):
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source="Awaria PLC",
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: r"Awaria \nPLC" for text in texts
+        },
+    )
+    started = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    assert started.status_code == 200, started.text
+    response = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{started.json()['job_id']}/next",
+        json={},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "completed"
+    assert response.json()["skipped_unique"] == 0
+    assert response.json()["completed_unique"] == 1
+    assert live["main-1"] == "Awaria PLC"
+    assert "import-project-texts" in commands
+    assert len(imports) == 1

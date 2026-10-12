@@ -432,3 +432,26 @@ def test_import_warning_still_stops_before_reporting_success(monkeypatch):
     assert response.status_code == 502
     assert "Warning" in response.json()["detail"]
     assert commands.count("export-project-texts") == 2
+
+
+
+def test_manual_prepare_normalizes_literal_backslash_n_before_review(
+    monkeypatch,
+):
+    _live, commands, imported = _setup(monkeypatch)
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: r"212BP2 Za\nzaworem" if text == "212BP2 Za zaworem"
+            else text for text in texts
+        },
+    )
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations",
+        json=REQUEST,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["examples"][0]["proposed_target"] == "212BP2 Za zaworem"
+    assert commands == ["export-project-texts"]
+    assert not imported

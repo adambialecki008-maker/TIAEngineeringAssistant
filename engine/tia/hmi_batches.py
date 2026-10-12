@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from engine.tia.adapter import PROJECT_ROOT
 from engine.tia.models import TranslateHmiTextsRequest
 from engine.tia.hmi_text_safety import (
-    needs_target_fill, validate_hmi_translation,
+    needs_target_fill, normalize_hmi_translation, validate_hmi_translation,
 )
 from engine.tia.ollama_translation import resolve_ollama_model
 from engine.tia import hmi_review as review
@@ -324,7 +324,7 @@ def _perform_one_batch(job: dict) -> dict:
     valid_proposals = {}
     skipped = []
     for index, source in enumerate(selected):
-        proposal = translations.get(source)
+        proposal = normalize_hmi_translation(source, translations.get(source))
         try:
             validate_hmi_translation(source, proposal)
         except HTTPException as exc:

@@ -36,12 +36,33 @@ def _reject_unsafe_proposal(source: str, translated: str, problem: str) -> None:
     )
 
 
+def normalize_hmi_translation(source: str, translated: str) -> str:
+    """Remove AI-invented literal backslash-n before validating HMI text.
+
+    Do not change literal escape sequences that were already in the source.
+    If the source contains real line breaks, preserve those as real line
+    breaks; otherwise normalize the invented separator to one space.
+    Only the PROPOSED target is normalized, never the TIA source cell.
+    """
+    if (not isinstance(translated, str) or r"\n" not in translated
+            or r"\n" in source):
+        return translated
+    separator = "\n" if "\n" in source else " "
+    return re.sub(r"[ \t]*\\n[ \t]*", lambda _match: separator, translated)
+
+
 def validate_hmi_translation(source: str, translated: str) -> None:
     """Reject structurally damaged translations before ANY TIA import."""
     if not isinstance(translated, str) or not translated.strip():
         raise HTTPException(502, "Translation returned empty text.")
     if translated.strip().casefold() == "text" and source.strip().casefold() != "text":
         raise HTTPException(502, "Translation returned the placeholder 'Text'.")
+    # Defense in depth: do not allow an unnormalized Ollama escape to be
+    # imported through a different/legacy call path.
+    if r"\n" in translated and r"\n" not in source:
+        _reject_unsafe_proposal(
+            source, translated, r"introduced literal \n instead of whitespace",
+        )
 
     # Preserve numbered instruction prefixes without treating the following
     # human-language word as part of an identifier: "1.Naciagnij" is prose,

@@ -23,7 +23,7 @@ from engine.tia.hmi_translation import (
 )
 from engine.tia.models import TranslateHmiTextsRequest
 from engine.tia.hmi_text_safety import (
-    needs_target_fill, validate_hmi_translation,
+    needs_target_fill, normalize_hmi_translation, validate_hmi_translation,
 )
 from engine.tia.ollama_translation import (
     list_ollama_models, resolve_ollama_model, translation_batch_size,
@@ -314,6 +314,7 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
     for row in rows:
         source = row["source"]
         proposal = translated[source] if source in translated else source
+        proposal = normalize_hmi_translation(source, proposal)
         validate_hmi_translation(source, proposal)
         row["proposal"] = proposal
 
