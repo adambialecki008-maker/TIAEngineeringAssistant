@@ -344,7 +344,19 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
     response_model=ImportReviewResponse,
 )
 def import_reviewed_hmi_translations(request: ImportReviewRequest):
+    return _import_reviewed_hmi_translations(request)
+
+
+def _import_reviewed_hmi_translations(
+    request: ImportReviewRequest, *, allow_skipped: bool = False,
+):
     _prune_expired_reviews()
+    review = _REVIEWS.get(request.review_id)
+    if review and review.get("skip_origin") and not allow_skipped:
+        raise HTTPException(
+            409, "Skipped-translation review must be imported through "
+            "its original batch job, so the verified checkpoint is updated."
+        )
     review = _REVIEWS.pop(request.review_id, None)
     if review is None:
         raise HTTPException(
