@@ -1875,3 +1875,48 @@ td {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+
+
+/* Individual rejected HMI proposal repair inside Prepare preview. */
+.hmi-review-skipped-item label {
+    display: block;
+    margin: 8px 0;
+    color: #d0e0ea;
+    font-size: 12px;
+}
+.hmi-review-skipped-item textarea {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 68px;
+    margin-top: 5px;
+    padding: 8px;
+    border: 1px solid #586979;
+    border-radius: 4px;
+    color: #e9f2f7;
+    background: #111a21;
+    font: 13px Consolas, monospace;
+    resize: vertical;
+}
+.hmi-review-skipped-item .action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+.hmi-review-skipped-item .action-row button {
+    padding: 5px 10px;
+    min-height: 30px;
+    font-size: 12px;
+}
+.hmi-review-skipped-reason {
+    margin: 5px 0;
+    color: #e8ae80;
+    font-size: 12px;
+}
+.hmi-review-repair-status {
+    margin: 7px 0 0;
+    color: #bcd2e0;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
