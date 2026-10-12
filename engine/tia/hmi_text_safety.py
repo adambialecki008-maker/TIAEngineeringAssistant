@@ -37,17 +37,19 @@ def _reject_unsafe_proposal(source: str, translated: str, problem: str) -> None:
 
 
 def normalize_hmi_translation(source: str, translated: str) -> str:
-    """Remove AI-invented literal backslash-n before validating HMI text.
+    """Resolve literal backslash-n to a proper TIA newline or space.
 
-    For HMI prose, a literal backslash-n is not a real line break: normalize
-    it even if it was already present in the exported source column.
-    If the source contains real line breaks, preserve those as real line
-    breaks; otherwise replace the textual escape with one space.
+    TIA displays actual line breaks as a paragraph marker (¶). If the
+    source contains a real line break OR a literal backslash-n separator,
+    the translation must contain a real line break, never the visible
+    backslash-n characters. Preserve the source's intended layout.
+    Only an escape invented by Ollama for an otherwise single-line
+    source is replaced with a space.
     Only the PROPOSED target is normalized, never the TIA source cell.
     """
     if not isinstance(translated, str) or r"\n" not in translated:
         return translated
-    separator = "\n" if "\n" in source else " "
+    separator = "\n" if ("\n" in source or r"\n" in source) else " "
     return re.sub(r"[ \t]*\\n[ \t]*", lambda _match: separator, translated)
 
 
@@ -61,7 +63,7 @@ def validate_hmi_translation(source: str, translated: str) -> None:
     # imported through a different/legacy call path.
     if r"\n" in translated:
         _reject_unsafe_proposal(
-            source, translated, r"introduced literal \n instead of whitespace",
+            source, translated, r"introduced literal \n instead of a real newline or space",
         )
 
     # Preserve numbered instruction prefixes without treating the following

@@ -486,6 +486,38 @@ def test_batch_repairs_literal_newline_already_present_in_source(
     assert finished.status_code == 200, finished.text
     assert finished.json()["status"] == "completed"
     assert finished.json()["skipped_unique"] == 0
-    assert live["main-1"] == "Awaria PLC"
+    # The literal source escape is an intended line break (TIA shows ¶).
+    assert live["main-1"] == "Awaria\nPLC"
+    assert len(imports) == 1
+    assert "import-project-texts" in commands
+
+
+
+def test_batch_keeps_actual_tia_newline_when_source_has_one(
+    monkeypatch, tmp_path,
+):
+    source = "Awaria\nhardware"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: r"Awaria\nhardware" for text in texts
+        },
+    )
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    assert created.status_code == 200, created.text
+    finished = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{created.json()['job_id']}/next",
+        json={},
+    )
+    assert finished.status_code == 200, finished.text
+    assert finished.json()["status"] == "completed"
+    assert finished.json()["skipped_unique"] == 0
+    assert live["main-1"] == "Awaria\nhardware"
     assert len(imports) == 1
     assert "import-project-texts" in commands
