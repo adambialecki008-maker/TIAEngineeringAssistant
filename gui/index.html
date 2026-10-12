@@ -694,6 +694,12 @@
                     <div id="tia-hmi-review-results" class="hidden">
                         <h4>Prepared translations — review before importing</h4>
                         <p id="tia-hmi-review-summary" class="hint"></p>
+                        <details id="tia-hmi-review-skipped" class="hmi-review-skipped hidden">
+                            <summary id="tia-hmi-review-skipped-summary">Skipped unsafe proposals</summary>
+                            <p class="hint">These translations were rejected before import.
+                                Only validated rows below can be imported into TIA.</p>
+                            <div id="tia-hmi-review-skipped-list" class="hmi-review-skipped-list"></div>
+                        </details>
                         <div class="table-wrapper hmi-text-table-wrapper">
                             <table class="hmi-text-table hmi-review-table">
                                 <colgroup>
