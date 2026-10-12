@@ -331,7 +331,9 @@ def import_skipped_hmi_translation(
     try:
         # The existing reviewed-import path validates each source and target,
         # imports ONLY selected-HMI rows, then checks a fresh TIA XLSX export.
-        verified = review.import_reviewed_hmi_translations(request)
+        verified = review._import_reviewed_hmi_translations(
+            request, allow_skipped=True,
+        )
         with _JOB_LOCK:
             current = _load_job(job_id)
             _skipped_entry(current, offset)
