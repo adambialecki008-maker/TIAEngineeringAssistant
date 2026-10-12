@@ -86,8 +86,14 @@ class TranslationReviewItem(BaseModel):
     proposed_target: str
 
 
+class SkippedReviewTranslation(BaseModel):
+    source_text: str
+    proposed_target: str = ""
+    reason: str
+
+
 class TranslationReviewResponse(BaseModel):
-    review_id: str
+    review_id: str | None = None
     hmi_name: str
     view_path_root: str
     source_culture: str
@@ -95,6 +101,8 @@ class TranslationReviewResponse(BaseModel):
     ollama_model: str
     selected_rows: int
     unique_texts: int
+    skipped_unique: int = 0
+    skipped: list[SkippedReviewTranslation] = Field(default_factory=list)
     examples: list[TranslationReviewItem]
 
 
@@ -311,20 +319,39 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         )
     _record_progress(request.progress_id, "preparing_review", len(unique), len(unique))
 
+    safe_rows = []
+    skipped = []
     for row in rows:
         source = row["source"]
-        proposal = translated[source] if source in translated else source
+        proposal = translated.get(source)
+        if request.translation_strategy == "copy":
+            proposal = source
         proposal = normalize_hmi_translation(source, proposal)
-        validate_hmi_translation(source, proposal)
+        try:
+            validate_hmi_translation(source, proposal)
+        except HTTPException as exc:
+            if exc.status_code != 502:
+                raise
+            skipped.append(SkippedReviewTranslation(
+                source_text=source,
+                proposed_target=proposal if isinstance(proposal, str) else "",
+                reason=str(exc.detail).split(". Source:", 1)[0],
+            ))
+            continue
         row["proposal"] = proposal
+        safe_rows.append(row)
 
-    token = uuid4().hex
-    _REVIEWS[token] = {
-        "created": time.monotonic(),
-        "request": request.model_dump(),
-        "model": model,
-        "rows": rows,
-    }
+    # A review token is created ONLY for individually validated proposals.
+    # Invalid proposals remain visible in Preview but can never reach TIA.
+    token = None
+    if safe_rows:
+        token = uuid4().hex
+        _REVIEWS[token] = {
+            "created": time.monotonic(),
+            "request": request.model_dump(),
+            "model": model,
+            "rows": safe_rows,
+        }
     _record_progress(request.progress_id, "ready", len(unique), len(unique))
     return TranslationReviewResponse(
         review_id=token,
@@ -333,9 +360,11 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
         source_culture=request.source_culture,
         target_culture=request.target_culture,
         ollama_model=model,
-        selected_rows=len(rows),
-        unique_texts=len(unique),
-        examples=_samples(rows),
+        selected_rows=len(safe_rows),
+        unique_texts=len(safe_rows),
+        skipped_unique=len(skipped),
+        skipped=skipped,
+        examples=_samples(safe_rows),
     )
 
 
