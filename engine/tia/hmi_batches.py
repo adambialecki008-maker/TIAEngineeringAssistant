@@ -286,7 +286,9 @@ def prepare_skipped_hmi_translation(
         proposal = proposals.get(source)
 
     proposal = normalize_hmi_translation(source, proposal)
-    validate_hmi_translation(source, proposal)
+    review.validate_hmi_translation_quality(
+        source, proposal, requested.target_culture,
+    )
     for row in matching:
         row["proposal"] = proposal
 
@@ -500,7 +502,9 @@ def _perform_one_batch(job: dict) -> dict:
     for index, source in enumerate(selected):
         proposal = normalize_hmi_translation(source, translations.get(source))
         try:
-            validate_hmi_translation(source, proposal)
+            review.validate_hmi_translation_quality(
+                source, proposal, requested.target_culture,
+            )
         except HTTPException as exc:
             if exc.status_code != 502:
                 raise
