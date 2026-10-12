@@ -184,10 +184,13 @@ def _hmi_project_text_kind(category: str, reference: str) -> str:
     Graphic lists contain image references, not translatable HMI labels.
     Classification never overrides the required selected-HMI ViewPath root.
     """
-    details = " ".join((str(category or ""), str(reference or ""))).casefold()
-    if re.search(r"graphic[\\s_.-]*lists?|graphic[\\s_.-]*list[\\s_.-]*entry", details):
+    details = re.sub(
+        r"[^a-z0-9]+", " ",
+        " ".join((str(category or ""), str(reference or ""))).casefold(),
+    )
+    if "graphic list" in details or "graphiclist" in details:
         return "graphic_list"
-    if re.search(r"text[\\s_.-]*lists?|text[\\s_.-]*list[\\s_.-]*entry", details):
+    if "text list" in details or "textlist" in details:
         return "text_list"
     return "other"
 
