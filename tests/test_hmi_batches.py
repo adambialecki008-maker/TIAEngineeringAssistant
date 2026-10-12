@@ -690,3 +690,81 @@ def test_skipped_recovery_requires_completed_job_and_matching_review(
     assert invalid_token.status_code == 409
     assert live["main-1"] == "Text"
     assert commands.count("import-project-texts") == 1
+
+
+
+def test_skipped_review_cannot_bypass_checkpoint_via_generic_import(
+    monkeypatch, tmp_path,
+):
+    source = "Pneumatyczny"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(Pneumatyczny" for text in texts
+        },
+    )
+    job_id = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    ).json()["job_id"]
+    assert client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next",
+        json={},
+    ).status_code == 200
+    prepared = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/prepare",
+        json={"mode": "manual", "proposal": source},
+    ).json()
+
+    bypass = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": prepared["review_id"]},
+    )
+    assert bypass.status_code == 409, bypass.text
+    assert not imports
+    assert live["main-1"] == "Text"
+
+    valid = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/import",
+        json={"review_id": prepared["review_id"]},
+    )
+    assert valid.status_code == 200, valid.text
+    assert valid.json()["job"]["recovered_unique"] == 1
+    assert len(imports) == 1
+
+
+def test_skipped_list_returns_original_full_source_from_checkpoint(
+    monkeypatch, tmp_path,
+):
+    source = ("Pneumatyczny " * 22).strip()
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(" + text for text in texts
+        },
+    )
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    job_id = created.json()["job_id"]
+    run = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next",
+        json={},
+    )
+    assert run.status_code == 200, run.text
+    response = client.get(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped"
+    )
+    assert response.status_code == 200, response.text
+    assert len(response.json()["items"]) == 1
+    assert response.json()["items"][0]["source"] == source
+    assert len(source) > 160
+    assert response.json()["items"][0]["resolved"] is False
+    assert not imports
