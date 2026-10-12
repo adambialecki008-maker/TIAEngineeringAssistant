@@ -635,6 +635,25 @@
                            aria-live="polite">
                             No automatic batch import started.
                         </p>
+                        <div class="hmi-skipped-manager">
+                            <button type="button" id="tia-hmi-skipped-open"
+                                    class="secondary-button" disabled>
+                                Skipped translations (0)
+                            </button>
+                            <section id="tia-hmi-skipped-panel" class="hidden"
+                                     aria-label="Skipped HMI translations">
+                                <h4>Skipped translations</h4>
+                                <p class="hint">View every skipped text, correct the proposal
+                                    or retry it individually with Ollama. Prepare does not
+                                    import into TIA. Confirm each import explicitly; the
+                                    result must pass validation and re-export verification.</p>
+                                <p id="tia-hmi-skipped-status" class="status-box"
+                                   role="status" aria-live="polite">
+                                    Load a completed batch job to view skips.
+                                </p>
+                                <div id="tia-hmi-skipped-list" class="hmi-skipped-list"></div>
+                            </section>
+                        </div>
                     </section>
 
                     <div id="tia-hmi-preview-results" class="hidden">
