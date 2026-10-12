@@ -4755,74 +4755,216 @@ export function initTiaUi(
 
     // Shared read-only hierarchical member table for OB/FB/FC and DB/UDT.
     // Nested TIA XML members are flattened with level/path metadata.
-    function renderPlcMemberRows(body, members) {
+    // Shared read-only inspector for OB/FB/FC and DB/UDT.
+    function renderPlcMemberRows(body, members, context) {
         const tree = createPlcMemberTree(members);
         const rendered = [];
+        const wrapper = body.closest(".tia-structure-member-table-wrapper");
+        wrapper?.parentElement?.querySelector(".plc-member-toolbar")?.remove();
+
+        const toolbar = document.createElement("div");
+        toolbar.className = "plc-member-toolbar";
+        const actionRow = document.createElement("div");
+        actionRow.className = "plc-member-toolbar-actions";
+        const searchInput = document.createElement("input");
+        searchInput.type = "search";
+        searchInput.className = "plc-member-search";
+        searchInput.placeholder = "Search name, type, comment or path...";
+        searchInput.setAttribute("aria-label", "Search PLC members");
+        const expand = document.createElement("button");
+        expand.type = "button";
+        expand.textContent = "Expand all";
+        const collapse = document.createElement("button");
+        collapse.type = "button";
+        collapse.textContent = "Collapse all";
+        const blockRefs = document.createElement("button");
+        blockRefs.type = "button";
+        blockRefs.textContent = "Block references";
+        const message = document.createElement("span");
+        message.className = "plc-member-message";
+        message.setAttribute("role", "status");
+        const referenceResults = document.createElement("div");
+        referenceResults.className = "plc-member-reference-results";
+        referenceResults.setAttribute("aria-live", "polite");
+        actionRow.append(searchInput, expand, collapse, blockRefs, message);
+        toolbar.append(actionRow, referenceResults);
+        wrapper?.parentElement?.insertBefore(toolbar, wrapper);
+
+        const copyPath = async member => {
+            const fullPath = [context.name, member.path || member.name]
+                .filter(Boolean).join(".");
+            try {
+                await navigator.clipboard.writeText(fullPath);
+                message.textContent = "Copied: " + fullPath;
+            } catch (_error) {
+                message.textContent = "Clipboard unavailable. Path: " + fullPath;
+            }
+        };
+
+        let requestSequence = 0;
+        async function showCrossReferences(member = null) {
+            const requestId = ++requestSequence;
+            referenceResults.replaceChildren();
+            const heading = document.createElement("p");
+            const label = member?.path || context.name;
+            heading.textContent = "Reading TIA references for " + label + "...";
+            referenceResults.appendChild(heading);
+            const params = new URLSearchParams({
+                process_id: String(selectedProcessId()),
+                device_name: projectConfig.tia_target?.device_name || "",
+                plc_name: projectConfig.tia_target?.plc_name || "",
+                kind: context.kind,
+                group_path: context.group_path || "",
+                name: context.name,
+                member_path: member?.path || "",
+            });
+            try {
+                const result = await getJson(
+                    "/api/v1/tia/plc-cross-references?" + params.toString()
+                );
+                if (requestId !== requestSequence || !toolbar.isConnected) {
+                    return;
+                }
+                referenceResults.replaceChildren();
+                const title = document.createElement("p");
+                title.textContent = "Cross-references — " + label + ": "
+                    + result.references.length + " result(s)"
+                    + (result.truncated ? " (limited to 200)" : "");
+                referenceResults.appendChild(title);
+                if (!result.references.length) {
+                    const empty = document.createElement("p");
+                    empty.textContent = "No references reported by TIA for this object.";
+                    referenceResults.appendChild(empty);
+                    return;
+                }
+                const table = document.createElement("table");
+                table.className = "management-table plc-xref-table";
+                const head = document.createElement("thead");
+                const header = document.createElement("tr");
+                for (const column of ["Source", "Referenced in", "Location", "Access"]) {
+                    const th = document.createElement("th");
+                    th.textContent = column;
+                    header.appendChild(th);
+                }
+                head.appendChild(header);
+                const bodyRows = document.createElement("tbody");
+                for (const item of result.references) {
+                    const row = document.createElement("tr");
+                    const values = [
+                        item.source_path || item.source_name,
+                        item.reference_path || item.reference_name,
+                        [item.location_name, item.reference_location,
+                            item.reference_type].filter(Boolean).join(" / "),
+                        item.access,
+                    ];
+                    for (const value of values) {
+                        const td = document.createElement("td");
+                        td.textContent = value || "—";
+                        row.appendChild(td);
+                    }
+                    bodyRows.appendChild(row);
+                }
+                table.append(head, bodyRows);
+                const scroll = document.createElement("div");
+                scroll.className = "table-wrapper";
+                scroll.appendChild(table);
+                referenceResults.appendChild(scroll);
+            } catch (error) {
+                if (requestId === requestSequence && toolbar.isConnected) {
+                    heading.textContent = "Cross-reference lookup failed: " + error.message;
+                }
+            }
+        }
 
         members.forEach((member, index) => {
             const row = document.createElement("tr");
             row.className = "plc-member-row";
             const section = document.createElement("td");
             section.textContent = member.section || "—";
-
             const nameCell = document.createElement("td");
             nameCell.title = member.path || member.name || "";
             const nameContainer = document.createElement("span");
             nameContainer.className = "plc-member-name";
             nameContainer.style.paddingLeft =
                 `${12 + Math.min(12, Math.max(0, Number(member.level) || 0)) * 18}px`;
-
-            let button = null;
+            let toggle = null;
             if (tree.hasChildren(index)) {
                 row.classList.add("plc-member-parent-row");
-                button = document.createElement("button");
-                button.type = "button";
-                button.className = "plc-member-toggle";
-                nameContainer.appendChild(button);
+                toggle = document.createElement("button");
+                toggle.type = "button";
+                toggle.className = "plc-member-toggle";
+                nameContainer.appendChild(toggle);
             } else {
                 const spacer = document.createElement("span");
                 spacer.className = "plc-member-leaf-spacer";
                 spacer.setAttribute("aria-hidden", "true");
                 nameContainer.appendChild(spacer);
             }
-
             const name = document.createElement("span");
             name.textContent = member.name || "—";
             nameContainer.appendChild(name);
             nameCell.appendChild(nameContainer);
-
             const dataType = document.createElement("td");
             dataType.textContent = member.data_type || "—";
             const offset = document.createElement("td");
             offset.textContent = member.offset || "—";
             const comment = document.createElement("td");
             comment.textContent = member.comment || "—";
-            row.append(section, nameCell, dataType, offset, comment);
+            const actions = document.createElement("td");
+            actions.className = "plc-member-actions";
+            const copy = document.createElement("button");
+            copy.type = "button";
+            copy.textContent = "Copy path";
+            copy.addEventListener("click", () => { void copyPath(member); });
+            const refs = document.createElement("button");
+            refs.type = "button";
+            refs.textContent = "Refs";
+            refs.title = "Show Openness cross-references";
+            refs.addEventListener("click", () => { void showCrossReferences(member); });
+            actions.append(copy, refs);
+            row.append(section, nameCell, dataType, offset, comment, actions);
             body.appendChild(row);
-            rendered.push({row, button});
+            rendered.push({row, toggle});
         });
 
         const updateVisibility = () => {
-            rendered.forEach(({row, button}, index) => {
-                row.hidden = !tree.isVisible(index);
-                if (button) {
+            const results = tree.search(members, searchInput.value);
+            rendered.forEach(({row, toggle}, index) => {
+                row.hidden = results ? !results.visible.has(index)
+                    : !tree.isVisible(index);
+                if (toggle) {
                     const expanded = tree.isExpanded(index);
-                    const label = members[index].path || members[index].name;
-                    button.textContent = expanded ? "▾" : "▸";
-                    button.setAttribute("aria-expanded", String(expanded));
-                    button.setAttribute(
-                        "aria-label",
-                        (expanded ? "Collapse " : "Expand ") + label
+                    const path = members[index].path || members[index].name;
+                    toggle.textContent = expanded ? "▾" : "▸";
+                    toggle.setAttribute("aria-expanded", String(expanded));
+                    toggle.setAttribute(
+                        "aria-label", (expanded ? "Collapse " : "Expand ") + path
                     );
                 }
             });
+            message.textContent = results
+                ? results.matches + " matching member(s)"
+                : members.length + " member(s)";
         };
-
-        rendered.forEach(({button}, index) => {
-            button?.addEventListener("click", () => {
+        rendered.forEach(({toggle}, index) => {
+            toggle?.addEventListener("click", () => {
                 tree.toggle(index);
                 updateVisibility();
             });
+        });
+        searchInput.addEventListener("input", updateVisibility);
+        expand.addEventListener("click", () => {
+            searchInput.value = "";
+            tree.expandAll();
+            updateVisibility();
+        });
+        collapse.addEventListener("click", () => {
+            searchInput.value = "";
+            tree.collapseAll();
+            updateVisibility();
+        });
+        blockRefs.addEventListener("click", () => {
+            void showCrossReferences();
         });
         updateVisibility();
     }
@@ -4957,7 +5099,7 @@ export function initTiaUi(
                 );
 
             cell.colSpan =
-                5;
+                6;
 
             cell.className =
                 "empty-table-cell";
@@ -4974,7 +5116,7 @@ export function initTiaUi(
             );
 
         } else {
-            renderPlcMemberRows(plcProgramBlockDetailBody, members);
+            renderPlcMemberRows(plcProgramBlockDetailBody, members, detail);
         }
 
         setPlcProgramBlockDetailStatus(
@@ -5376,7 +5518,7 @@ export function initTiaUi(
                 );
 
             cell.colSpan =
-                5;
+                6;
 
             cell.className =
                 "empty-table-cell";
@@ -5400,7 +5542,7 @@ export function initTiaUi(
         }
 
 
-        renderPlcMemberRows(plcStructureDetailBody, detail.members);
+        renderPlcMemberRows(plcStructureDetailBody, detail.members, detail);
 
         setPlcStructureDetailStatus(
             `${detail.members.length} member(s) loaded. Expand branches with ▸.`,
