@@ -118,6 +118,13 @@ export function initTiaUi(
     const hmiReviewResults = document.getElementById("tia-hmi-review-results");
     const hmiReviewSummary = document.getElementById("tia-hmi-review-summary");
     const hmiReviewRows = document.getElementById("tia-hmi-review-rows");
+    const hmiReviewSkipped = document.getElementById("tia-hmi-review-skipped");
+    const hmiReviewSkippedSummary = document.getElementById(
+        "tia-hmi-review-skipped-summary"
+    );
+    const hmiReviewSkippedList = document.getElementById(
+        "tia-hmi-review-skipped-list"
+    );
 
     const hmiPreviewResults =
         document.getElementById(
@@ -1122,6 +1129,8 @@ export function initTiaUi(
         preparedHmiReview = null;
         hmiReviewResults?.classList.add("hidden");
         hmiReviewRows?.replaceChildren();
+        hmiReviewSkipped?.classList.add("hidden");
+        hmiReviewSkippedList?.replaceChildren();
         updateHmiTranslateButtonState();
     }
 
@@ -2145,11 +2154,15 @@ export function initTiaUi(
                 return;
             }
 
-            preparedHmiReview = {
-                reviewId: result.review_id,
-                selectionKey: key,
-                rowCount: result.selected_rows,
-            };
+            const safeCount = result.selected_rows || 0;
+            const skipped = result.skipped || [];
+            preparedHmiReview = result.review_id && safeCount
+                ? {
+                    reviewId: result.review_id,
+                    selectionKey: key,
+                    rowCount: safeCount,
+                }
+                : null;
             hmiReviewRows?.replaceChildren();
             for (const item of result.examples || []) {
                 const row = document.createElement("tr");
@@ -2159,15 +2172,42 @@ export function initTiaUi(
                 addHmiDetailsCell(row, item.view_path, "", item.sheet, null);
                 hmiReviewRows?.appendChild(row);
             }
+            hmiReviewSkippedList?.replaceChildren();
+            if (hmiReviewSkipped) {
+                hmiReviewSkipped.classList.toggle("hidden", !skipped.length);
+                hmiReviewSkipped.open = Boolean(skipped.length);
+            }
+            if (hmiReviewSkippedSummary) {
+                hmiReviewSkippedSummary.textContent = skipped.length
+                    + " unsafe translation(s) skipped — not importable";
+            }
+            for (const item of skipped) {
+                const card = document.createElement("div");
+                card.className = "hmi-review-skipped-item";
+                for (const [label, value] of [
+                    ["Source", item.source_text],
+                    ["Rejected proposal", item.proposed_target || "(empty)"],
+                    ["Reason", item.reason],
+                ]) {
+                    const title = document.createElement("strong");
+                    title.textContent = label;
+                    const line = document.createElement("pre");
+                    line.textContent = value;
+                    card.append(title, line);
+                }
+                hmiReviewSkippedList?.appendChild(card);
+            }
             if (hmiReviewSummary) {
                 hmiReviewSummary.textContent =
-                    "Prepared " + result.selected_rows + " row(s), "
-                    + result.unique_texts + " unique source text(s). "
-                    + "These are NEW proposed values, not existing target values. "
-                    + "Review each displayed proposal before importing."
-                    + (result.selected_rows > (result.examples || []).length
+                    "Prepare complete: " + safeCount + " safe proposed row(s), "
+                    + skipped.length + " unsafe text(s) skipped. "
+                    + (safeCount
+                        ? "Only the safe proposals below are eligible for import. "
+                            + "Review them before approving."
+                        : "No safe translations available; import is disabled.")
+                    + (safeCount > (result.examples || []).length
                         ? " Showing first " + result.examples.length + " of "
-                            + result.selected_rows + " proposed rows."
+                            + safeCount + " safe proposals."
                         : "");
             }
             hmiReviewResults?.classList.remove("hidden");
@@ -2176,9 +2216,12 @@ export function initTiaUi(
                 block: "start",
             });
             setHmiTranslationStatus(
-                "Translations prepared. TIA project was not changed. "
-                + "Review the Proposed target column, then choose Import reviewed texts.",
-                "success"
+                "Prepare finished: " + safeCount + " safe, "
+                + skipped.length + " skipped. TIA was not changed. "
+                + (safeCount
+                    ? "Review safe proposals, then choose Import reviewed texts."
+                    : "No safe proposals to import."),
+                safeCount ? "success" : "error"
             );
         } catch (error) {
             setHmiTranslationStatus(error.message, "error");
