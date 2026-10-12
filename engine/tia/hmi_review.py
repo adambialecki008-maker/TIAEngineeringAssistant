@@ -25,6 +25,7 @@ from engine.tia.models import TranslateHmiTextsRequest
 from engine.tia.hmi_text_safety import (
     needs_target_fill, normalize_hmi_translation, validate_hmi_translation,
 )
+from engine.tia.hmi_semantic_qa import semantic_qa_warnings
 from engine.tia.ollama_translation import (
     list_ollama_models, resolve_ollama_model, translation_batch_size,
     repair_ollama_translation,
@@ -243,6 +244,18 @@ def get_hmi_translation_models():
     }
 
 
+def validate_hmi_translation_quality(
+    source: str, proposal: str, target_culture: str,
+) -> None:
+    """Enforce structural guards and explicit semantic-risk review markers."""
+    validate_hmi_translation(source, proposal)
+    warnings = semantic_qa_warnings(source, proposal, target_culture)
+    if warnings:
+        raise HTTPException(
+            502, "Semantic QA requires manual review: " + "; ".join(warnings),
+        )
+
+
 def try_repair_unsafe_translation(
     source: str, rejected: str, validation_error: str,
     target_culture: str, model: str,
@@ -257,7 +270,7 @@ def try_repair_unsafe_translation(
             source, rejected, validation_error, target_culture, model,
         )
         candidate = normalize_hmi_translation(source, candidate)
-        validate_hmi_translation(source, candidate)
+        validate_hmi_translation_quality(source, candidate, target_culture)
     except HTTPException:
         return None
     return candidate
@@ -359,7 +372,9 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
             proposal = source
         proposal = normalize_hmi_translation(source, proposal)
         try:
-            validate_hmi_translation(source, proposal)
+            validate_hmi_translation_quality(
+                source, proposal, request.target_culture,
+            )
         except HTTPException as exc:
             if exc.status_code != 502:
                 raise
@@ -443,7 +458,9 @@ def repair_prepared_hmi_translation(request: RepairPreparedTranslationRequest):
             409, "The selected source is not an unresolved skipped proposal."
         )
     proposal = normalize_hmi_translation(source, request.proposal)
-    validate_hmi_translation(source, proposal)
+    validate_hmi_translation_quality(
+        source, proposal, prepared["request"]["target_culture"],
+    )
     # Do not accept a repair when it could conflict with a safe candidate.
     if any(existing["source"] == source for existing in prepared["rows"]):
         raise HTTPException(409, "Text already exists in the validated review.")
@@ -544,8 +561,8 @@ def _import_reviewed_hmi_translations(
                         409, "Existing HMI target is already populated; "
                         "refusing to overwrite: " + row["key"][1][:180]
                     )
-                validate_hmi_translation(
-                    prepared_row["source"], prepared_row["proposal"]
+                validate_hmi_translation_quality(
+                    prepared_row["source"], prepared_row["proposal"], target,
                 )
                 workbook[row["sheet"]].cell(
                     row["row_index"], row["target_column"]
