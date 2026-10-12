@@ -1744,3 +1744,15 @@ td {
 .plc-member-parent-row td:nth-child(2) {
     font-weight: 600;
 }
+
+/* Read-only PLC member explorer. Preserve dark UI. */
+.plc-member-toolbar { display: grid; gap: 8px; margin: 12px 0; }
+.plc-member-toolbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.plc-member-toolbar-actions .plc-member-search { flex: 1 1 250px; min-width: 190px; max-width: 430px; }
+.plc-member-toolbar-actions button, .plc-member-actions button { min-height: 28px; padding: 4px 8px; font-size: 12px; }
+.plc-member-message { color: #99a8b4; font-size: 12px; overflow-wrap: anywhere; }
+.plc-member-actions { white-space: nowrap; min-width: 140px; }
+.plc-member-actions button + button { margin-left: 5px; }
+.plc-member-reference-results:not(:empty) { border: 1px solid #32434e; border-radius: 5px; padding: 10px; background: #131c23; }
+.plc-member-reference-results p { margin: 0 0 8px; color: #c5d8e7; }
+.plc-xref-table th, .plc-xref-table td { font-size: 12px; overflow-wrap: anywhere; }

@@ -67,5 +67,41 @@ export function createPlcMemberTree(members) {
             }
             return true;
         },
+        expandAll() {
+            collapsed.clear();
+        },
+        collapseAll() {
+            entries.forEach((entry, index) => {
+                if (entry.hasChildren) {
+                    collapsed.add(index);
+                }
+            });
+        },
+        // Search reveals matching descendants and their ancestors WITHOUT
+        // mutating user expand/collapse preferences.
+        search(members, query) {
+            const needle = String(query || "").trim().toLocaleLowerCase();
+            if (!needle) {
+                return null;
+            }
+            const visible = new Set();
+            let matches = 0;
+            entries.forEach((entry, index) => {
+                const member = members[index] || {};
+                if (![member.name, member.path, member.data_type,
+                    member.comment, member.section].some(
+                    value => String(value || "").toLocaleLowerCase().includes(needle)
+                )) {
+                    return;
+                }
+                matches += 1;
+                visible.add(index);
+                for (let parent = entry.parent; parent !== null;
+                    parent = entries[parent].parent) {
+                    visible.add(parent);
+                }
+            });
+            return {visible, matches};
+        },
     };
 }

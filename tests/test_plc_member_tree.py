@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_both_plc_member_tables_use_shared_renderer():
     source = (ROOT / "gui" / "js" / "tia.js").read_text(encoding="utf-8")
     assert 'from "./plc_member_tree.js"' in source
-    assert "renderPlcMemberRows(plcProgramBlockDetailBody, members)" in source
-    assert "renderPlcMemberRows(plcStructureDetailBody, detail.members)" in source
+    assert "renderPlcMemberRows(plcProgramBlockDetailBody, members, detail)" in source
+    assert "renderPlcMemberRows(plcStructureDetailBody, detail.members, detail)" in source
     assert 'row.hidden = !tree.isVisible(index)' in source
     assert 'button.setAttribute("aria-expanded", String(expanded))' in source
     assert 'button?.addEventListener("click"' in source
@@ -72,3 +72,48 @@ assert.equal(tree.isVisible(999), false);
         ["node", "--input-type=module", "--eval", script, str(module)],
         check=True, capture_output=True, text=True, timeout=15,
     )
+
+
+def test_search_reveals_ancestors_and_bulk_toggles():
+    if not shutil.which("node"):
+        pytest.skip("Node.js not installed")
+    module = ROOT / "gui" / "js" / "plc_member_tree.js"
+    script = r"""
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const url = "data:text/javascript;base64," +
+    Buffer.from(readFileSync(process.argv[1], "utf8")).toString("base64");
+const {createPlcMemberTree} = await import(url);
+const members = [
+  {name:"Timer",path:"Timer",level:0,section:"Static",data_type:"TON"},
+  {name:"IN",path:"Timer.IN",level:1,section:"Static",data_type:"Bool"},
+  {name:"ET",path:"Timer.ET",level:1,section:"Static",data_type:"Time"},
+  {name:"Params",path:"Params",level:0,section:"Static",data_type:"Struct"},
+  {name:"Setting",path:"Params.Setting",level:1,section:"Static",data_type:"Int"},
+];
+const tree=createPlcMemberTree(members);
+assert.equal(tree.isVisible(2),false);
+const result=tree.search(members,"timer.et");
+assert.equal(result.matches,1);
+assert.deepEqual([...result.visible].sort(),[0,2]);
+assert.equal(tree.isVisible(2),false);
+assert.equal(tree.search(members,"missing").matches,0);
+assert.equal(tree.search(members,""),null);
+tree.expandAll();
+assert.equal(tree.isVisible(2),true);
+assert.equal(tree.isVisible(4),true);
+tree.collapseAll();
+assert.equal(tree.isVisible(2),false);
+assert.equal(tree.isVisible(4),false);
+"""
+    subprocess.run(["node", "--input-type=module", "--eval", script, str(module)],
+                   check=True, capture_output=True, text=True, timeout=15)
+
+
+def test_member_explorer_has_search_copy_and_reference_controls():
+    source = (ROOT / "gui" / "js" / "tia.js").read_text(encoding="utf-8")
+    assert "tree.search(members, searchInput.value)" in source
+    assert "tree.expandAll()" in source
+    assert "tree.collapseAll()" in source
+    assert "navigator.clipboard.writeText(fullPath)" in source
+    assert '"/api/v1/tia/plc-cross-references?"' in source
