@@ -446,7 +446,7 @@ export function initTiaUi(
 
     let selectedHmiForTranslation = null;
 
-    let verifiedHmiPreviewKey = null;
+    let verifiedHmiScanKey = null;
     let hmiPreviewInProgress = false;
     let lastHmiPreviewRows = [];
     let latestHmiScan = null;
@@ -1027,6 +1027,22 @@ export function initTiaUi(
         };
     }
 
+    // A scan verifies the HMI/project/languages/root, not the Ollama model.
+    // Keep review identity model-sensitive through hmiTranslationKey().
+    function hmiScanKey(selection) {
+        if (!selection) {
+            return null;
+        }
+        return JSON.stringify({
+            process_id: selection.process_id,
+            device_name: selection.device_name,
+            hmi_name: selection.hmi_name,
+            view_path_root: selection.view_path_root,
+            source_culture: selection.source_culture,
+            target_culture: selection.target_culture,
+        });
+    }
+
     function hmiTranslationKey(selection) {
         return selection ? JSON.stringify(selection) : null;
     }
@@ -1092,7 +1108,7 @@ export function initTiaUi(
     }
 
     function invalidateHmiPreview() {
-        verifiedHmiPreviewKey = null;
+        verifiedHmiScanKey = null;
         latestHmiScan = null;
         if (hmiScanSummary) {
             hmiScanSummary.textContent =
@@ -1127,8 +1143,9 @@ export function initTiaUi(
 
     function updateHmiTranslateButtonState() {
         const selection = hmiTranslationSelection();
-        const key = hmiTranslationKey(selection);
-        const isVerified = Boolean(key && key === verifiedHmiPreviewKey);
+        const scanKey = hmiScanKey(selection);
+        const reviewKey = hmiTranslationKey(selection);
+        const isVerified = Boolean(scanKey && scanKey === verifiedHmiScanKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting;
         const hasTranslationEngine = Boolean(selection?.ollama_model);
@@ -1167,7 +1184,8 @@ export function initTiaUi(
         }
         if (hmiImportReviewedButton) {
             hmiImportReviewedButton.disabled =
-                busy || !preparedHmiReview || preparedHmiReview.selectionKey !== key;
+                busy || !isVerified || !preparedHmiReview
+                || preparedHmiReview.selectionKey !== reviewKey;
         }
         if (hmiBatchStartButton) {
             const cannotStart = busy || !isVerified
@@ -1268,7 +1286,8 @@ export function initTiaUi(
                 hmiRefreshOllamaModels.disabled = false;
             }
             if (hmiOllamaModelSelect.value !== previous) {
-                invalidateHmiPreview();
+                // A new model invalidates prepared proposals, never the HMI scan.
+                discardHmiReview();
             } else {
                 updateHmiTranslateButtonState();
             }
@@ -1486,8 +1505,8 @@ export function initTiaUi(
 
     async function startHmiBatchImport() {
         const selection = hmiTranslationSelection();
-        const key = hmiTranslationKey(selection);
-        if (!selection || key !== verifiedHmiPreviewKey
+        const scanKey = hmiScanKey(selection);
+        if (!selection || scanKey !== verifiedHmiScanKey
             || !selection.view_path_root
             || !selection.ollama_model) {
             setHmiBatchStatus(
@@ -1561,6 +1580,17 @@ export function initTiaUi(
             if (job.status === "completed") {
                 return;
             }
+            const selectedModel = hmiTranslationSelection()?.ollama_model;
+            if (job.model !== selectedModel) {
+                setHmiBatchStatus(
+                    "Saved job uses model " + job.model
+                    + ", while current selection is " + (selectedModel || "none")
+                    + ". Select the original model to resume, or start a NEW job "
+                    + "after checking TIA. Model changes never alter a saved job.",
+                    true
+                );
+                return;
+            }
             if (job.status === "processing") {
                 setHmiBatchStatus(
                     "The batch is running in another request. Do not launch another import.",
@@ -1626,10 +1656,10 @@ export function initTiaUi(
                 "Export in progress — TIA is read-only during this scan.";
         }
         setHmiTranslationStatus("Exporting Project texts for read-only preview...");
-        const previewKey = hmiTranslationKey(selection);
+        const previewKey = hmiScanKey(selection);
         try {
             const result = await postJson("/api/v1/tia/hmis/preview-texts", selection);
-            if (hmiTranslationKey(hmiTranslationSelection()) !== previewKey) {
+            if (hmiScanKey(hmiTranslationSelection()) !== previewKey) {
                 return false;
             }
             lastHmiPreviewRows = result.sample_rows || [];
@@ -1742,7 +1772,7 @@ export function initTiaUi(
                         return false;
                     }
                 }
-                verifiedHmiPreviewKey = hmiTranslationKey(confirmed);
+                verifiedHmiScanKey = hmiScanKey(confirmed);
                 setHmiTranslationStatus(
                     `Preview found ${result.matched_text_rows} matching text row(s). `
                     + "Check the sample references before translating.", "success"
@@ -2008,7 +2038,8 @@ export function initTiaUi(
     async function translateSelectedHmi() {
         const selection = hmiTranslationSelection();
         const key = hmiTranslationKey(selection);
-        if (!selection || !key || key !== verifiedHmiPreviewKey) {
+        if (!selection || !selection.ollama_model
+            || hmiScanKey(selection) !== verifiedHmiScanKey) {
             setHmiTranslationStatus(
                 "Scan this HMI and ViewPath root before preparing translations.",
                 "error"
@@ -2090,7 +2121,7 @@ export function initTiaUi(
                 }
             );
             if (hmiTranslationKey(hmiTranslationSelection()) !== key
-                || verifiedHmiPreviewKey !== key) {
+                || hmiScanKey(hmiTranslationSelection()) !== verifiedHmiScanKey) {
                 return;
             }
 
@@ -2192,7 +2223,7 @@ export function initTiaUi(
         const selectionBeforeImport = hmiTranslationSelection();
         const key = hmiTranslationKey(selectionBeforeImport);
         if (!review || review.selectionKey !== key
-            || verifiedHmiPreviewKey !== key) {
+            || hmiScanKey(selectionBeforeImport) !== verifiedHmiScanKey) {
             setHmiTranslationStatus(
                 "Translations must be prepared and reviewed for this HMI first.",
                 "error"
@@ -7215,8 +7246,8 @@ export function initTiaUi(
     hmiUseScanTotalButton?.addEventListener("click", () => {
         if (!latestHmiScan || !latestHmiScan.eligible
             || latestHmiScan.missingUnique > 100000
-            || hmiTranslationKey(hmiTranslationSelection())
-                !== verifiedHmiPreviewKey) {
+            || hmiScanKey(hmiTranslationSelection())
+                !== verifiedHmiScanKey) {
             return;
         }
         if (hmiBatchTotalInput) {
@@ -7240,7 +7271,14 @@ export function initTiaUi(
     if (hmiOllamaModelSelect) {
         hmiOllamaModelSelect.addEventListener(
             "change",
-            invalidateHmiPreview
+            () => {
+                // Keep scan counts/results; remove proposals made by the old model.
+                discardHmiReview();
+                setHmiTranslationStatus(
+                    "Ollama model changed. Scan remains valid; "
+                    + "prepare new translations with the selected model."
+                );
+            }
         );
     }
     if (hmiRefreshOllamaModels) {
