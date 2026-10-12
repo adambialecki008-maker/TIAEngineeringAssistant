@@ -411,6 +411,7 @@ def run_next_hmi_batch(job_id: str, action: BatchJobAction):
                 "verified_unique": result["verified_unique"],
                 "verified_rows": result["verified_rows"],
                 "skipped_unique": len(result["skipped"]),
+                "auto_repaired_unique": result["auto_repaired_unique"],
             }
             if result["verified_unique"]:
                 current["last_verified_batch"] = {
@@ -495,6 +496,7 @@ def _perform_one_batch(job: dict) -> dict:
     # proposals are skipped, not copied, retried, or sent to TIA.
     valid_proposals = {}
     skipped = []
+    auto_repaired = 0
     for index, source in enumerate(selected):
         proposal = normalize_hmi_translation(source, translations.get(source))
         try:
@@ -502,6 +504,19 @@ def _perform_one_batch(job: dict) -> dict:
         except HTTPException as exc:
             if exc.status_code != 502:
                 raise
+            # Repair only this unsafe text, once. A rejected second result is
+            # never imported, and a failed repair must not stop the batch.
+            fixed = (
+                review.try_repair_unsafe_translation(
+                    source, proposal if isinstance(proposal, str) else "",
+                    str(exc.detail), requested.target_culture, job["model"],
+                )
+                if requested.translation_strategy == "ollama" else None
+            )
+            if fixed is not None:
+                valid_proposals[source] = fixed
+                auto_repaired += 1
+                continue
             skipped.append({
                 "offset": offset + index,
                 "source": source[:160],
@@ -549,6 +564,7 @@ def _perform_one_batch(job: dict) -> dict:
         "next_offset": offset + len(selected),
         "verified_unique": len(valid_proposals),
         "verified_rows": verified_rows,
+        "auto_repaired_unique": auto_repaired,
         "skipped": skipped,
         "import_state": import_state,
         "import_log": import_log,
