@@ -689,6 +689,34 @@
                             <summary>ViewPath / XLSX diagnostics</summary>
                             <pre id="tia-hmi-preview-references" class="hmi-preview-references"></pre>
                         </details>
+                        <section class="hmi-existing-qa">
+                            <h4>Existing target quality audit — read only</h4>
+                            <p class="hint">Inspect every filled target in the selected HMI,
+                                not just the 50 preview samples. Suspected technical
+                                meaning changes require human review; no TIA texts
+                                are modified.</p>
+                            <button id="tia-hmi-audit-existing" type="button"
+                                    class="secondary-button" disabled>
+                                Audit existing target translations
+                            </button>
+                            <p id="tia-hmi-existing-qa-status" class="hint"
+                               role="status" aria-live="polite"></p>
+                            <div id="tia-hmi-existing-qa-results" class="hidden">
+                                <div class="table-wrapper hmi-text-table-wrapper">
+                                    <table class="hmi-text-table hmi-qa-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Source</th>
+                                                <th>Current target (TIA)</th>
+                                                <th>Suspicion / reason</th>
+                                                <th>Location</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tia-hmi-existing-qa-rows"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
                     </div>
 
                     <div id="tia-hmi-review-results" class="hidden">
