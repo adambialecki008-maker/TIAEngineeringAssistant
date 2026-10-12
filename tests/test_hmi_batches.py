@@ -521,3 +521,172 @@ def test_batch_keeps_actual_tia_newline_when_source_has_one(
     assert live["main-1"] == "Awaria\nhardware"
     assert len(imports) == 1
     assert "import-project-texts" in commands
+
+
+
+def test_skipped_manager_manual_prepare_then_verified_import(monkeypatch, tmp_path):
+    source = "Pneumatyczny"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(Pneumatyczny" for text in texts
+        },
+    )
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    assert created.status_code == 200, created.text
+    job_id = created.json()["job_id"]
+    ran = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    )
+    assert ran.status_code == 200, ran.text
+    assert ran.json()["status"] == "completed"
+    assert ran.json()["skipped_unique"] == 1
+    assert not imports
+
+    skipped = client.get(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped"
+    )
+    assert skipped.status_code == 200, skipped.text
+    assert skipped.json()["items"][0]["source"] == source
+    assert skipped.json()["items"][0]["resolved"] is False
+
+    prepared = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/prepare",
+        json={"mode": "manual", "proposal": source},
+    )
+    assert prepared.status_code == 200, prepared.text
+    body = prepared.json()
+    assert body["proposal"] == source
+    assert body["rows"] == 1
+    assert live["main-1"] == "Text"
+    assert not imports
+
+    approved = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/import",
+        json={"review_id": body["review_id"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "verified"
+    assert approved.json()["verified_rows"] == 1
+    assert live["main-1"] == source
+    assert live["main-2"] == "Text"
+    assert live["other-1"] == "Original"
+    assert len(imports) == 1
+    assert commands.count("import-project-texts") == 1
+
+    state = client.get(f"/api/v1/tia/hmis/batch-translations/{job_id}").json()
+    assert state["completed_unique"] == 1
+    assert state["skipped_total"] == 1
+    assert state["skipped_unique"] == 0
+    assert state["recovered_unique"] == 1
+    assert state["completed_rows"] == 1
+    assert client.get(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped"
+    ).json()["items"][0]["resolved"] is True
+    repeat = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/import",
+        json={"review_id": body["review_id"]},
+    )
+    assert repeat.status_code == 409
+    assert len(imports) == 1
+
+
+def test_skipped_retry_ollama_must_be_reviewed_before_import(monkeypatch, tmp_path):
+    source = "(Hydrauliczna)"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(Hydrauliczna" for text in texts
+        },
+    )
+    job_id = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    ).json()["job_id"]
+    assert client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    ).status_code == 200
+
+    unsafe_manual = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/prepare",
+        json={"mode": "manual", "proposal": "(Hydrauliczna"},
+    )
+    assert unsafe_manual.status_code == 502
+    assert not imports
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(Hydrauliczna)" for text in texts
+        },
+    )
+    prepared = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/prepare",
+        json={"mode": "ollama", "ollama_model": "qwen2.5:3b"},
+    )
+    assert prepared.status_code == 200, prepared.text
+    assert prepared.json()["model"] == "qwen2.5:3b"
+    assert live["main-1"] == "Text"
+    assert len(imports) == 0
+    approved = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/import",
+        json={"review_id": prepared.json()["review_id"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert live["main-1"] == source
+    assert len(imports) == 1
+    assert commands.count("import-project-texts") == 1
+
+
+def test_skipped_recovery_requires_completed_job_and_matching_review(
+    monkeypatch, tmp_path,
+):
+    source = "Pneumatyczny"
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source=source,
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(Pneumatyczny" for text in texts
+        },
+    )
+    job_id = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 2},
+    ).json()["job_id"]
+    assert client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    ).status_code == 200
+    forbidden = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/prepare",
+        json={"mode": "manual", "proposal": source},
+    )
+    assert forbidden.status_code == 409
+    assert live["main-1"] == "Text"
+
+    # Finalize the remaining batch, then refuse a token not bound to this skip.
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: text for text in texts
+        },
+    )
+    assert client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+    ).status_code == 200
+    invalid_token = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{job_id}/skipped/0/import",
+        json={"review_id": "a" * 32},
+    )
+    assert invalid_token.status_code == 409
+    assert live["main-1"] == "Text"
+    assert commands.count("import-project-texts") == 1
