@@ -92,6 +92,18 @@ export function initTiaUi(
         document.getElementById("tia-hmi-batch-progress-text");
     const hmiScanSummary = document.getElementById("tia-hmi-scan-summary");
     const hmiScanButton = document.getElementById("tia-hmi-scan-button");
+    const hmiAuditExistingButton = document.getElementById(
+        "tia-hmi-audit-existing"
+    );
+    const hmiExistingQaStatus = document.getElementById(
+        "tia-hmi-existing-qa-status"
+    );
+    const hmiExistingQaResults = document.getElementById(
+        "tia-hmi-existing-qa-results"
+    );
+    const hmiExistingQaRows = document.getElementById(
+        "tia-hmi-existing-qa-rows"
+    );
     const hmiUseScanTotalButton =
         document.getElementById("tia-hmi-use-scan-total");
     const hmiScanInstruction =
@@ -462,6 +474,7 @@ export function initTiaUi(
 
     let verifiedHmiScanKey = null;
     let hmiPreviewInProgress = false;
+    let hmiAuditInProgress = false;
     let lastHmiPreviewRows = [];
     let latestHmiScan = null;
     let hmiBatchRunning = false;
@@ -1138,6 +1151,10 @@ export function initTiaUi(
 
     function invalidateHmiPreview() {
         hmiSkippedManager.reset();
+        hmiExistingQaResults?.classList.add("hidden");
+        hmiExistingQaRows?.replaceChildren();
+        if (hmiExistingQaStatus) hmiExistingQaStatus.textContent = "";
+        if (hmiAuditExistingButton) hmiAuditExistingButton.disabled = true;
         verifiedHmiScanKey = null;
         latestHmiScan = null;
         if (hmiScanSummary) {
@@ -1177,7 +1194,7 @@ export function initTiaUi(
         const reviewKey = hmiTranslationKey(selection);
         const isVerified = Boolean(scanKey && scanKey === verifiedHmiScanKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress
-            || hmiBatchRunning || hmiBatchStarting;
+            || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress;
         const hasTranslationEngine = Boolean(selection?.ollama_model);
         const missingUnique = latestHmiScan?.missingUnique ?? 0;
         const batchSize = Number(hmiBatchSizeInput?.value);
@@ -1205,6 +1222,10 @@ export function initTiaUi(
         }
         if (hmiScanButton) {
             hmiScanButton.disabled = busy || !selection;
+        }
+        if (hmiAuditExistingButton) {
+            hmiAuditExistingButton.disabled = busy || !isVerified
+                || !selection?.view_path_root;
         }
         if (hmiUseScanTotalButton) {
             hmiUseScanTotalButton.disabled =
@@ -1666,6 +1687,63 @@ export function initTiaUi(
                 "Pause request could not be saved: " + error.message,
                 true
             );
+        }
+    }
+
+
+    async function auditExistingHmiTranslations() {
+        const selection = hmiTranslationSelection();
+        if (!selection?.view_path_root
+            || hmiScanKey(selection) !== verifiedHmiScanKey
+            || hmiAuditInProgress || hmiBatchRunning || hmiReviewInProgress) {
+            if (hmiExistingQaStatus) {
+                hmiExistingQaStatus.textContent =
+                    "Choose the HMI ViewPath root and run Scan HMI first.";
+            }
+            return;
+        }
+        const scanKey = hmiScanKey(selection);
+        hmiAuditInProgress = true;
+        updateHmiTranslateButtonState();
+        hmiExistingQaResults?.classList.add("hidden");
+        hmiExistingQaRows?.replaceChildren();
+        if (hmiExistingQaStatus) {
+            hmiExistingQaStatus.textContent =
+                "Read-only audit of all existing HMI target texts...";
+        }
+        try {
+            const result = await postJson(
+                "/api/v1/tia/hmis/audit-existing-translations", selection
+            );
+            if (hmiScanKey(hmiTranslationSelection()) !== scanKey) return;
+            for (const finding of result.findings || []) {
+                const row = document.createElement("tr");
+                addHmiTextCell(row, finding.source_text);
+                addHmiTextCell(row, finding.target_text);
+                addHmiTextCell(row, (finding.reasons || []).join("; "));
+                addHmiDetailsCell(
+                    row, finding.view_path, "", finding.sheet, finding.row
+                );
+                hmiExistingQaRows?.appendChild(row);
+            }
+            hmiExistingQaResults?.classList.remove("hidden");
+            if (hmiExistingQaStatus) {
+                hmiExistingQaStatus.textContent =
+                    "Audited " + result.scanned_rows + " HMI rows ("
+                    + result.filled_target_rows + " filled targets). Found "
+                    + result.suspicious_rows + " suspicious row(s). Showing "
+                    + result.shown_rows + " of them. This is a heuristic "
+                    + "review list, not proof of incorrect translation. "
+                    + "No changes were made to TIA.";
+            }
+        } catch (error) {
+            if (hmiExistingQaStatus) {
+                hmiExistingQaStatus.textContent =
+                    "Audit failed: " + error.message;
+            }
+        } finally {
+            hmiAuditInProgress = false;
+            updateHmiTranslateButtonState();
         }
     }
 
@@ -7451,6 +7529,9 @@ export function initTiaUi(
 
     hmiScanButton?.addEventListener(
         "click", () => { void previewSelectedHmi(); }
+    );
+    hmiAuditExistingButton?.addEventListener(
+        "click", () => { void auditExistingHmiTranslations(); }
     );
     hmiUseScanTotalButton?.addEventListener("click", () => {
         if (!latestHmiScan || !latestHmiScan.eligible
