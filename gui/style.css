@@ -1920,3 +1920,25 @@ td {
     font-size: 12px;
     overflow-wrap: anywhere;
 }
+
+
+/* Read-only HMI QA audit (not a translation editor). */
+.hmi-existing-qa {
+    border-top: 1px solid #394b58;
+    margin-top: 14px;
+    padding-top: 12px;
+}
+.hmi-existing-qa h4 {
+    margin: 0 0 6px;
+    color: #dce8f2;
+}
+.hmi-existing-qa .hint {
+    margin: 6px 0 10px;
+}
+.hmi-existing-qa .hmi-qa-table td:nth-child(3) {
+    color: #f0c091;
+}
+.hmi-existing-qa .hmi-qa-table td {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
