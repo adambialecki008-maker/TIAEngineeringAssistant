@@ -19,6 +19,7 @@ from engine.tia.adapter import read_project_saved
 from engine.tia.hmi_translation import (
     _project_text_columns,
     _reference_matches_hmi,
+    _hmi_project_text_kind,
     _translate_texts,
 )
 from engine.tia.models import TranslateHmiTextsRequest
@@ -209,13 +210,17 @@ def _matching_rows(workbook, request):
         )
         if column_info is None:
             continue
-        (header, src_col, tgt_col, _category_col, path_col), target_header = column_info
+        (header, src_col, tgt_col, category_col, path_col), target_header = column_info
         for row_index in range(header + 1, sheet.max_row + 1):
             view_path = _text(sheet.cell(row_index, path_col).value)
             if not _reference_matches_hmi(
                 view_path, request.device_name, request.hmi_name,
                 request.view_path_root
             ):
+                continue
+            if _hmi_project_text_kind(
+                _text(sheet.cell(row_index, category_col).value), view_path,
+            ) == "graphic_list":
                 continue
             source = _text(sheet.cell(row_index, src_col).value)
             if not source.strip():
@@ -636,9 +641,13 @@ def _import_reviewed_hmi_translations(
                 # even in a 10-text pilot, while leaving their existing
                 # target values untouched unless explicitly reviewed.
                 path_col = columns[0][4]
+                category_col = columns[0][3]
                 for index in range(header + 1, sheet.max_row + 1):
                     ref = _text(sheet.cell(index, path_col).value)
-                    if _reference_matches_hmi(
+                    kind = _hmi_project_text_kind(
+                        _text(sheet.cell(index, category_col).value), ref
+                    )
+                    if kind != "graphic_list" and _reference_matches_hmi(
                         ref, requested.device_name, requested.hmi_name,
                         requested.view_path_root
                     ):
