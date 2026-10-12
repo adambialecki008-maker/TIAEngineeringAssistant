@@ -1442,7 +1442,9 @@ export function initTiaUi(
             + " / " + job.total_batches + ".";
         if (job.last_batch) {
             message += " Last batch: " + job.last_batch.verified_unique
-                + " verified, " + job.last_batch.skipped_unique + " skipped.";
+                + " verified, " + job.last_batch.skipped_unique + " skipped, "
+                + (job.last_batch.auto_repaired_unique ?? 0)
+                + " auto-repaired.";
         } else if (last) {
             message += " Last verified batch: " + last.verified_unique
                 + " unique texts, " + last.verified_rows + " HMI rows.";
@@ -2180,6 +2182,7 @@ export function initTiaUi(
         if (hmiReviewSummary) {
             hmiReviewSummary.textContent =
                 "Prepare: " + safeCount + " validated text(s), "
+                + (result.auto_repaired_unique || 0) + " auto-repaired, "
                 + skipped.length + " rejected. "
                 + (safeCount
                     ? "Only validated proposals can be imported after approval."
@@ -2193,7 +2196,9 @@ export function initTiaUi(
             behavior: "smooth", block: "nearest",
         });
         setHmiTranslationStatus(
-            safeCount + " ready for review, " + skipped.length
+            safeCount + " ready for review ("
+            + (result.auto_repaired_unique || 0)
+            + " auto-repaired), " + skipped.length
             + " rejected. Edit rejected text and click Validate & add, "
             + "or approve only the validated translations. TIA unchanged.",
             safeCount ? "success" : "error"

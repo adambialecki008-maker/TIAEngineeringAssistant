@@ -33,6 +33,10 @@ def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
     )
     batches._ACTIVE_JOBS.clear()
     review._REVIEWS.clear()
+    monkeypatch.setattr(
+        review, "try_repair_unsafe_translation",
+        lambda *args: None,
+    )
     live = {"main-1": "Text", "main-2": "Text", "other-1": "Original"}
     commands = []
     imports = []
@@ -769,3 +773,74 @@ def test_skipped_list_returns_original_full_source_from_checkpoint(
     assert len(source) > 160
     assert response.json()["items"][0]["resolved"] is False
     assert not imports
+
+
+
+def test_batch_autorepairs_unsafe_text_once_and_verifies_tia(monkeypatch, tmp_path):
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source="Pneumatyczny",
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(Pneumatyczna) " + text for text in texts
+        },
+    )
+    calls = []
+    def repair_once(source, rejected, reason, target, model):
+        calls.append(source)
+        return source
+    monkeypatch.setattr(review, "try_repair_unsafe_translation", repair_once)
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    )
+    assert created.status_code == 200, created.text
+    finished = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{created.json()['job_id']}/next",
+        json={},
+    )
+    assert finished.status_code == 200, finished.text
+    data = finished.json()
+    assert data["status"] == "completed"
+    assert data["completed_unique"] == 1
+    assert data["skipped_unique"] == 0
+    assert data["last_batch"]["auto_repaired_unique"] == 1
+    assert live["main-1"] == "Pneumatyczny"
+    assert calls == ["Pneumatyczny"]
+    assert len(imports) == 1
+
+
+def test_batch_failed_auto_repair_preserves_skip_and_no_import(
+    monkeypatch, tmp_path,
+):
+    live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, first_source="Pneumatyczny",
+    )
+    monkeypatch.setattr(
+        review, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            text: "(Pneumatyczna) " + text for text in texts
+        },
+    )
+    calls = []
+    def no_repair(source, rejected, reason, target, model):
+        calls.append(source)
+        return None
+    monkeypatch.setattr(review, "try_repair_unsafe_translation", no_repair)
+    created = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 1, "total_to_translate": 1},
+    ).json()
+    finished = client.post(
+        f"/api/v1/tia/hmis/batch-translations/{created['job_id']}/next",
+        json={},
+    )
+    assert finished.status_code == 200, finished.text
+    job = finished.json()
+    assert job["skipped_unique"] == 1
+    assert job["completed_unique"] == 0
+    assert job["last_batch"]["auto_repaired_unique"] == 0
+    assert calls == ["Pneumatyczny"]
+    assert not imports
+    assert live["main-1"] == "Text"

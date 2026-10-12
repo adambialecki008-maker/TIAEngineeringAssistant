@@ -91,6 +91,11 @@ def _setup(monkeypatch, *, verify_updates=True, stale=False):
             for source in texts
         },
     )
+    # Existing mocked tests stay offline for deliberately invalid proposals.
+    monkeypatch.setattr(
+        review_module, "try_repair_unsafe_translation",
+        lambda *args: None,
+    )
     review_module._REVIEWS.clear()
     return live, commands, imported
 
@@ -722,3 +727,72 @@ def test_repair_rejects_source_outside_selected_review(monkeypatch):
     assert forbidden.status_code == 409
     assert not imported
     assert live == {}
+
+
+
+def test_prepare_autorepairs_only_invalid_proposals_before_preview(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    faulty_source = "212BP2 Za zaworem"
+    unsafe = "(212BP2 Za zaworem)"
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: unsafe if source == faulty_source else source
+            for source in texts
+        },
+    )
+    calls = []
+    def safe_repair(source, rejected, reason, target, model):
+        calls.append((source, rejected, reason, target, model))
+        return source
+    monkeypatch.setattr(
+        review_module, "try_repair_unsafe_translation", safe_repair,
+    )
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert response.status_code == 200, response.text
+    state = response.json()
+    assert state["auto_repaired_unique"] == 1
+    assert state["selected_rows"] == 2
+    assert state["skipped_unique"] == 0
+    assert len(calls) == 1
+    assert calls[0][0] == faulty_source
+    assert calls[0][1] == unsafe
+    assert "changed count" in calls[0][2]
+    assert not imported
+    assert commands == ["export-project-texts"]
+    approved = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": state["review_id"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["verified_rows"] == 2
+
+
+def test_rejected_auto_repair_still_skips_and_never_imports(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: "(" + source for source in texts
+        },
+    )
+    attempts = []
+    def no_repair(source, rejected, reason, target, model):
+        attempts.append(source)
+        return None
+    monkeypatch.setattr(
+        review_module, "try_repair_unsafe_translation", no_repair,
+    )
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["auto_repaired_unique"] == 0
+    assert data["skipped_unique"] == 2
+    assert data["review_id"] is None
+    assert len(attempts) == 2
+    assert imported == []
+    assert commands == ["export-project-texts"]
