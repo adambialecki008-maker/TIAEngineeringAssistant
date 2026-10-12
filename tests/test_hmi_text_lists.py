@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
 
 from engine.main import app
-from engine.tia import hmi_review, hmi_translation
+from engine.tia import hmi_review, hmi_translation, hmi_batches
 import engine.tia_openness as tia_openness
 
 
@@ -179,3 +179,65 @@ def test_reviewed_import_includes_text_lists_but_never_graphics_or_other_hmis(
     assert all(source == target for _, source, target in imports)
     assert calls.count("import-project-texts") == 1
     assert calls.count("export-project-texts") == 3
+
+
+
+def test_automatic_batch_processes_text_lists_without_graphic_import(
+    monkeypatch, tmp_path,
+):
+    values = {}
+    calls = []
+    imported_ids = []
+    monkeypatch.setattr(hmi_batches, "JOB_DIR", tmp_path)
+    hmi_batches._ACTIVE_JOBS.clear()
+    monkeypatch.setattr(
+        hmi_batches, "resolve_ollama_model", lambda model: "test-model",
+    )
+    monkeypatch.setattr(
+        hmi_review, "_translate_texts",
+        lambda texts, culture, model, progress=None:
+            {source: source for source in texts},
+    )
+
+    def adapter(*args):
+        calls.append(args[0])
+        if args[0] == "export-project-texts":
+            _export(Path(args[-1]), values)
+            return ["PROJECT_TEXTS_EXPORTED|" + args[-1]]
+        if args[0] == "add-project-language":
+            return ["LANGUAGE_ADDED|pl-PL"]
+        if args[0] == "import-project-texts":
+            wb = load_workbook(args[2])
+            for row in list(wb["User Texts"].values)[1:]:
+                imported_ids.append(row[2])
+                values[row[2]] = row[5]
+            wb.close()
+            return [
+                "PROJECT_TEXTS_IMPORTED|Success|test-import.log",
+                "PROJECT_SAVED|TestProject",
+            ]
+        raise AssertionError(args)
+
+    monkeypatch.setattr(tia_openness, "_run_adapter", adapter)
+    started = client.post(
+        "/api/v1/tia/hmis/batch-translations/start",
+        json={**REQUEST, "batch_size": 2, "total_to_translate": 3},
+    )
+    assert started.status_code == 200, started.text
+    job_id = started.json()["job_id"]
+    for _ in range(2):
+        current = client.post(
+            f"/api/v1/tia/hmis/batch-translations/{job_id}/next", json={},
+        )
+        assert current.status_code == 200, current.text
+    assert current.json()["status"] == "completed"
+    assert current.json()["completed_unique"] == 3
+    assert current.json()["skipped_unique"] == 0
+    assert values["textlist-1"] == SOURCE_1
+    assert values["textlist-2"] == SOURCE_2
+    assert values["screen-1"] == "Awaria pompy"
+    assert "graphic-1" not in values
+    assert "other-1" not in values
+    assert "graphic-1" not in imported_ids
+    assert "other-1" not in imported_ids
+    assert calls.count("import-project-texts") == 2
