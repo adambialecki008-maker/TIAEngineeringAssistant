@@ -853,14 +853,14 @@ def test_batch_failed_auto_repair_preserves_skip_and_no_import(
 def test_source_literal_newline_semantic_guard_is_not_skipped(
     monkeypatch, tmp_path,
 ):
-    source = r"Awaria \\nPLC"
+    source = r"Awaria \nPLC"
     live, commands, imports = setup_batch_mock(
         monkeypatch, tmp_path, first_source=source,
     )
     monkeypatch.setattr(
         review, "_translate_texts",
         lambda texts, target, model, progress=None: {
-            text: r"Awaria\\npompy" for text in texts
+            text: r"Awaria\npompy" for text in texts
         },
     )
     created = client.post(
