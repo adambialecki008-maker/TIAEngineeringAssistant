@@ -173,8 +173,8 @@ def test_import_is_not_reported_success_without_reexport_match(monkeypatch):
     assert "import.log" in response.json()["detail"]
 
 
-def test_prepare_rejects_placeholder_for_nonplaceholder_source(monkeypatch):
-    _setup(monkeypatch)
+def test_prepare_skips_placeholder_without_creating_import_token(monkeypatch):
+    _live, commands, imported = _setup(monkeypatch)
     monkeypatch.setattr(
         review_module, "_translate_texts",
         lambda texts, target, model, progress=None: {source: "Text" for source in texts},
@@ -182,8 +182,17 @@ def test_prepare_rejects_placeholder_for_nonplaceholder_source(monkeypatch):
     response = client.post(
         "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
     )
-    assert response.status_code == 502
-    assert "placeholder" in response.json()["detail"]
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["review_id"] is None
+    assert result["selected_rows"] == 0
+    assert result["unique_texts"] == 0
+    assert result["skipped_unique"] == 2
+    assert len(result["skipped"]) == 2
+    assert all("placeholder" in item["reason"] for item in result["skipped"])
+    assert not review_module._REVIEWS
+    assert commands == ["export-project-texts"]
+    assert not imported
 
 
 def test_pilot_preserves_unreviewed_sibling_texts_in_same_hmi(monkeypatch):
@@ -454,4 +463,113 @@ def test_manual_prepare_normalizes_literal_backslash_n_before_review(
     data = response.json()
     assert data["examples"][0]["proposed_target"] == "212BP2 Za zaworem"
     assert commands == ["export-project-texts"]
+    assert not imported
+
+
+
+def test_manual_prepare_mixed_safe_unsafe_imports_only_valid_rows(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    faulty_source = "212BP2 Za zaworem"
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: ("(212BP2 Za zaworem)" if source == faulty_source
+                     else source)
+            for source in texts
+        },
+    )
+    response = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["selected_rows"] == 1
+    assert data["unique_texts"] == 1
+    assert data["skipped_unique"] == 1
+    assert data["review_id"]
+    assert data["examples"][0]["source_text"] == "Zgniatarka"
+    assert data["skipped"][0]["source_text"] == faulty_source
+    assert data["skipped"][0]["proposed_target"] == "(212BP2 Za zaworem)"
+    assert "changed count of '('" in data["skipped"][0]["reason"]
+    assert not imported
+
+    approved = client.post(
+        "/api/v1/tia/hmis/import-reviewed-translations",
+        json={"review_id": data["review_id"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["verified_rows"] == 1
+    assert live["main-1"] == "Text"  # Unsafe proposal never reached TIA
+    assert live["main-2"] == "Zgniatarka"
+    assert "import-project-texts" in commands
+    assert not any(row_id == "main-1" and target != "Text"
+                   for row_id, target in imported)
+
+
+def test_manual_prepare_all_unsafe_does_not_offer_review_token(monkeypatch):
+    live, commands, imported = _setup(monkeypatch)
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {
+            source: "(" + source for source in texts
+        },
+    )
+    prepared = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert prepared.status_code == 200, prepared.text
+    result = prepared.json()
+    assert result["review_id"] is None
+    assert result["selected_rows"] == 0
+    assert result["skipped_unique"] == 2
+    assert result["examples"] == []
+    assert result["skipped"][0]["proposed_target"].startswith("(")
+    assert live == {}
+    assert imported == []
+    assert commands == ["export-project-texts"]
+    assert not review_module._REVIEWS
+
+
+def test_exact_reported_oil_level_proposal_rejected_and_previewed(monkeypatch):
+    source = (
+        "Poziom oleju w agregacie glownym jest niski, uzupelnij "
+        "(Olej US620, ostrzezenie, nie awaria)"
+    )
+    bad = (
+        "(Poziom oleju w agregacie glownym jest niski, uzupelnij) "
+        "(Olej US620, ostrzezenie, nie awaria)"
+    )
+    def custom_export(path, live_targets):
+        from openpyxl import Workbook
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "User Texts"
+        sheet.append(["Category", "ViewPath", "Internal ID", "Substitutions",
+                      "en-US*", "pl-PL", 'ref="0"'])
+        sheet.append(["<HMI screen>",
+                      r"Project\HMI_00_Main\Screens\Status\Text",
+                      "main-oil", "", source,
+                      live_targets.get("main-oil", "Text"), ""])
+        workbook.save(path)
+        workbook.close()
+
+    live, commands, imported = _setup(monkeypatch)
+    monkeypatch.setattr(
+        __import__(__name__, fromlist=["_export_file"]),
+        "_export_file", custom_export,
+    )
+    monkeypatch.setattr(
+        review_module, "_translate_texts",
+        lambda texts, target, model, progress=None: {text: bad for text in texts},
+    )
+    result = client.post(
+        "/api/v1/tia/hmis/prepare-translations", json=REQUEST,
+    )
+    assert result.status_code == 200, result.text
+    data = result.json()
+    assert data["skipped_unique"] == 1
+    assert data["skipped"][0]["source_text"] == source
+    assert data["skipped"][0]["proposed_target"] == bad
+    assert data["selected_rows"] == 0
+    assert data["review_id"] is None
     assert not imported
