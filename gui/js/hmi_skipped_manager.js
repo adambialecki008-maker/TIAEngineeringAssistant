@@ -74,6 +74,13 @@ export function createHmiSkippedManager({
             reason.className = "hmi-skipped-reason";
             reason.textContent = item.reason;
             card.append(heading, sourceLabel, source, reason);
+            if (item.rejected_proposal) {
+                const rejectedLabel = document.createElement("strong");
+                rejectedLabel.textContent = "Rejected Ollama proposal";
+                const rejected = document.createElement("pre");
+                rejected.textContent = item.rejected_proposal;
+                card.append(rejectedLabel, rejected);
+            }
             if (item.resolved) {
                 list.appendChild(card);
                 continue;
