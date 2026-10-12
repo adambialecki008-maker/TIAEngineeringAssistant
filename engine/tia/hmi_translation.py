@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import tempfile
 
 from fastapi import APIRouter, HTTPException
@@ -176,6 +177,21 @@ def _reference_matches_hmi(
 
 
 
+def _hmi_project_text_kind(category: str, reference: str) -> str:
+    """Classify TIA Project texts entries without touching graphic lists.
+
+    List entry text uses Text_list_entry_N\\Text or the Text lists branch.
+    Graphic lists contain image references, not translatable HMI labels.
+    Classification never overrides the required selected-HMI ViewPath root.
+    """
+    details = " ".join((str(category or ""), str(reference or ""))).casefold()
+    if re.search(r"graphic[\\s_.-]*lists?|graphic[\\s_.-]*list[\\s_.-]*entry", details):
+        return "graphic_list"
+    if re.search(r"text[\\s_.-]*lists?|text[\\s_.-]*list[\\s_.-]*entry", details):
+        return "text_list"
+    return "other"
+
+
 def _translate_texts(
     texts: list[str],
     target_culture: str,
@@ -192,6 +208,7 @@ def _preview_workbook(workbook, request):
     from collections import Counter
 
     matched_rows = []
+    text_list_rows = []
     unmatched_rows = []
     references = []
     reference_set = set()
@@ -204,6 +221,11 @@ def _preview_workbook(workbook, request):
     eligible_sources = set()
     missing_target_sources = set()
     missing_target_rows = 0
+    text_list_count = 0
+    text_list_unique_sources = set()
+    text_list_missing_rows = 0
+    text_list_missing_sources = set()
+    excluded_graphic_rows = 0
     headers = ("", "")
     sheets_found = 0
 
@@ -269,6 +291,10 @@ def _preview_workbook(workbook, request):
 
             if source is None or not str(source).strip():
                 continue
+            kind = _hmi_project_text_kind(category, reference)
+            if kind == "graphic_list":
+                excluded_graphic_rows += 1
+                continue
 
             total += 1
             if "viewpath" in str(head[reference_col - 1]).casefold():
@@ -282,6 +308,9 @@ def _preview_workbook(workbook, request):
             )
             if matches:
                 matched += 1
+                if kind == "text_list":
+                    text_list_count += 1
+                    text_list_unique_sources.add(str(source))
                 # Count roots across the full export, including alarms and
                 # other text categories. Never guess from the first 50 rows.
                 if "viewpath" in str(head[reference_col - 1]).casefold():
@@ -297,6 +326,9 @@ def _preview_workbook(workbook, request):
                     if needs_target_fill(source_text, target_text):
                         missing_target_rows += 1
                         missing_target_sources.add(source_text)
+                        if kind == "text_list":
+                            text_list_missing_rows += 1
+                            text_list_missing_sources.add(source_text)
 
             dest = matched_rows if matches else unmatched_rows
             if len(dest) < 50:
@@ -309,6 +341,19 @@ def _preview_workbook(workbook, request):
                         category=category,
                         reference=reference,
                         matches_hmi=matches,
+                    )
+                )
+
+            if matches and kind == "text_list" and len(text_list_rows) < 30:
+                text_list_rows.append(
+                    HmiProjectTextPreviewRow(
+                        sheet=worksheet.title,
+                        row=index,
+                        source_text=str(source),
+                        target_text=str(cell_value(target_col) or ""),
+                        category=category,
+                        reference=reference,
+                        matches_hmi=True,
                     )
                 )
 
@@ -336,6 +381,12 @@ def _preview_workbook(workbook, request):
         matched_eligible_unique_texts=len(eligible_sources),
         matched_missing_target_rows=missing_target_rows,
         matched_missing_target_unique_texts=len(missing_target_sources),
+        matched_text_list_rows=text_list_count,
+        matched_text_list_unique_texts=len(text_list_unique_sources),
+        matched_missing_text_list_rows=text_list_missing_rows,
+        matched_missing_text_list_unique_texts=len(text_list_missing_sources),
+        excluded_graphic_list_rows=excluded_graphic_rows,
+        text_list_sample_rows=text_list_rows,
         reference_examples=references,
         sample_rows=matched_rows + unmatched_rows,
     )
@@ -515,6 +566,11 @@ def translate_hmi_texts(
                     request.hmi_name,
                     request.view_path_root,
                 ):
+                    continue
+                category_text = str(worksheet.cell(
+                    row=row_index, column=columns[3],
+                ).value or "")
+                if _hmi_project_text_kind(category_text, reference) == "graphic_list":
                     continue
 
                 source_cell = worksheet.cell(
