@@ -1756,3 +1756,79 @@ td {
 .plc-member-reference-results:not(:empty) { border: 1px solid #32434e; border-radius: 5px; padding: 10px; background: #131c23; }
 .plc-member-reference-results p { margin: 0 0 8px; color: #c5d8e7; }
 .plc-xref-table th, .plc-xref-table td { font-size: 12px; overflow-wrap: anywhere; }
+
+
+/* Skipped HMI translations: reviewed retry, existing dark palette. */
+.hmi-skipped-manager {
+    margin-top: 12px;
+}
+#tia-hmi-skipped-panel {
+    margin-top: 12px;
+    padding: 14px;
+    border: 1px solid #334451;
+    border-radius: 7px;
+    background: #121a21;
+}
+#tia-hmi-skipped-panel h4 {
+    margin: 0 0 8px;
+    color: #e5eef5;
+}
+.hmi-skipped-list {
+    display: grid;
+    gap: 12px;
+    max-height: 600px;
+    margin-top: 12px;
+    overflow: auto;
+}
+.hmi-skipped-item {
+    padding: 12px;
+    border: 1px solid #364653;
+    border-radius: 6px;
+    background: #1b252e;
+    overflow-wrap: anywhere;
+}
+.hmi-skipped-item h5 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: #d9e8f3;
+}
+.hmi-skipped-item strong,
+.hmi-skipped-item label {
+    display: block;
+    font-size: 12px;
+    color: #c3d5e2;
+}
+.hmi-skipped-item pre {
+    margin: 5px 0 8px;
+    padding: 8px;
+    border: 1px solid #32414b;
+    background: #111920;
+    color: #e5edf2;
+    font: 12px Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.hmi-skipped-item textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 65px;
+    margin: 6px 0 8px;
+    resize: vertical;
+    border: 1px solid #465a68;
+    background: #111920;
+    color: #e9f2f6;
+}
+.hmi-skipped-reason {
+    margin: 6px 0;
+    font-size: 12px;
+    color: #edb88c;
+}
+.hmi-skipped-item-status {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #bfd1de;
+}
+.hmi-skipped-item .action-row button {
+    min-height: 30px;
+    font-size: 12px;
+}
