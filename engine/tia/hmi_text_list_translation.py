@@ -26,6 +26,7 @@ from engine.tia import hmi_review as review
 router = APIRouter()
 _REVIEWS = {}
 _LOCK = Lock()
+_IMPORT_LOCK = Lock()
 _TTL = 1800
 _MAX_XML_BYTES = 20 * 1024 * 1024
 
@@ -293,11 +294,22 @@ def prepare_text_list(request: PrepareTextListRequest):
 
 @router.post("/hmis/text-lists/import")
 def import_text_list(request: ImportTextListRequest):
-    with _LOCK:
-        _prune()
-        prepared = _REVIEWS.pop(request.review_id, None)
-    if not prepared:
-        raise HTTPException(404, "TextList review expired or already used.")
+    # Do not overlap TextList imports. The token is single-use even when
+    # import success is uncertain, preventing blind replays.
+    if not _IMPORT_LOCK.acquire(blocking=False):
+        raise HTTPException(409, "Another TextList import is in progress.")
+    try:
+        with _LOCK:
+            _prune()
+            prepared = _REVIEWS.pop(request.review_id, None)
+        if not prepared:
+            raise HTTPException(404, "TextList review expired or already used.")
+        return _perform_reviewed_import(prepared, request)
+    finally:
+        _IMPORT_LOCK.release()
+
+
+def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
     selection = PrepareTextListRequest(**prepared["request"])
     approved = {item["entry_index"]: item for item in prepared["accepted"]}
     provided = {item.entry_index: item.proposal for item in request.proposals}
@@ -347,8 +359,10 @@ def import_text_list(request: ImportTextListRequest):
             selection.device_name, selection.hmi_name,
             selection.text_list_name, str(path),
         )
-        prefix = "HMI_TEXT_LIST_IMPORTED|"
-        if not any(line.startswith(prefix) for line in lines):
+        confirmed = "HMI_TEXT_LIST_IMPORTED|" + base64.b64encode(
+            selection.text_list_name.encode("utf-8")
+        ).decode("ascii")
+        if confirmed not in lines:
             raise HTTPException(
                 502, "TextList import not confirmed. Inspect TIA before retrying."
             )
