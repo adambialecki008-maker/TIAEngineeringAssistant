@@ -129,6 +129,7 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
                         "source_text": item["source"],
                         "target_text": item["target"],
                         "supported": item["supported"],
+                        "reason": item.get("reason"),
                     }
                     for item in entries[:50]
                 ]
