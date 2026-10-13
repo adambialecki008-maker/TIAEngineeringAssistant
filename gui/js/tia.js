@@ -97,6 +97,14 @@ export function initTiaUi(
     const hmiDedicatedTextLists = document.getElementById(
         "tia-hmi-dedicated-text-lists"
     );
+    const hmiTextListDetails = document.getElementById("tia-hmi-text-lists-details");
+    const hmiTextListCatalog = document.getElementById("tia-hmi-text-lists-catalog");
+    const hmiTextListSelect = document.getElementById("tia-hmi-text-list-select");
+    const hmiTextListPrepare = document.getElementById("tia-hmi-text-list-prepare");
+    const hmiTextListImport = document.getElementById("tia-hmi-text-list-import");
+    const hmiTextListStatus = document.getElementById("tia-hmi-text-list-status");
+    const hmiTextListReview = document.getElementById("tia-hmi-text-list-review");
+    const hmiTextListReviewRows = document.getElementById("tia-hmi-text-list-review-rows");
     const hmiScanButton = document.getElementById("tia-hmi-scan-button");
     const hmiAuditExistingButton = document.getElementById(
         "tia-hmi-audit-existing"
@@ -486,6 +494,10 @@ export function initTiaUi(
     let hmiAuditInProgress = false;
     let lastHmiPreviewRows = [];
     let lastHmiTextListRows = [];
+    let hmiTextListsData = null;
+    let hmiTextListReviewToken = null;
+    let hmiTextListBusy = false;
+    let hmiTextListPreparedKey = null;
     let latestHmiScan = null;
     let hmiBatchRunning = false;
     let hmiBatchStarting = false;
@@ -1173,10 +1185,18 @@ export function initTiaUi(
                 "Not scanned yet. Select the HMI, languages and ViewPath root, "
                 + "then click Scan HMI / Count texts.";
         }
+        hmiTextListsData = null;
+        discardHmiTextListReview();
+        if (hmiTextListSelect) {
+            hmiTextListSelect.replaceChildren();
+            hmiTextListSelect.disabled = true;
+        }
+        hmiTextListCatalog?.replaceChildren();
         if (hmiDedicatedTextLists) {
             hmiDedicatedTextLists.textContent =
-                "Dedicated Text lists inventory has not been checked yet.";
+                "Classic Text lists — not scanned";
         }
+        if (hmiTextListStatus) hmiTextListStatus.textContent = "";
         if (hmiBatchTotalInput) {
             hmiBatchTotalInput.placeholder = "Scan HMI to see total";
             renderHmiBatchPlan();
@@ -1210,7 +1230,15 @@ export function initTiaUi(
         const reviewKey = hmiTranslationKey(selection);
         const isVerified = Boolean(scanKey && scanKey === verifiedHmiScanKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress
-            || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress;
+            || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress
+            || hmiTextListBusy;
+        if (hmiTextListPrepare) {
+            hmiTextListPrepare.disabled = busy || !hasTextListSelection();
+        }
+        if (hmiTextListImport) {
+            hmiTextListImport.disabled = busy || !hmiTextListReviewToken
+                || hmiTextListPreparedKey !== textListReviewKey();
+        }
         const hasTranslationEngine = Boolean(selection?.ollama_model);
         const missingUnique = latestHmiScan?.missingUnique ?? 0;
         const batchSize = Number(hmiBatchSizeInput?.value);
@@ -1800,6 +1828,133 @@ export function initTiaUi(
     }
 
 
+
+    function textListReviewKey() {
+        const selection = hmiTranslationSelection();
+        return hmiScanKey(selection) + ":" + (hmiTextListSelect?.value || "");
+    }
+
+    function hasTextListSelection() {
+        const selection = hmiTranslationSelection();
+        return Boolean(selection && hmiTextListsData?.lists?.length
+            && hmiTextListSelect?.value && selection.ollama_model
+            && !hmiBatchRunning);
+    }
+
+    function discardHmiTextListReview() {
+        hmiTextListReviewToken = null;
+        hmiTextListPreparedKey = null;
+        hmiTextListReview?.classList.add("hidden");
+        hmiTextListReviewRows?.replaceChildren();
+        if (hmiTextListImport) hmiTextListImport.disabled = true;
+    }
+
+    async function prepareHmiTextList() {
+        if (!hasTextListSelection() || hmiTextListBusy) return;
+        const selection = hmiTranslationSelection();
+        const identity = textListReviewKey();
+        discardHmiTextListReview();
+        hmiTextListBusy = true;
+        updateHmiTranslateButtonState();
+        if (hmiTextListStatus) {
+            hmiTextListStatus.textContent = "Preparing missing targets in "
+                + hmiTextListSelect.value + " — no import yet...";
+        }
+        try {
+            const result = await postJson(
+                "/api/v1/tia/hmis/text-lists/prepare",
+                {...selection, text_list_name: hmiTextListSelect.value, max_rows: 50}
+            );
+            if (identity !== textListReviewKey()) return;
+            hmiTextListReviewToken = result.review_id;
+            hmiTextListPreparedKey = identity;
+            if (hmiTextListReviewRows) {
+                hmiTextListReviewRows.replaceChildren();
+                for (const item of result.rows || []) {
+                    const tr = document.createElement("tr");
+                    addHmiTextCell(tr, item.source);
+                    addHmiTextCell(tr, item.current_target || "—");
+                    const td = document.createElement("td");
+                    const textarea = document.createElement("textarea");
+                    textarea.value = item.proposal;
+                    textarea.dataset.entryIndex = String(item.entry_index);
+                    textarea.setAttribute("aria-label",
+                        "Proposed translation for entry " + item.entry_index);
+                    td.appendChild(textarea);
+                    tr.appendChild(td);
+                    hmiTextListReviewRows.appendChild(tr);
+                }
+            }
+            if (hmiTextListStatus) {
+                const reasons = (result.skipped || [])
+                    .slice(0, 3).map(x => x.source + ": " + x.reason).join("; ");
+                hmiTextListStatus.textContent =
+                    "Prepared " + result.approved_count
+                    + " safe entries for manual approval; "
+                    + (result.skipped?.length || 0)
+                    + " rejected by QA."
+                    + (reasons ? " Examples: " + reasons : "")
+                    + " Only this list can be imported.";
+            }
+            if (result.review_id) {
+                hmiTextListReview?.classList.remove("hidden");
+                hmiTextListDetails.open = true;
+            }
+        } catch (error) {
+            if (hmiTextListStatus)
+                hmiTextListStatus.textContent = "Prepare failed: " + error.message;
+        } finally {
+            hmiTextListBusy = false;
+            updateHmiTranslateButtonState();
+        }
+    }
+
+    async function importReviewedHmiTextList() {
+        if (!hmiTextListReviewToken || hmiTextListBusy
+            || hmiTextListPreparedKey !== textListReviewKey()) return;
+        const listName = hmiTextListSelect.value;
+        const selected = [...(hmiTextListReviewRows
+            ?.querySelectorAll("textarea[data-entry-index]") || [])]
+            .map(element => ({
+                entry_index: Number(element.dataset.entryIndex),
+                proposal: element.value,
+            }));
+        if (!selected.length || !confirm(
+            "Import reviewed translations into TIA?\n\n"
+            + "ONLY Text list: " + listName + "\n"
+            + "Entries: " + selected.length + "\n\n"
+            + "This overrides the selected list XML, preserves the other "
+            + "lists, and verifies every entry by re-export.\n"
+            + "Use a BACKUP/COPY of the TIA project for the first import."
+        )) return;
+        const token = hmiTextListReviewToken;
+        // One-shot approval: no silent retry after uncertain TIA import.
+        discardHmiTextListReview();
+        hmiTextListBusy = true;
+        updateHmiTranslateButtonState();
+        if (hmiTextListStatus)
+            hmiTextListStatus.textContent = "Importing and verifying " + listName + "...";
+        try {
+            const result = await postJson(
+                "/api/v1/tia/hmis/text-lists/import",
+                {review_id: token, proposals: selected}
+            );
+            if (hmiTextListStatus)
+                hmiTextListStatus.textContent =
+                    "Verified " + result.verified_entries + " entries in "
+                    + result.text_list_name + ". Graphic lists untouched. "
+                    + "Scan again to refresh counts.";
+        } catch (error) {
+            if (hmiTextListStatus)
+                hmiTextListStatus.textContent =
+                    "Import rejected or verification uncertain: " + error.message
+                    + ". Inspect TIA before repeating the operation.";
+        } finally {
+            hmiTextListBusy = false;
+            updateHmiTranslateButtonState();
+        }
+    }
+
     async function auditExistingHmiTranslations() {
         const selection = hmiTranslationSelection();
         if (!selection?.view_path_root
@@ -1927,6 +2082,19 @@ export function initTiaUi(
                     + "Missing-target counts are estimates, not confirmed "
                     + "untranslated-text counts.";
             }
+            hmiTextListsData = separateLists;
+            discardHmiTextListReview();
+            hmiTextListCatalog?.replaceChildren();
+            if (hmiTextListSelect) {
+                hmiTextListSelect.replaceChildren();
+                for (const item of separateLists?.lists || []) {
+                    const option = document.createElement("option");
+                    option.value = item.name;
+                    option.textContent = item.name;
+                    hmiTextListSelect.appendChild(option);
+                }
+                hmiTextListSelect.disabled = !separateLists?.lists?.length;
+            }
             if (hmiDedicatedTextLists) {
                 if (separateListsError) {
                     hmiDedicatedTextLists.textContent =
@@ -1937,28 +2105,22 @@ export function initTiaUi(
                     const entries = separateLists.entry_count_known
                         ? separateLists.entry_count
                         : "unknown (XML format not recognized)";
-                    const names = (separateLists.lists || [])
-                        .slice(0, 15)
-                        .map(item => item.name
-                            + (item.entry_count_known
-                                ? " (" + item.entry_count + " entries)" : ""))
-                        .join(", ");
-                    const examples = (separateLists.lists || [])
-                        .flatMap(item => item.sample_texts || [])
-                        .filter(item => item.culture.toLowerCase()
-                            === selection.source_culture.toLowerCase())
-                        .slice(0, 5)
-                        .map(item => item.text)
-                        .join(" | ");
                     hmiDedicatedTextLists.textContent =
-                        "Dedicated Classic Text lists: "
-                        + separateLists.text_list_count
-                        + " list(s), " + entries + " entries. "
-                        + (names ? "Names: " + names + ". " : "")
-                        + (examples ? "Source examples: " + examples + ". " : "")
-                        + "Read-only XML inventory: NOT included in the "
-                        + "Project texts XLSX translation/import batch. "
-                        + "Graphic lists untouched.";
+                        "Classic Text lists: " + separateLists.text_list_count
+                        + " lists · " + entries + " entries — Details";
+                    if (hmiTextListCatalog) {
+                        const ul = document.createElement("ul");
+                        for (const item of separateLists.lists || []) {
+                            const li = document.createElement("li");
+                            li.textContent = item.name
+                                + (item.entry_count_known
+                                    ? " — " + item.entry_count + " entries"
+                                    : " — entry count unavailable");
+                            ul.appendChild(li);
+                        }
+                        hmiTextListCatalog.appendChild(ul);
+                    }
+
                 }
             }
             if (hmiBatchTotalInput) {
@@ -7700,6 +7862,16 @@ export function initTiaUi(
     );
     hmiAuditExistingButton?.addEventListener(
         "click", () => { void auditExistingHmiTranslations(); }
+    );
+    hmiTextListSelect?.addEventListener("change", () => {
+        discardHmiTextListReview();
+        updateHmiTranslateButtonState();
+    });
+    hmiTextListPrepare?.addEventListener(
+        "click", () => { void prepareHmiTextList(); }
+    );
+    hmiTextListImport?.addEventListener(
+        "click", () => { void importReviewedHmiTextList(); }
     );
     hmiExistingQaReportButton?.addEventListener(
         "click", () => { void downloadHmiExistingQaReport(); }
