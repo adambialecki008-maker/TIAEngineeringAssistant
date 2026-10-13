@@ -88,45 +88,74 @@ def _parse(xml_bytes: bytes, expected_name: str):
     return root, entries
 
 
+def _plain_value(node):
+    """Accept plain direct Value or a single, unformatted <body><p>."""
+    if node is None:
+        return None
+    if not len(node):
+        return node, node.text or ""
+    if len(node) == 1 and _local(node[0].tag) == "body":
+        body = node[0]
+        if len(body) == 1 and _local(body[0].tag) == "p":
+            paragraph = body[0]
+            if not len(paragraph):
+                return paragraph, paragraph.text or ""
+    return None
+
+
 def _multilingual_entry(entry):
     texts = [node for node in entry.iter()
              if _local(node.tag) == "MultilingualText"
              and node.attrib.get("CompositionName") == "Text"]
     if len(texts) != 1:
-        return None, []
-    container = _child(texts[0], "ObjectList")
-    if container is None:
-        return None, []
-    items = [node for node in container
-             if _local(node.tag) == "MultilingualTextItem"]
-    return container, items
+        return None, [], None
+    multilingual = texts[0]
+    # Native TIA XML sometimes serializes multilingual strings directly
+    # under <TextItems><Value lang="xx-YY"> instead of an ObjectList.
+    items = _child(_child(multilingual, "AttributeList"), "TextItems")
+    if items is not None:
+        return items, [node for node in items
+                       if _local(node.tag) == "Value"], "values"
+    container = _child(multilingual, "ObjectList")
+    if container is not None:
+        return container, [node for node in container
+                           if _local(node.tag) == "MultilingualTextItem"], "items"
+    return None, [], None
 
 
 def _extract_entries(root, entries, source_culture: str, target_culture: str):
     result = []
     for i, node in enumerate(entries):
-        parent, items = _multilingual_entry(node)
+        parent, items, storage = _multilingual_entry(node)
         languages = {}
         complex_text = False
         for item in items:
-            culture_node = _attribute(item, "Culture")
-            text_node = _attribute(item, "Text")
-            culture = _node_text(culture_node)
+            if storage == "values":
+                culture = item.attrib.get("lang", "")
+                parsed = _plain_value(item)
+                if parsed is None:
+                    complex_text = True
+                    break
+                text_node, value = parsed
+            else:
+                culture_node = _attribute(item, "Culture")
+                text_node = _attribute(item, "Text")
+                culture = _node_text(culture_node)
+                value = _node_text(text_node)
+                if value is None:
+                    complex_text = True
+                    break
             if not culture or culture.casefold() in languages:
-                complex_text = True
-                break
-            value = _node_text(text_node)
-            if value is None:
                 complex_text = True
                 break
             languages[culture.casefold()] = (item, text_node, value)
         source = languages.get(source_culture.casefold())
         target = languages.get(target_culture.casefold())
-        # Unsupported entries remain present in the XML, unchanged.
         result.append({
             "entry_index": i,
             "node": node,
             "parent": parent,
+            "storage": storage,
             "languages": languages,
             "source": source[2] if source else "",
             "target": target[2] if target else "",
@@ -190,16 +219,22 @@ def _write_proposal(root, row, target_culture, proposal):
     if row["parent"] is None:
         raise HTTPException(409, "Unsupported TextList language container.")
     clone = deepcopy(source[0])
-    existing_ids = {int(e.attrib["ID"]) for e in root.iter()
-                    if e.attrib.get("ID", "").isdigit()}
-    next_id = max(existing_ids or {0}) + 1
-    clone.set("ID", str(next_id))
-    culture = _attribute(clone, "Culture")
-    text = _attribute(clone, "Text")
-    if culture is None or text is None or len(text):
-        raise HTTPException(409, "Cannot safely add target language to TextList.")
-    culture.text = target_culture
-    text.text = proposal
+    if row["storage"] == "values":
+        clone.set("lang", target_culture)
+        payload = _plain_value(clone)
+        if payload is None:
+            raise HTTPException(409, "Cannot clone complex target TextList XML.")
+        payload[0].text = proposal
+    else:
+        existing_ids = {int(e.attrib["ID"]) for e in root.iter()
+                        if e.attrib.get("ID", "").isdigit()}
+        clone.set("ID", str(max(existing_ids or {0}) + 1))
+        culture = _attribute(clone, "Culture")
+        text = _attribute(clone, "Text")
+        if culture is None or text is None or len(text):
+            raise HTTPException(409, "Cannot safely add target language to TextList.")
+        culture.text = target_culture
+        text.text = proposal
     row["parent"].append(clone)
 
 
@@ -345,6 +380,19 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
     before = _extract_entries(
         root, entries, selection.source_culture, selection.target_culture
     )
+    # A different entry can contain a rich-text value; because Override
+    # replaces the entire list, refuse ALL writes in that case.
+    if any(
+        _plain_value(node) is None
+        for entry in entries
+        for node in entry.iter()
+        if _local(node.tag) == "Value"
+        and "lang" in node.attrib
+    ):
+        raise HTTPException(
+            409, "TextList contains formatted multilingual Value XML. "
+            "No import was attempted."
+        )
     if any(
         any(
             _local(item.tag) == "Text" and len(item)
