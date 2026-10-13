@@ -94,6 +94,9 @@ export function initTiaUi(
     const hmiBatchProgressText =
         document.getElementById("tia-hmi-batch-progress-text");
     const hmiScanSummary = document.getElementById("tia-hmi-scan-summary");
+    const hmiDedicatedTextLists = document.getElementById(
+        "tia-hmi-dedicated-text-lists"
+    );
     const hmiScanButton = document.getElementById("tia-hmi-scan-button");
     const hmiAuditExistingButton = document.getElementById(
         "tia-hmi-audit-existing"
@@ -1170,6 +1173,10 @@ export function initTiaUi(
                 "Not scanned yet. Select the HMI, languages and ViewPath root, "
                 + "then click Scan HMI / Count texts.";
         }
+        if (hmiDedicatedTextLists) {
+            hmiDedicatedTextLists.textContent =
+                "Dedicated Text lists inventory has not been checked yet.";
+        }
         if (hmiBatchTotalInput) {
             hmiBatchTotalInput.placeholder = "Scan HMI to see total";
             renderHmiBatchPlan();
@@ -1872,6 +1879,21 @@ export function initTiaUi(
         const previewKey = hmiScanKey(selection);
         try {
             const result = await postJson("/api/v1/tia/hmis/preview-texts", selection);
+            // Separate read-only Siemens Openness export, independent of XLSX.
+            // Failed export must never be presented as an actual zero count.
+            let separateLists = null;
+            let separateListsError = null;
+            if (hmiDedicatedTextLists) {
+                hmiDedicatedTextLists.textContent =
+                    "Checking dedicated HMI Text lists XML export...";
+            }
+            try {
+                separateLists = await postJson(
+                    "/api/v1/tia/hmis/inspect-text-lists", selection
+                );
+            } catch (error) {
+                separateListsError = error.message;
+            }
             if (hmiScanKey(hmiTranslationSelection()) !== previewKey) {
                 return false;
             }
@@ -1898,12 +1920,38 @@ export function initTiaUi(
                     + latestHmiScan.missingUnique
                     + " unique texts have an empty or 'Text' target "
                     + "(recommended Total to translate). "
-                    + "Text lists: " + latestHmiScan.textListRows + " entries ("
+                    + "Text lists in Project texts XLSX: " + latestHmiScan.textListRows + " entries ("
                     + latestHmiScan.missingTextListRows
                     + " missing/placeholder targets). "
                     + "Graphic lists: not translated. "
                     + "Missing-target counts are estimates, not confirmed "
                     + "untranslated-text counts.";
+            }
+            if (hmiDedicatedTextLists) {
+                if (separateListsError) {
+                    hmiDedicatedTextLists.textContent =
+                        "Dedicated Text lists export unavailable: "
+                        + separateListsError
+                        + ". This does NOT mean zero lists.";
+                } else if (separateLists) {
+                    const entries = separateLists.entry_count_known
+                        ? separateLists.entry_count
+                        : "unknown (XML format not recognized)";
+                    const names = (separateLists.lists || [])
+                        .slice(0, 15)
+                        .map(item => item.name
+                            + (item.entry_count_known
+                                ? " (" + item.entry_count + " entries)" : ""))
+                        .join(", ");
+                    hmiDedicatedTextLists.textContent =
+                        "Dedicated Classic Text lists: "
+                        + separateLists.text_list_count
+                        + " list(s), " + entries + " entries. "
+                        + (names ? "Names: " + names + ". " : "")
+                        + "Read-only XML inventory: NOT included in the "
+                        + "Project texts XLSX translation/import batch. "
+                        + "Graphic lists untouched.";
+                }
             }
             if (hmiBatchTotalInput) {
                 hmiBatchTotalInput.placeholder =
@@ -1923,7 +1971,7 @@ export function initTiaUi(
                     + `target column: ${result.target_column_header || "unknown"}. `
                     + `${result.matched_text_rows} matched of ${result.total_text_rows} text rows `
                     + `across ${result.worksheets_found} sheet(s). `
-                    + "Includes text-list entries from this HMI only; "
+                    + "These samples include only list entries present in XLSX; "
                     + "graphic lists are excluded. "
                     + "Rows below are samples, not the entire export.";
             }
