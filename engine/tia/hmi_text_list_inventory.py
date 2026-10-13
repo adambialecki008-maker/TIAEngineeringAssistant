@@ -109,7 +109,39 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
                 Path(temp_dir) / filename,
                 request.source_culture, request.target_culture,
             )
-            results.append({"name": name, **parsed})
+            # This same XML is also used for the selected-list preview.
+            # Never run Project texts XLSX export to discover list contents.
+            sample_rows = []
+            preview_warning = None
+            try:
+                from engine.tia.hmi_text_list_translation import (
+                    _parse, _extract_entries,
+                )
+                xml = (Path(temp_dir) / filename).read_bytes()
+                root, entry_nodes = _parse(xml, name)
+                entries = _extract_entries(
+                    root, entry_nodes,
+                    request.source_culture, request.target_culture,
+                )
+                sample_rows = [
+                    {
+                        "entry_index": item["entry_index"],
+                        "source_text": item["source"],
+                        "target_text": item["target"],
+                        "supported": item["supported"],
+                    }
+                    for item in entries[:50]
+                ]
+            except (HTTPException, ValueError) as exc:
+                preview_warning = (
+                    str(exc.detail) if isinstance(exc, HTTPException)
+                    else str(exc)
+                )[:200]
+            results.append({
+                "name": name, **parsed,
+                "preview_rows": sample_rows,
+                "preview_warning": preview_warning,
+            })
             entries_known = entries_known and parsed["entry_count_known"]
         return {
             "hmi_name": request.hmi_name,
