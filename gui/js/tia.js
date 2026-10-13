@@ -8199,6 +8199,8 @@ export function initTiaUi(
     hmiTextListSelect?.addEventListener("change", () => {
         hmiTextListImportedCount = 0;
         hmiTextListProgressKey = null;
+        if (hmiTextListTotalInput) hmiTextListTotalInput.value = "";
+        if (hmiTextListPreview) hmiTextListPreview.open = false;
         renderSelectedTextListPreview();
     });
     for (const input of [hmiTextListBatchSizeInput, hmiTextListTotalInput]) {
