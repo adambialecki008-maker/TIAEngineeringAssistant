@@ -496,6 +496,9 @@ export function initTiaUi(
     let selectedHmiForTranslation = null;
 
     let verifiedHmiScanKey = null;
+    let verifiedHmiTextListsScanKey = null;
+    let hmiProjectScanMessage = null;
+    let hmiTextListsScanMessage = null;
     let hmiPreviewInProgress = false;
     let hmiAuditInProgress = false;
     let lastHmiPreviewRows = [];
@@ -1071,32 +1074,54 @@ export function initTiaUi(
     }
 
 
+    function hmiScopeEnabled(scope) {
+        if (scope === "project") return Boolean(hmiScopeProject?.checked);
+        if (scope === "text_lists") return Boolean(hmiScopeLists?.checked);
+        return false;
+    }
+
     function hmiWorkScope() {
-        if (hmiScopeProject?.checked && !hmiScopeLists?.checked)
-            return "project";
-        if (hmiScopeLists?.checked && !hmiScopeProject?.checked)
-            return "text_lists";
+        if (hmiScopeEnabled("project") && hmiScopeEnabled("text_lists"))
+            return "both";
+        if (hmiScopeEnabled("project")) return "project";
+        if (hmiScopeEnabled("text_lists")) return "text_lists";
         return null;
+    }
+
+    function renderHmiScanSummary() {
+        if (!hmiScanSummary) return;
+        const parts = [];
+        if (hmiScopeEnabled("project"))
+            parts.push("Project texts: " + (hmiProjectScanMessage || "not scanned"));
+        if (hmiScopeEnabled("text_lists"))
+            parts.push("Text lists: " + (hmiTextListsScanMessage || "not scanned"));
+        hmiScanSummary.textContent = parts.length ? parts.join("\n")
+            : "Select Project texts, Text lists, or both to enable Scan.";
     }
 
     function applyHmiScope() {
         const scope = hmiWorkScope();
         for (const element of hmiScopeSections) {
-            element.classList.toggle("hidden", element.dataset.hmiScope !== scope);
+            element.classList.toggle("hidden",
+                !hmiScopeEnabled(element.dataset.hmiScope));
         }
         hmiPreviewResults?.classList.add("hidden");
         hmiReviewResults?.classList.add("hidden");
         if (hmiTextListDetails) hmiTextListDetails.open = false;
         if (hmiScanButton) {
-            hmiScanButton.textContent = scope === "project"
-                ? "Scan Project texts"
-                : scope === "text_lists"
-                    ? "Scan Text lists" : "Select scope to scan";
+            hmiScanButton.textContent = scope === "both"
+                ? "Scan selected texts (XLSX + XML)"
+                : scope === "project" ? "Scan Project texts"
+                : scope === "text_lists" ? "Scan Text lists"
+                : "Select scope to scan";
         }
-        if (hmiScanInstruction && !scope) {
-            hmiScanInstruction.textContent =
-                "Select Project texts or Text lists to enable Scan.";
+        if (hmiScanInstruction) {
+            hmiScanInstruction.textContent = scope === "both"
+                ? "Scan reads both formats separately. Review and import each type in its own section."
+                : scope ? "Scan is read-only and uses only the selected type."
+                : "Select at least one text type to enable Scan.";
         }
+        renderHmiScanSummary();
     }
 
     function hmiTranslationSelection() {
@@ -1123,16 +1148,16 @@ export function initTiaUi(
 
     // A scan verifies the HMI/project/languages/root, not the Ollama model.
     // Keep review identity model-sensitive through hmiTranslationKey().
-    function hmiScanKey(selection) {
+    function hmiScanKey(selection, scope = "project") {
         if (!selection) {
             return null;
         }
         return JSON.stringify({
-            scope: hmiWorkScope(),
+            scope,
             process_id: selection.process_id,
             device_name: selection.device_name,
             hmi_name: selection.hmi_name,
-            view_path_root: selection.view_path_root,
+            view_path_root: scope === "project" ? selection.view_path_root : null,
             source_culture: selection.source_culture,
             target_culture: selection.target_culture,
         });
@@ -1175,7 +1200,7 @@ export function initTiaUi(
 
     function renderHmiPreviewRows() {
         hmiPreviewRows?.replaceChildren();
-        if (hmiWorkScope() !== "project") return;
+        if (!hmiScopeEnabled("project")) return;
         const selected = hmiPreviewFilter?.value || "matched";
         const subset = lastHmiPreviewRows.filter(item =>
             Boolean(item.matches_hmi) === (selected === "matched")
@@ -1212,15 +1237,11 @@ export function initTiaUi(
         if (hmiExistingQaStatus) hmiExistingQaStatus.textContent = "";
         if (hmiAuditExistingButton) hmiAuditExistingButton.disabled = true;
         verifiedHmiScanKey = null;
+        verifiedHmiTextListsScanKey = null;
+        hmiProjectScanMessage = null;
+        hmiTextListsScanMessage = null;
         latestHmiScan = null;
-        if (hmiScanSummary) {
-            const scope = hmiWorkScope();
-            hmiScanSummary.textContent = scope === "project"
-                ? "Project texts not scanned. Choose an HMI and languages, then Scan Project texts."
-                : scope === "text_lists"
-                    ? "Text lists not scanned. Choose an HMI and languages, then Scan Text lists."
-                    : "Select Project texts or Text lists to enable Scan.";
-        }
+        renderHmiScanSummary();
         hmiTextListsData = null;
         discardHmiTextListReview();
         if (hmiTextListSelect) {
@@ -1266,8 +1287,8 @@ export function initTiaUi(
         const scanKey = hmiScanKey(selection);
         const reviewKey = hmiTranslationKey(selection);
         const scope = hmiWorkScope();
-        const projectSelected = scope === "project";
-        const listsSelected = scope === "text_lists";
+        const projectSelected = hmiScopeEnabled("project");
+        const listsSelected = hmiScopeEnabled("text_lists");
         const isVerified = Boolean(scanKey && scanKey === verifiedHmiScanKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress
@@ -1659,7 +1680,7 @@ export function initTiaUi(
     async function startHmiBatchImport() {
         const selection = hmiTranslationSelection();
         const scanKey = hmiScanKey(selection);
-        if (hmiWorkScope() !== "project" || !selection || scanKey !== verifiedHmiScanKey
+        if (!hmiScopeEnabled("project") || !selection || scanKey !== verifiedHmiScanKey
             || !selection.view_path_root
             || !selection.ollama_model) {
             setHmiBatchStatus(
@@ -1720,7 +1741,7 @@ export function initTiaUi(
     }
 
     async function resumeHmiBatchImport() {
-        if (hmiWorkScope() !== "project") return;
+        if (!hmiScopeEnabled("project")) return;
         const jobId = savedHmiBatchJobId();
         if (!jobId) {
             setHmiBatchStatus("No saved job for this HMI.", true);
@@ -1768,7 +1789,7 @@ export function initTiaUi(
     }
 
     async function pauseHmiBatchImport() {
-        if (hmiWorkScope() !== "project") return;
+        if (!hmiScopeEnabled("project")) return;
         if (!hmiBatchJobId || !hmiBatchRunning) {
             return;
         }
@@ -1823,7 +1844,7 @@ export function initTiaUi(
     }
 
     async function downloadHmiBatchQualityReport() {
-        if (hmiWorkScope() !== "project" || !hmiBatchJobId || hmiBatchRunning) return;
+        if (!hmiScopeEnabled("project") || !hmiBatchJobId || hmiBatchRunning) return;
         hmiQualityReportButton.disabled = true;
         setHmiBatchStatus("Downloading checkpoint quality XLSX...");
         try {
@@ -1845,7 +1866,7 @@ export function initTiaUi(
 
     async function downloadHmiExistingQaReport() {
         const selection = hmiTranslationSelection();
-        if (hmiWorkScope() !== "project" || !selection?.view_path_root
+        if (!hmiScopeEnabled("project") || !selection?.view_path_root
             || hmiScanKey(selection) !== verifiedHmiScanKey
             || hmiAuditInProgress || hmiBatchRunning) return;
         hmiAuditInProgress = true;
@@ -1880,15 +1901,15 @@ export function initTiaUi(
 
     function textListReviewKey() {
         const selection = hmiTranslationSelection();
-        return hmiScanKey(selection) + ":"
+        return hmiScanKey(selection, "text_lists") + ":"
             + (hmiTextListSelect?.value || "") + ":"
             + (selection?.ollama_model || "");
     }
 
     function hasTextListSelection() {
         const selection = hmiTranslationSelection();
-        return Boolean(hmiWorkScope() === "text_lists"
-            && hmiScanKey(selection) === verifiedHmiScanKey
+        return Boolean(hmiScopeEnabled("text_lists")
+            && hmiScanKey(selection, "text_lists") === verifiedHmiTextListsScanKey
             && selection && hmiTextListsData?.lists?.length
             && hmiTextListSelect?.value && selection.ollama_model
             && !hmiBatchRunning);
@@ -2009,7 +2030,7 @@ export function initTiaUi(
 
     async function auditExistingHmiTranslations() {
         const selection = hmiTranslationSelection();
-        if (hmiWorkScope() !== "project" || !selection?.view_path_root
+        if (!hmiScopeEnabled("project") || !selection?.view_path_root
             || hmiScanKey(selection) !== verifiedHmiScanKey
             || hmiAuditInProgress || hmiBatchRunning || hmiReviewInProgress) {
             if (hmiExistingQaStatus) {
@@ -2070,7 +2091,7 @@ export function initTiaUi(
         discardHmiTextListReview();
         const list = (hmiTextListsData?.lists || [])
             .find(item => item.name === hmiTextListSelect?.value);
-        if (!list || hmiWorkScope() !== "text_lists") {
+        if (!list || !hmiScopeEnabled("text_lists")) {
             hmiTextListPreview?.classList.add("hidden");
             return;
         }
@@ -2098,11 +2119,10 @@ export function initTiaUi(
 
     async function scanHmiTextLists() {
         const selection = hmiTranslationSelection();
-        if (hmiWorkScope() !== "text_lists" || !selection) return false;
-        invalidateHmiPreview();
+        if (!hmiScopeEnabled("text_lists") || !selection) return false;
         hmiPreviewInProgress = true;
         updateHmiTranslateButtonState();
-        const scanKey = hmiScanKey(selection);
+        const scanKey = hmiScanKey(selection, "text_lists");
         if (hmiScanSummary) {
             hmiScanSummary.textContent =
                 "Scanning only Classic Text lists (read-only XML export)...";
@@ -2111,8 +2131,8 @@ export function initTiaUi(
             const data = await postJson(
                 "/api/v1/tia/hmis/inspect-text-lists", selection
             );
-            if (hmiWorkScope() !== "text_lists"
-                || hmiScanKey(hmiTranslationSelection()) !== scanKey) return false;
+            if (!hmiScopeEnabled("text_lists")
+                || hmiScanKey(hmiTranslationSelection(), "text_lists") !== scanKey) return false;
             hmiTextListsData = data;
             if (hmiTextListCatalog) {
                 hmiTextListCatalog.replaceChildren();
@@ -2155,7 +2175,7 @@ export function initTiaUi(
                     + "Graphic lists are excluded. "
                     + "No Project texts XLSX scan was performed.";
             }
-            verifiedHmiScanKey = scanKey;
+            verifiedHmiTextListsScanKey = scanKey;
             renderSelectedTextListPreview();
             setHmiTranslationStatus(
                 "Text lists scan complete. Expand Details, choose a list, "
@@ -2174,6 +2194,8 @@ export function initTiaUi(
             setHmiTranslationStatus(error.message, "error");
             return false;
         } finally {
+            hmiTextListsScanMessage = hmiScanSummary?.textContent || null;
+            renderHmiScanSummary();
             hmiPreviewInProgress = false;
             updateHmiTranslateButtonState();
         }
@@ -2181,17 +2203,26 @@ export function initTiaUi(
 
 
     async function previewSelectedHmi() {
-        if (hmiWorkScope() === "text_lists") {
-            return await scanHmiTextLists();
-        }
-        if (hmiWorkScope() !== "project") return false;
+        const scanProject = hmiScopeEnabled("project");
+        const scanLists = hmiScopeEnabled("text_lists");
+        if (!scanProject && !scanLists) return false;
+        invalidateHmiPreview();
+        // Serialize the Openness exports; keep XLSX and XML scan identities separate.
+        let projectOk = true;
+        let listsOk = true;
+        if (scanProject) projectOk = await scanProjectHmiTexts();
+        if (scanLists) listsOk = await scanHmiTextLists();
+        return projectOk && listsOk;
+    }
+
+    async function scanProjectHmiTexts() {
+        if (!hmiScopeEnabled("project")) return false;
         const selection = hmiTranslationSelection();
         if (!selection) {
             setHmiTranslationStatus("Select HMI, source slot and target language.", "error");
             return false;
         }
 
-        invalidateHmiPreview();
         hmiPreviewInProgress = true;
         updateHmiTranslateButtonState();
         if (hmiScanSummary) {
@@ -2351,6 +2382,8 @@ export function initTiaUi(
             setHmiTranslationStatus(error.message, "error");
             return false;
         } finally {
+            hmiProjectScanMessage = hmiScanSummary?.textContent || null;
+            renderHmiScanSummary();
             hmiPreviewInProgress = false;
             updateHmiTranslateButtonState();
         }
@@ -2729,7 +2762,7 @@ export function initTiaUi(
     async function translateSelectedHmi() {
         const selection = hmiTranslationSelection();
         const key = hmiTranslationKey(selection);
-        if (hmiWorkScope() !== "project" || !selection || !selection.ollama_model
+        if (!hmiScopeEnabled("project") || !selection || !selection.ollama_model
             || hmiScanKey(selection) !== verifiedHmiScanKey) {
             setHmiTranslationStatus(
                 "Scan this HMI and ViewPath root before preparing translations.",
@@ -2879,7 +2912,7 @@ export function initTiaUi(
         const review = preparedHmiReview;
         const selectionBeforeImport = hmiTranslationSelection();
         const key = hmiTranslationKey(selectionBeforeImport);
-        if (hmiWorkScope() !== "project" || !review || review.selectionKey !== key
+        if (!hmiScopeEnabled("project") || !review || review.selectionKey !== key
             || hmiScanKey(selectionBeforeImport) !== verifiedHmiScanKey) {
             setHmiTranslationStatus(
                 "Translations must be prepared and reviewed for this HMI first.",
@@ -7968,22 +8001,22 @@ export function initTiaUi(
     });
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
 
-    const changeHmiScope = (changed, other) => {
+    const changeHmiScope = (changed) => {
         if (hmiPreviewInProgress || hmiTextListBusy || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress) {
             changed.checked = !changed.checked;
             return;
         }
-        if (changed.checked && other) other.checked = false;
+        // Independent checkboxes: zero, one or both text types may be selected.
         invalidateHmiPreview();
         applyHmiScope();
         updateHmiTranslateButtonState();
     };
     hmiScopeProject?.addEventListener(
-        "change", () => changeHmiScope(hmiScopeProject, hmiScopeLists)
+        "change", () => changeHmiScope(hmiScopeProject)
     );
     hmiScopeLists?.addEventListener(
-        "change", () => changeHmiScope(hmiScopeLists, hmiScopeProject)
+        "change", () => changeHmiScope(hmiScopeLists)
     );
     hmiScanButton?.addEventListener(
         "click", () => { void previewSelectedHmi(); }
