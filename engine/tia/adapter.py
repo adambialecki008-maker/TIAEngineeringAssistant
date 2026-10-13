@@ -76,6 +76,7 @@ DEFAULT_PROJECT_TEXT_TIMEOUT_SECONDS = 900
 PROJECT_TEXT_COMMANDS = frozenset({
     "export-project-texts",
     "export-hmi-text-lists",
+    "import-hmi-text-list",
     "import-project-texts",
 })
 
