@@ -66,6 +66,9 @@ namespace TiaOpennessAdapter
                     case "export-project-texts":
                         return ExportProjectTexts(args);
 
+                    case "export-hmi-text-lists":
+                        return ExportHmiTextLists(args);
+
 
                     case "import-project-texts":
                         return ImportProjectTexts(args);
@@ -225,6 +228,24 @@ namespace TiaOpennessAdapter
             );
         }
 
+
+        private static int ExportHmiTextLists(string[] args)
+        {
+            if (args.Length != 5)
+            {
+                Console.Error.WriteLine(
+                    "PID, DEVICE_NAME, HMI_NAME, OUTPUT_DIRECTORY are required."
+                );
+                return 1;
+            }
+            if (!TryReadProcessId(args, out int processId))
+            {
+                return 1;
+            }
+            return TiaService.ExportHmiTextLists(
+                processId, args[2], args[3], args[4]
+            );
+        }
 
         private static int ExportProjectTexts(
             string[] args
@@ -773,6 +794,10 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  export-project-texts <PID> <SOURCE_CULTURE> <TARGET_CULTURE> <OUTPUT_FILE>"
+            );
+
+            Console.WriteLine(
+                "  export-hmi-text-lists <PID> <DEVICE_NAME> <HMI_NAME> <OUTPUT_DIRECTORY> (read-only Classic XML)"
             );
 
             Console.WriteLine(
