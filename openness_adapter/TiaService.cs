@@ -746,6 +746,132 @@ namespace TiaOpennessAdapter
         }
 
 
+        /// <summary>
+        /// Import one pre-reviewed Classic HMI TextList XML with Override.
+        /// The Python review handler owns the whitelist, snapshot checks,
+        /// and post-import re-export verification. GraphicLists are excluded.
+        /// </summary>
+        public static int ImportHmiTextList(
+            int processId, string deviceName, string hmiName,
+            string listName, string inputFilePath
+        )
+        {
+            FileInfo sourceFile = new FileInfo(inputFilePath);
+            if (!sourceFile.Exists)
+            {
+                Console.Error.WriteLine("HMI_TEXT_LIST_FILE_NOT_FOUND");
+                return 3;
+            }
+            // Refuse XML containing any non-TextList engineering objects.
+            System.Xml.XmlDocument document = new System.Xml.XmlDocument();
+            document.XmlResolver = null;
+            using (System.Xml.XmlReader reader = System.Xml.XmlReader.Create(
+                sourceFile.FullName, new System.Xml.XmlReaderSettings {
+                    DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                    XmlResolver = null
+                }))
+            {
+                document.Load(reader);
+            }
+            var roots = document.GetElementsByTagName(
+                "Hmi.TextGraphicList.TextList"
+            );
+            if (roots.Count != 1 ||
+                document.GetElementsByTagName(
+                    "Hmi.TextGraphicList.GraphicList").Count != 0)
+            {
+                Console.Error.WriteLine("HMI_TEXT_LIST_XML_SCOPE_INVALID");
+                return 3;
+            }
+            System.Xml.XmlNode nameNode = roots[0].SelectSingleNode(
+                "./AttributeList/Name"
+            );
+            if (nameNode == null || !string.Equals(
+                nameNode.InnerText, listName, StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("HMI_TEXT_LIST_XML_NAME_MISMATCH");
+                return 3;
+            }
+
+            TiaPortalProcess process = FindProcess(processId);
+            if (process == null) return WriteProcessNotFound(processId);
+            using (TiaPortal portal = process.Attach())
+            {
+                Project project = GetSingleOpenProject(
+                    portal, out int errorCode
+                );
+                if (project == null) return errorCode;
+
+                Siemens.Engineering.Hmi.HmiTarget selected = null;
+                int matches = 0;
+                foreach (Device device in EnumerateDevices(project))
+                {
+                    if (!string.Equals(
+                        device.Name, deviceName,
+                        StringComparison.OrdinalIgnoreCase
+                    )) continue;
+                    foreach (DeviceItemPath path in EnumerateDeviceItems(device))
+                    {
+                        SoftwareContainer container;
+                        try
+                        {
+                            container = path.Item.GetService<SoftwareContainer>();
+                        }
+                        catch { continue; }
+                        var software = container?.Software;
+                        if (software == null ||
+                            !TypeIsOrDerivesFrom(software.GetType(),
+                                "Siemens.Engineering.Hmi.HmiTarget"))
+                            continue;
+                        if (!string.Equals(
+                                path.Item.Name, hmiName,
+                                StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(
+                                ReadObjectName(software), hmiName,
+                                StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        matches++;
+                        selected = software as Siemens.Engineering.Hmi.HmiTarget;
+                    }
+                }
+                if (matches != 1 || selected == null)
+                {
+                    Console.Error.WriteLine("HMI_TEXT_LIST_SELECTION_INVALID");
+                    return 7;
+                }
+                if (selected.TextLists.Find(listName) == null)
+                {
+                    Console.Error.WriteLine("HMI_TEXT_LIST_NOT_FOUND");
+                    return 7;
+                }
+                using (ExclusiveAccess access = portal.ExclusiveAccess(
+                    "TIA Engineering Assistant: reviewed HMI text list import"
+                ))
+                {
+                    var imported = selected.TextLists.Import(
+                        sourceFile, ImportOptions.Override
+                    );
+                    if (imported == null || imported.Count != 1 ||
+                        !string.Equals(imported[0].Name, listName,
+                            StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            "Unexpected HMI text-list import result. "
+                            + "Inspect TIA before any retry."
+                        );
+                    }
+                    SaveProject(project);
+                    Console.WriteLine(
+                        "HMI_TEXT_LIST_IMPORTED|" +
+                        Convert.ToBase64String(
+                            Encoding.UTF8.GetBytes(listName))
+                    );
+                }
+            }
+            return 0;
+        }
+
+
         public static int ImportProjectTexts(
             int processId,
             string inputFilePath,
