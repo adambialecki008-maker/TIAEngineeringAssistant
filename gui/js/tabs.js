@@ -45,10 +45,9 @@ export function initTabs() {
                     tabName
             );
 
-        const selectedTab =
-            validTab
-                ? tabName
-                : "project";
+        // Migrate the former combined TIA Portal tab to the PLC tab.
+        const selectedTab = tabName === "tia" ? "plc"
+            : validTab ? tabName : "project";
 
 
         for (
