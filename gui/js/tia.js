@@ -1951,7 +1951,6 @@ export function initTiaUi(
             }
             if (result.review_id) {
                 hmiTextListReview?.classList.remove("hidden");
-                hmiTextListDetails.open = true;
             }
         } catch (error) {
             if (hmiTextListStatus)
@@ -2143,6 +2142,10 @@ export function initTiaUi(
                 hmiDedicatedTextLists.textContent =
                     "Text lists — " + data.text_list_count
                     + " lists · " + entries + " entries · Details";
+            }
+            if (hmiScanInstruction) {
+                hmiScanInstruction.textContent =
+                    "Choose a Text list below to preview and prepare it for review.";
             }
             if (hmiScanSummary) {
                 hmiScanSummary.textContent =
