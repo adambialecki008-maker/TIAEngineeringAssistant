@@ -108,7 +108,8 @@ def _plain_value(node):
 def _multilingual_entry(entry):
     texts = [node for node in entry.iter()
              if _local(node.tag) == "MultilingualText"
-             and node.attrib.get("CompositionName") == "Text"]
+             and (node.attrib.get("CompositionName") == "Text"
+                  or node.attrib.get("AggregationName") == "Text")]
     if len(texts) != 1:
         return None, [], None
     multilingual = texts[0]
@@ -153,6 +154,15 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
             languages[culture.casefold()] = (item, text_node, value)
         source = languages.get(source_culture.casefold())
         target = languages.get(target_culture.casefold())
+        reason = None
+        if parent is None:
+            reason = "Unsupported Text aggregation (XML layout)"
+        elif complex_text:
+            reason = "Formatted, linked or ambiguous multilingual XML"
+        elif source is None:
+            available = ", ".join(sorted(languages)) or "none"
+            reason = ("No source text in " + source_culture
+                      + " (available cultures: " + available + ")")
         result.append({
             "entry_index": i,
             "node": node,
@@ -163,6 +173,7 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
             "target": target[2] if target else "",
             "supported": not complex_text and parent is not None
                          and source is not None,
+            "reason": reason,
         })
     return result
 
