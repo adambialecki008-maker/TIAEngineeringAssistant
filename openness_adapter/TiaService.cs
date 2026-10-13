@@ -839,7 +839,9 @@ namespace TiaOpennessAdapter
                     Console.Error.WriteLine("HMI_TEXT_LIST_SELECTION_INVALID");
                     return 7;
                 }
-                if (selected.TextLists.Find(listName) == null)
+                if (!selected.TextLists.Any(textList =>
+                    string.Equals(textList.Name, listName,
+                        StringComparison.Ordinal)))
                 {
                     Console.Error.WriteLine("HMI_TEXT_LIST_NOT_FOUND");
                     return 7;
