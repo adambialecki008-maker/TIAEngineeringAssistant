@@ -462,7 +462,7 @@
                     </div>
 
 
-                    <div class="field-group">
+                    <div class="field-group" data-hmi-scope="project">
                         <label for="tia-hmi-view-path-root">
                             Exported ViewPath device/root:
                         </label>
@@ -495,19 +495,32 @@
                     </div>
                     <div class="hmi-translation-batch-controls">
                         <h4>HMI text scan and translation scope</h4>
+                        <fieldset class="hmi-text-scope-options">
+                            <legend>Choose what to scan and translate</legend>
+                            <label for="tia-hmi-scope-project">
+                                <input type="checkbox" id="tia-hmi-scope-project" checked>
+                                Project texts (XLSX)
+                            </label>
+                            <label for="tia-hmi-scope-lists">
+                                <input type="checkbox" id="tia-hmi-scope-lists">
+                                Text lists (XML)
+                            </label>
+                            <p class="hint">Choose one scope at a time. Uncheck both
+                                to disable Scan. Switching scope clears the previous preview.
+                                Graphic lists are never translated.</p>
+                        </fieldset>
                         <section class="hmi-scan-help hmi-workflow-step">
                             <h5 class="hmi-step-heading">Step 1 — Scan the selected HMI</h5>
                             <p>
-                                Choose Source / Target languages and the correct
-                                HMI ViewPath root above (for example, HMI_00_Main).
-                                Click Scan HMI / Count texts. This only exports
-                                and counts project texts: no Ollama translation,
-                                no TIA import.
+                                Select Project texts or Text lists above and choose Source /
+                                Target languages. Project texts also require a matching
+                                ViewPath root for import. The Scan button reads only the
+                                chosen scope; it never imports or translates.
                             </p>
                             <div class="action-row">
                                 <button id="tia-hmi-scan-button"
                                         type="button" class="secondary-button">
-                                    Scan HMI / Count texts
+                                    Scan selected scope
                                 </button>
                                 <span id="tia-hmi-scan-instruction" class="hint">
                                     After scanning, the total appears below.
@@ -519,7 +532,7 @@
                             Not scanned yet. Select the HMI, languages and ViewPath root, then click Scan HMI / Count texts.
                         </p>
                         <details id="tia-hmi-text-lists-details"
-                                 class="hmi-text-lists-details">
+                                 class="hmi-text-lists-details hidden" data-hmi-scope="text_lists">
                             <summary id="tia-hmi-dedicated-text-lists"
                                      aria-live="polite">
                                 Text lists — not scanned
@@ -541,6 +554,20 @@
                                             class="secondary-button" disabled>
                                         Prepare list translations
                                     </button>
+                                </div>
+                                <div id="tia-hmi-text-list-preview" class="hidden">
+                                    <h5>Selected list preview — existing TIA texts</h5>
+                                    <p id="tia-hmi-text-list-preview-summary" class="hint"></p>
+                                    <div class="table-wrapper hmi-text-table-wrapper">
+                                        <table class="hmi-text-table">
+                                            <thead><tr>
+                                                <th>Source</th>
+                                                <th>Current target</th>
+                                                <th>Entry</th>
+                                            </tr></thead>
+                                            <tbody id="tia-hmi-text-list-preview-rows"></tbody>
+                                        </table>
+                                    </div>
                                 </div>
                                 <p id="tia-hmi-text-list-status" class="hint"
                                    role="status" aria-live="polite"></p>
@@ -566,7 +593,7 @@
                                 </section>
                             </div>
                         </details>
-                        <section class="hmi-workflow-step hmi-scope-step">
+                        <section class="hmi-workflow-step hmi-scope-step" data-hmi-scope="project">
                             <h5 class="hmi-step-heading">Step 2 — Choose how many texts to process</h5>
                         <div class="form-grid hmi-translation-grid">
                             <div class="field-group">
@@ -595,7 +622,7 @@
                         </section>
                     </div>
 
-                    <section class="hmi-workflow-step hmi-manual-step">
+                    <section class="hmi-workflow-step hmi-manual-step" data-hmi-scope="project">
                         <h5 class="hmi-step-heading">Step 3 — Prepare and review translations</h5>
                         <p class="hint">
                             Prepare one limited batch and inspect the proposed target texts.
@@ -629,7 +656,7 @@
                     </p>
                     </section>
 
-                    <section class="hmi-batch-panel hmi-workflow-step">
+                    <section class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project">
                         <h5 class="hmi-step-heading">Step 4 — Automatic batch import into TIA</h5>
                         <p class="hint">
                             Automated mode: Ollama translates one batch, then TIA imports
@@ -708,7 +735,7 @@
                         </div>
                     </section>
 
-                    <div id="tia-hmi-preview-results" class="hidden">
+                    <div id="tia-hmi-preview-results" class="hidden" data-hmi-scope="project">
                         <p id="tia-hmi-preview-summary" class="hint"></p>
                         <div class="hmi-preview-toolbar">
                             <label for="tia-hmi-preview-filter">Show sample rows:</label>
@@ -776,7 +803,7 @@
                         </section>
                     </div>
 
-                    <div id="tia-hmi-review-results" class="hidden">
+                    <div id="tia-hmi-review-results" class="hidden" data-hmi-scope="project">
                         <h4>Prepared translations — review before importing</h4>
                         <p id="tia-hmi-review-summary" class="hint"></p>
                         <details id="tia-hmi-review-skipped" class="hmi-review-skipped hidden">
