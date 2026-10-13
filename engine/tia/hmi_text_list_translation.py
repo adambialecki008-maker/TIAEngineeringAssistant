@@ -50,6 +50,8 @@ def _local(tag):
 
 
 def _child(element, tag):
+    if element is None:
+        return None
     return next((c for c in element if _local(c.tag) == tag), None)
 
 
