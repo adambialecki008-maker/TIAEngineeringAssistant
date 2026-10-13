@@ -1368,6 +1368,11 @@ export function initTiaUi(
             return;
         }
         const count = textListBatchCount();
+        const preview = list.preview_rows || [];
+        const eligiblePreview = preview.filter(entry => entry.supported
+            && entry.source_text?.trim()
+            && (!entry.target_text?.trim()
+                || entry.target_text?.trim() === "Text")).length;
         const verified = hmiTextListProgressKey === textListBatchIdentity()
             ? hmiTextListImportedCount : 0;
         const limit = hmiTextListTotalInput?.value?.trim();
@@ -1375,8 +1380,13 @@ export function initTiaUi(
             name + ": " + (list.entry_count_known
                 ? list.entry_count + " total entries" : "entry count unknown")
             + " (not all necessarily need translation). "
-            + verified + " entries imported and verified in this browser session. "
+            + eligiblePreview + " eligible-looking entries in read-only preview"
+            + (preview.length < (list.entry_count || 0) ? " (partial)" : "")
+            + ". " + verified
+            + " entries imported and verified in this browser session. "
             + (count === null ? "Enter a valid batch size (1–50) and optional total."
+                : eligiblePreview === 0
+                    ? "No readable missing-target entries in preview; see Details."
                 : count === 0 ? "Configured total reached."
                 : "Next reviewed XML batch: at most " + count
                     + " eligible entries.")
@@ -2017,11 +2027,18 @@ export function initTiaUi(
 
     function hasTextListSelection() {
         const selection = hmiTranslationSelection();
+        const list = (hmiTextListsData?.lists || [])
+            .find(item => item.name === hmiTextListSelect?.value);
+        const hasEligibleRows = list?.preview_rows?.some(
+            entry => entry.supported && entry.source_text?.trim()
+                && (!entry.target_text?.trim()
+                    || entry.target_text?.trim() === "Text")
+        );
         return Boolean(hmiScopeEnabled("text_lists")
             && hmiScanKey(selection, "text_lists") === verifiedHmiTextListsScanKey
             && selection && hmiTextListsData?.lists?.length
             && hmiTextListSelect?.value && selection.ollama_model
-            && !hmiBatchRunning);
+            && hasEligibleRows && !hmiBatchRunning);
     }
 
     function discardHmiTextListReview() {
