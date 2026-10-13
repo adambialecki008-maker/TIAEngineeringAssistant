@@ -313,6 +313,10 @@ def _preview_workbook(workbook, request):
             if kind == "graphic_list":
                 excluded_graphic_rows += 1
                 continue
+            # Text lists are now handled exclusively through Classic XML
+            # (HmiTarget.TextLists), not the Project texts XLSX workflow.
+            if kind == "text_list":
+                continue
 
             total += 1
             if "viewpath" in str(head[reference_col - 1]).casefold():
@@ -588,7 +592,7 @@ def translate_hmi_texts(
                 category_text = str(worksheet.cell(
                     row=row_index, column=columns[3],
                 ).value or "")
-                if _hmi_project_text_kind(category_text, reference) == "graphic_list":
+                if _hmi_project_text_kind(category_text, reference) != "other":
                     continue
 
                 source_cell = worksheet.cell(
