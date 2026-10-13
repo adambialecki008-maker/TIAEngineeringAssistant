@@ -1601,13 +1601,18 @@ td {
     padding: 10px 14px 14px;
     border-top: 1px solid #30404d;
 }
-.hmi-text-lists-detail-body .action-row {
+.hmi-text-lists-main-controls {
+    padding: 8px 2px 12px;
+    border-top: 1px solid #30404d;
+    margin-top: 8px;
+}
+.hmi-text-lists-main-controls .action-row {
     align-items: center;
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 12px;
 }
-.hmi-text-lists-detail-body select {
+.hmi-text-lists-main-controls select {
     max-width: min(100%, 380px);
     min-width: 200px;
 }
