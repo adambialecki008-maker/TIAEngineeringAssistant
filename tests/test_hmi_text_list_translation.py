@@ -313,7 +313,7 @@ def test_text_items_value_lang_format_supports_safe_translation(mock_tia):
   <AttributeList><Name>Auto Status</Name></AttributeList>
   <ObjectList><Hmi.TextGraphicList.TextListEntry ID="1" CompositionName="Entries">
     <AttributeList><SelectionValue>1</SelectionValue></AttributeList>
-    <ObjectList><MultilingualText ID="2" CompositionName="Text">
+    <ObjectList><MultilingualText ID="2" AggregationName="Text">
       <AttributeList><TextItems>
         <Value lang="en-US"><body><p>Open valve</p></body></Value>
       </TextItems></AttributeList>
