@@ -499,7 +499,6 @@ export function initTiaUi(
     let hmiPreviewInProgress = false;
     let hmiAuditInProgress = false;
     let lastHmiPreviewRows = [];
-    let lastHmiTextListRows = [];
     let hmiTextListsData = null;
     let hmiTextListReviewToken = null;
     let hmiTextListBusy = false;
@@ -1178,11 +1177,9 @@ export function initTiaUi(
         hmiPreviewRows?.replaceChildren();
         if (hmiWorkScope() !== "project") return;
         const selected = hmiPreviewFilter?.value || "matched";
-        const subset = selected === "text_lists"
-            ? lastHmiTextListRows
-            : lastHmiPreviewRows.filter(item =>
-                Boolean(item.matches_hmi) === (selected === "matched")
-            );
+        const subset = lastHmiPreviewRows.filter(item =>
+            Boolean(item.matches_hmi) === (selected === "matched")
+        );
         for (const item of subset) {
             const row = document.createElement("tr");
             addHmiTextCell(row, item.source_text);
@@ -1217,9 +1214,12 @@ export function initTiaUi(
         verifiedHmiScanKey = null;
         latestHmiScan = null;
         if (hmiScanSummary) {
-            hmiScanSummary.textContent =
-                "Not scanned yet. Select the HMI, languages and ViewPath root, "
-                + "then click Scan HMI / Count texts.";
+            const scope = hmiWorkScope();
+            hmiScanSummary.textContent = scope === "project"
+                ? "Project texts not scanned. Choose an HMI and languages, then Scan Project texts."
+                : scope === "text_lists"
+                    ? "Text lists not scanned. Choose an HMI and languages, then Scan Text lists."
+                    : "Select Project texts or Text lists to enable Scan.";
         }
         hmiTextListsData = null;
         discardHmiTextListReview();
@@ -1245,7 +1245,6 @@ export function initTiaUi(
         }
         hmiPreviewResults?.classList.add("hidden");
         lastHmiPreviewRows = [];
-        lastHmiTextListRows = [];
         renderHmiPreviewRows();
         discardHmiReview();
     }
@@ -1881,7 +1880,9 @@ export function initTiaUi(
 
     function textListReviewKey() {
         const selection = hmiTranslationSelection();
-        return hmiScanKey(selection) + ":" + (hmiTextListSelect?.value || "");
+        return hmiScanKey(selection) + ":"
+            + (hmiTextListSelect?.value || "") + ":"
+            + (selection?.ollama_model || "");
     }
 
     function hasTextListSelection() {
@@ -2206,7 +2207,6 @@ export function initTiaUi(
                 return false;
             }
             lastHmiPreviewRows = result.sample_rows || [];
-            lastHmiTextListRows = result.text_list_sample_rows || [];
             latestHmiScan = {
                 rows: result.matched_text_rows ?? 0,
                 unique: result.matched_unique_texts ?? 0,
@@ -8032,6 +8032,8 @@ export function initTiaUi(
             () => {
                 // Keep scan counts/results; remove proposals made by the old model.
                 discardHmiReview();
+                discardHmiTextListReview();
+                updateHmiTranslateButtonState();
                 setHmiTranslationStatus(
                     "Ollama model changed. Scan remains valid; "
                     + "prepare new translations with the selected model."
