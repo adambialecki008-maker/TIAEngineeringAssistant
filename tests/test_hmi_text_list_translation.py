@@ -267,3 +267,40 @@ def test_duplicate_entry_proposals_cannot_bypass_review(mock_tia):
     })
     assert response.status_code == 409
     assert not mock_tia["imported"]
+
+
+
+def test_complex_text_anywhere_in_list_blocks_xml_override(
+    mock_tia,
+):
+    # Even if another entry is eligible, an OpenLink in an untouched entry
+    # makes overriding the WHOLE list unsafe.
+    mock_tia["xml"] = mock_tia["xml"].replace(
+        b"<Text>Emergency stop</Text>",
+        b"<Text><OpenLink>PLC.Tag</OpenLink></Text>",
+    )
+    prepared = CLIENT.post(
+        "/api/v1/tia/hmis/text-lists/prepare", json=BASE
+    ).json()
+    proposals = [
+        {"entry_index": row["entry_index"], "proposal": row["proposal"]}
+        for row in prepared["rows"]
+    ]
+    result = CLIENT.post(
+        "/api/v1/tia/hmis/text-lists/import",
+        json={"review_id": prepared["review_id"], "proposals": proposals},
+    )
+    assert result.status_code == 409, result.text
+    assert not mock_tia["imported"]
+
+
+def test_no_second_import_can_run_during_an_active_import(mock_tia):
+    with lists._IMPORT_LOCK:
+        result = CLIENT.post(
+            "/api/v1/tia/hmis/text-lists/import",
+            json={"review_id": "a" * 32,
+                  "proposals": [{"entry_index": 0, "proposal": "Test"}]},
+        )
+    assert result.status_code == 409
+    assert "in progress" in result.json()["detail"]
+    assert not mock_tia["imported"]
