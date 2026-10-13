@@ -1,7 +1,7 @@
-"""Regression contract for exclusive HMI Project texts / Text lists UI scopes.
+"""Regression contract for independent HMI Project texts / Text lists UI scopes.
 
 The browser UI keeps existing separate Project XLSX and Classic TextList XML
-pipelines; these checks prevent accidentally wiring both to the same Scan.
+pipelines; these checks prevent accidentally combining their import or review pipelines.
 """
 from pathlib import Path
 
@@ -14,20 +14,23 @@ def _function(name, until):
     return JS.split(name, 1)[1].split(until, 1)[0]
 
 
-def test_checkbox_scope_is_mutually_exclusive_and_allows_none():
+def test_checkbox_scope_supports_zero_one_or_both():
     assert 'id="tia-hmi-scope-project" checked' in HTML
     assert 'id="tia-hmi-scope-lists"' in HTML
     assert 'id="tia-hmi-scope-lists" checked' not in HTML
     assert 'hmiScopeProject?.addEventListener(' in JS
     assert 'hmiScopeLists?.addEventListener(' in JS
-    assert 'if (changed.checked && other) other.checked = false;' in JS
+    assert 'if (changed.checked && other) other.checked = false;' not in JS
+    assert 'return "both";' in JS
+    assert 'if (scanProject) projectOk = await scanProjectHmiTexts();' in JS
+    assert 'if (scanLists) listsOk = await scanHmiTextLists();' in JS
     assert 'hmiScanButton.disabled = busy || !scope || !selection;' in JS
 
 
 def test_each_scan_uses_only_its_dedicated_endpoint():
     xml = _function('async function scanHmiTextLists()', 
                     'async function previewSelectedHmi()')
-    xlsx = _function('async function previewSelectedHmi()',
+    xlsx = _function('async function scanProjectHmiTexts()',
                      'function populateHmiTranslationLanguages()')
     assert '"/api/v1/tia/hmis/inspect-text-lists"' in xml
     assert '"/api/v1/tia/hmis/preview-texts"' not in xml
@@ -48,9 +51,9 @@ def test_only_selected_scope_shows_related_translation_sections():
         'id="tia-hmi-review-results" class="hidden" data-hmi-scope="project"',
     ):
         assert marker in HTML
-    assert 'element.dataset.hmiScope !== scope' in JS
-    assert 'hmiWorkScope() === "text_lists"' in JS
-    assert 'hmiWorkScope() !== "project"' in JS
+    assert '!hmiScopeEnabled(element.dataset.hmiScope)' in JS
+    assert 'hmiScopeEnabled("text_lists")' in JS
+    assert '!hmiScopeEnabled("project")' in JS
     assert 'hmiTextListPrepare.disabled = busy || !listsSelected' in JS
     assert 'hmiBatchResumeButton.disabled = busy || !projectSelected' in JS
 
