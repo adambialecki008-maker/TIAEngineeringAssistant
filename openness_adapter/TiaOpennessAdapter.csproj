@@ -20,6 +20,18 @@
       <Private>false</Private>
     </Reference>
 
+    <!-- WinCC Basic/Comfort/Advanced: V21 modular replacements for
+         the pre-V21 Siemens.Engineering.Hmi.dll assembly. -->
+    <Reference Include="Siemens.Engineering.WinCC">
+      <HintPath>C:\Program Files\Siemens\Automation\Portal V21\PublicAPI\V21\net48\Siemens.Engineering.WinCC.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Siemens.Engineering.WinCC.Extension">
+      <HintPath>C:\Program Files\Siemens\Automation\Portal V21\PublicAPI\V21\net48\Siemens.Engineering.WinCC.Extension.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
   </ItemGroup>
 
 </Project>
