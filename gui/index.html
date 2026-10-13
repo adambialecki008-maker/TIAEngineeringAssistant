@@ -518,6 +518,10 @@
                            aria-live="polite">
                             Not scanned yet. Select the HMI, languages and ViewPath root, then click Scan HMI / Count texts.
                         </p>
+                        <p id="tia-hmi-dedicated-text-lists" class="hint"
+                           role="status" aria-live="polite">
+                            Dedicated Text lists inventory has not been checked yet.
+                        </p>
                         <section class="hmi-workflow-step hmi-scope-step">
                             <h5 class="hmi-step-heading">Step 2 — Choose how many texts to process</h5>
                         <div class="form-grid hmi-translation-grid">
@@ -666,7 +670,7 @@
                             <label for="tia-hmi-preview-filter">Show sample rows:</label>
                             <select id="tia-hmi-preview-filter">
                                 <option value="matched">Selected HMI</option>
-                                <option value="text_lists">Text lists — selected HMI</option>
+                                <option value="text_lists">Text lists in Project texts XLSX only</option>
                                 <option value="unmatched">Other devices (diagnostic)</option>
                             </select>
                             <span id="tia-hmi-preview-sample-count" class="hint"></span>
