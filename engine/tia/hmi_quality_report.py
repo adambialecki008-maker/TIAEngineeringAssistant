@@ -148,6 +148,10 @@ def download_hmi_batch_quality_report(job_id: str):
         ("Total unique sources", state["total_unique"]),
         ("Processed unique sources", state["processed_unique"]),
         ("Verified unique sources", state["completed_unique"]),
+        ("Auto-repaired unique sources (recorded)",
+         sum(bool(item.get("auto_repaired"))
+             for item in job.get("verified_details", {}).values())),
+        ("Total skipped attempts", state["skipped_total"]),
         ("Pending skipped unique sources", state["skipped_unique"]),
         ("Recovered skipped sources", state["recovered_unique"]),
         ("Confirmed TIA rows", state["completed_rows"]),
