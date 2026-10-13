@@ -22,14 +22,20 @@ XML = """<?xml version="1.0" encoding="UTF-8"?>
     <AttributeList><Name>Auto Status</Name></AttributeList>
     <ObjectList>
       <Hmi.TextGraphicList.TextListEntry ID="1">
-        <AttributeList>
-          <Text>
-            <MultilingualTextItem><Culture>en-US</Culture>
-              <Text>Karuzela gotowa</Text></MultilingualTextItem>
-            <MultilingualTextItem><Culture>pl-PL</Culture>
-              <Text>Karuzela gotowa</Text></MultilingualTextItem>
-          </Text>
-        </AttributeList>
+        <ObjectList>
+          <MultilingualText ID="3" CompositionName="Text">
+            <ObjectList>
+              <MultilingualTextItem ID="4">
+                <AttributeList><Culture>en-US</Culture>
+                  <Text>Karuzela gotowa</Text></AttributeList>
+              </MultilingualTextItem>
+              <MultilingualTextItem ID="5">
+                <AttributeList><Culture>pl-PL</Culture>
+                  <Text /></AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+        </ObjectList>
       </Hmi.TextGraphicList.TextListEntry>
       <Hmi.TextGraphicList.TextListEntry ID="2">
         <AttributeList><Value>2</Value></AttributeList>
@@ -65,6 +71,12 @@ def test_classic_text_list_inventory_counts_entries_and_lists(monkeypatch):
     assert data["entry_count_known"] is True
     assert data["lists"][0]["name"] == "Auto Status"
     assert data["lists"][0]["sample_texts"][0]["text"] == "Karuzela gotowa"
+    preview = data["lists"][0]["preview_rows"]
+    assert len(preview) == 2
+    assert preview[0]["source_text"] == "Karuzela gotowa"
+    assert preview[0]["target_text"] == ""
+    assert preview[0]["supported"] is True
+    assert preview[1]["supported"] is False
     assert data["translation_scope"] == "read_only_inventory"
     assert len(calls) == 1
 
