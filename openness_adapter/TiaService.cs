@@ -595,6 +595,157 @@ namespace TiaOpennessAdapter
         }
 
 
+        /// <summary>
+        /// Read-only, Classic WinCC HMI text-list export. Siemens Openness V21
+        /// exposes HmiTarget.TextLists separately from Project.ExportProjectTexts.
+        /// NEVER export or import GraphicLists here.
+        /// </summary>
+        public static int ExportHmiTextLists(
+            int processId,
+            string deviceName,
+            string hmiName,
+            string destinationDirectory
+        )
+        {
+            TiaPortalProcess process = FindProcess(processId);
+            if (process == null)
+            {
+                return WriteProcessNotFound(processId);
+            }
+
+            using (TiaPortal portal = process.Attach())
+            {
+                Project project = GetSingleOpenProject(
+                    portal, out int errorCode
+                );
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+                Siemens.Engineering.Hmi.HmiTarget selected = null;
+                bool unifiedFound = false;
+                int matches = 0;
+                foreach (Device device in EnumerateDevices(project))
+                {
+                    if (!string.Equals(
+                        device.Name, deviceName,
+                        StringComparison.OrdinalIgnoreCase
+                    ))
+                    {
+                        continue;
+                    }
+
+                    foreach (DeviceItemPath itemPath in EnumerateDeviceItems(device))
+                    {
+                        DeviceItem item = itemPath.Item;
+                        SoftwareContainer container;
+                        try
+                        {
+                            container = item.GetService<SoftwareContainer>();
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+                        var software = container?.Software;
+                        if (software == null)
+                        {
+                            continue;
+                        }
+                        string softwareName = ReadObjectName(software);
+                        if (!string.Equals(
+                                item.Name, hmiName, StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(
+                                softwareName, hmiName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        bool classic = TypeIsOrDerivesFrom(
+                            software.GetType(),
+                            "Siemens.Engineering.Hmi.HmiTarget"
+                        );
+                        bool unified = TypeIsOrDerivesFrom(
+                            software.GetType(),
+                            "Siemens.Engineering.HmiUnified.HmiSoftware"
+                        );
+                        if (!classic && !unified)
+                        {
+                            continue;
+                        }
+                        matches++;
+                        if (classic)
+                        {
+                            selected = software as Siemens.Engineering.Hmi.HmiTarget;
+                        }
+                        else
+                        {
+                            unifiedFound = true;
+                        }
+                    }
+                }
+
+                if (matches != 1)
+                {
+                    Console.Error.WriteLine(
+                        matches == 0
+                            ? "HMI_TEXT_LIST_DEVICE_NOT_FOUND"
+                            : "HMI_TEXT_LIST_SELECTION_AMBIGUOUS"
+                    );
+                    return matches == 0 ? 7 : 9;
+                }
+
+                if (unifiedFound)
+                {
+                    // Unified uses HmiTextLists.Export(... .hmi.yml),
+                    // not the Classic XML format.
+                    Console.Error.WriteLine(
+                        "HMI_TEXT_LIST_UNIFIED_REQUIRES_YML_EXPORT"
+                    );
+                    return 10;
+                }
+
+                if (selected == null)
+                {
+                    Console.Error.WriteLine("HMI_TEXT_LIST_CLASSIC_TARGET_UNAVAILABLE");
+                    return 10;
+                }
+
+                DirectoryInfo destination = new DirectoryInfo(
+                    destinationDirectory
+                );
+                destination.Create();
+
+                int count = 0;
+                foreach (Siemens.Engineering.Hmi.TextGraphicList.TextList textList
+                    in selected.TextLists)
+                {
+                    // Safe filenames independent of HMI text-list names.
+                    // The caller supplies an isolated temporary directory.
+                    string filename = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "text_list_{0:D5}.xml", count + 1
+                    );
+                    FileInfo output = new FileInfo(
+                        Path.Combine(destination.FullName, filename)
+                    );
+                    textList.Export(output, ExportOptions.WithDefaults);
+                    string encodedName = Convert.ToBase64String(
+                        Encoding.UTF8.GetBytes(textList.Name ?? "")
+                    );
+                    Console.WriteLine(
+                        "HMI_TEXT_LIST_EXPORTED|" + filename + "|" + encodedName
+                    );
+                    count++;
+                }
+
+                Console.WriteLine("HMI_TEXT_LIST_COUNT|" + count);
+            }
+            return 0;
+        }
+
+
         public static int ImportProjectTexts(
             int processId,
             string inputFilePath,
