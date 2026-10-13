@@ -11,8 +11,7 @@ TABS_JS = (ROOT / "gui" / "js" / "tabs.js").read_text(encoding="utf-8")
 
 def _tab(name):
     section = HTML.split(f'data-tab-panel="{name}"', 1)[1]
-    marker = '\\n        <section\\n            class="tab-panel"'
-    return section.split(marker, 1)[0]
+    return section.split('data-tab-panel="', 1)[0]
 
 
 def test_plc_and_hmi_are_separate_navigation_tabs():
@@ -41,7 +40,7 @@ def test_each_tab_shows_connection_and_project_context_without_duplicate_ids():
         assert f'id="{name}"' in hmi
         assert f'id="{name}"' not in plc
 
-    counts = Counter(re.findall(r'\\bid="([^"]+)"', HTML))
+    counts = Counter(re.findall(r'id="([^"]+)"', HTML))
     assert all(count == 1 for count in counts.values())
 
 
