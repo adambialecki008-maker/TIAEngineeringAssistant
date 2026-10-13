@@ -2062,7 +2062,123 @@ export function initTiaUi(
     }
 
 
+
+    function renderSelectedTextListPreview() {
+        hmiTextListPreviewRows?.replaceChildren();
+        discardHmiTextListReview();
+        const list = (hmiTextListsData?.lists || [])
+            .find(item => item.name === hmiTextListSelect?.value);
+        if (!list || hmiWorkScope() !== "text_lists") {
+            hmiTextListPreview?.classList.add("hidden");
+            return;
+        }
+        const rows = list.preview_rows || [];
+        for (const entry of rows) {
+            const tr = document.createElement("tr");
+            addHmiTextCell(tr, entry.source_text || "—");
+            addHmiTextCell(tr, entry.target_text || "—");
+            addHmiTextCell(tr, String(entry.entry_index + 1)
+                + (entry.supported ? "" : " (complex XML)"));
+            hmiTextListPreviewRows?.appendChild(tr);
+        }
+        hmiTextListPreview?.classList.remove("hidden");
+        if (hmiTextListPreviewSummary) {
+            hmiTextListPreviewSummary.textContent =
+                list.name + ": " + (list.entry_count_known
+                    ? list.entry_count + " total entries; "
+                    : "total entries unknown; ")
+                + rows.length + " shown in read-only preview."
+                + (list.preview_warning
+                    ? " Preview issue: " + list.preview_warning : "");
+        }
+        updateHmiTranslateButtonState();
+    }
+
+    async function scanHmiTextLists() {
+        const selection = hmiTranslationSelection();
+        if (hmiWorkScope() !== "text_lists" || !selection) return false;
+        invalidateHmiPreview();
+        hmiPreviewInProgress = true;
+        updateHmiTranslateButtonState();
+        const scanKey = hmiScanKey(selection);
+        if (hmiScanSummary) {
+            hmiScanSummary.textContent =
+                "Scanning only Classic Text lists (read-only XML export)...";
+        }
+        try {
+            const data = await postJson(
+                "/api/v1/tia/hmis/inspect-text-lists", selection
+            );
+            if (hmiWorkScope() !== "text_lists"
+                || hmiScanKey(hmiTranslationSelection()) !== scanKey) return false;
+            hmiTextListsData = data;
+            if (hmiTextListCatalog) {
+                hmiTextListCatalog.replaceChildren();
+                const ul = document.createElement("ul");
+                for (const item of data.lists || []) {
+                    const li = document.createElement("li");
+                    li.textContent = item.name
+                        + (item.entry_count_known
+                            ? " — " + item.entry_count + " entries"
+                            : " — count unknown");
+                    ul.appendChild(li);
+                }
+                hmiTextListCatalog.appendChild(ul);
+            }
+            if (hmiTextListSelect) {
+                hmiTextListSelect.replaceChildren();
+                for (const item of data.lists || []) {
+                    const option = document.createElement("option");
+                    option.value = item.name;
+                    option.textContent = item.name;
+                    hmiTextListSelect.appendChild(option);
+                }
+            }
+            const entries = data.entry_count_known
+                ? data.entry_count : "unknown";
+            if (hmiDedicatedTextLists) {
+                hmiDedicatedTextLists.textContent =
+                    "Text lists — " + data.text_list_count
+                    + " lists · " + entries + " entries · Details";
+            }
+            if (hmiScanSummary) {
+                hmiScanSummary.textContent =
+                    "Text lists XML scan: " + data.text_list_count
+                    + " lists, " + entries + " entries. "
+                    + "Only selected lists can be translated; "
+                    + "Graphic lists are excluded. "
+                    + "No Project texts XLSX scan was performed.";
+            }
+            verifiedHmiScanKey = scanKey;
+            renderSelectedTextListPreview();
+            setHmiTranslationStatus(
+                "Text lists scan complete. Expand Details, choose a list, "
+                + "review its preview and prepare translations.", "success"
+            );
+            return true;
+        } catch (error) {
+            if (hmiScanSummary) {
+                hmiScanSummary.textContent =
+                    "Text lists scan failed: " + error.message;
+            }
+            if (hmiDedicatedTextLists) {
+                hmiDedicatedTextLists.textContent =
+                    "Text lists — scan failed (not zero)";
+            }
+            setHmiTranslationStatus(error.message, "error");
+            return false;
+        } finally {
+            hmiPreviewInProgress = false;
+            updateHmiTranslateButtonState();
+        }
+    }
+
+
     async function previewSelectedHmi() {
+        if (hmiWorkScope() === "text_lists") {
+            return await scanHmiTextLists();
+        }
+        if (hmiWorkScope() !== "project") return false;
         const selection = hmiTranslationSelection();
         if (!selection) {
             setHmiTranslationStatus("Select HMI, source slot and target language.", "error");
@@ -2084,21 +2200,6 @@ export function initTiaUi(
         const previewKey = hmiScanKey(selection);
         try {
             const result = await postJson("/api/v1/tia/hmis/preview-texts", selection);
-            // Separate read-only Siemens Openness export, independent of XLSX.
-            // Failed export must never be presented as an actual zero count.
-            let separateLists = null;
-            let separateListsError = null;
-            if (hmiDedicatedTextLists) {
-                hmiDedicatedTextLists.textContent =
-                    "Checking dedicated HMI Text lists XML export...";
-            }
-            try {
-                separateLists = await postJson(
-                    "/api/v1/tia/hmis/inspect-text-lists", selection
-                );
-            } catch (error) {
-                separateListsError = error.message;
-            }
             if (hmiScanKey(hmiTranslationSelection()) !== previewKey) {
                 return false;
             }
@@ -2131,47 +2232,6 @@ export function initTiaUi(
                     + "Graphic lists: not translated. "
                     + "Missing-target counts are estimates, not confirmed "
                     + "untranslated-text counts.";
-            }
-            hmiTextListsData = separateLists;
-            discardHmiTextListReview();
-            hmiTextListCatalog?.replaceChildren();
-            if (hmiTextListSelect) {
-                hmiTextListSelect.replaceChildren();
-                for (const item of separateLists?.lists || []) {
-                    const option = document.createElement("option");
-                    option.value = item.name;
-                    option.textContent = item.name;
-                    hmiTextListSelect.appendChild(option);
-                }
-                hmiTextListSelect.disabled = !separateLists?.lists?.length;
-            }
-            if (hmiDedicatedTextLists) {
-                if (separateListsError) {
-                    hmiDedicatedTextLists.textContent =
-                        "Dedicated Text lists export unavailable: "
-                        + separateListsError
-                        + ". This does NOT mean zero lists.";
-                } else if (separateLists) {
-                    const entries = separateLists.entry_count_known
-                        ? separateLists.entry_count
-                        : "unknown (XML format not recognized)";
-                    hmiDedicatedTextLists.textContent =
-                        "Classic Text lists: " + separateLists.text_list_count
-                        + " lists · " + entries + " entries — Details";
-                    if (hmiTextListCatalog) {
-                        const ul = document.createElement("ul");
-                        for (const item of separateLists.lists || []) {
-                            const li = document.createElement("li");
-                            li.textContent = item.name
-                                + (item.entry_count_known
-                                    ? " — " + item.entry_count + " entries"
-                                    : " — entry count unavailable");
-                            ul.appendChild(li);
-                        }
-                        hmiTextListCatalog.appendChild(ul);
-                    }
-
-                }
             }
             if (hmiBatchTotalInput) {
                 hmiBatchTotalInput.placeholder =
@@ -7907,16 +7967,30 @@ export function initTiaUi(
     });
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
 
+    const changeHmiScope = (changed, other) => {
+        if (hmiPreviewInProgress || hmiTextListBusy || hmiReviewInProgress
+            || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress) {
+            changed.checked = !changed.checked;
+            return;
+        }
+        if (changed.checked && other) other.checked = false;
+        invalidateHmiPreview();
+        applyHmiScope();
+        updateHmiTranslateButtonState();
+    };
+    hmiScopeProject?.addEventListener(
+        "change", () => changeHmiScope(hmiScopeProject, hmiScopeLists)
+    );
+    hmiScopeLists?.addEventListener(
+        "change", () => changeHmiScope(hmiScopeLists, hmiScopeProject)
+    );
     hmiScanButton?.addEventListener(
         "click", () => { void previewSelectedHmi(); }
     );
     hmiAuditExistingButton?.addEventListener(
         "click", () => { void auditExistingHmiTranslations(); }
     );
-    hmiTextListSelect?.addEventListener("change", () => {
-        discardHmiTextListReview();
-        updateHmiTranslateButtonState();
-    });
+    hmiTextListSelect?.addEventListener("change", renderSelectedTextListPreview);
     hmiTextListPrepare?.addEventListener(
         "click", () => { void prepareHmiTextList(); }
     );
@@ -7996,6 +8070,7 @@ export function initTiaUi(
     updateTargetSummary();
     renderHmiBatchProgress(0, 0);
     renderHmiBatchPlan();
+    applyHmiScope();
 
     renderPlcTagSortHeaders();
 
