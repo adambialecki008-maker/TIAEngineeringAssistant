@@ -79,6 +79,9 @@ export function initTiaUi(
     const hmiBatchResumeButton = document.getElementById("tia-hmi-batch-resume");
     const hmiBatchPauseButton = document.getElementById("tia-hmi-batch-pause");
     const hmiBatchStatus = document.getElementById("tia-hmi-batch-status");
+    const hmiQualityReportButton = document.getElementById(
+        "tia-hmi-quality-report"
+    );
     const hmiSkippedOpen = document.getElementById("tia-hmi-skipped-open");
     const hmiSkippedPanel = document.getElementById("tia-hmi-skipped-panel");
     const hmiSkippedStatus = document.getElementById("tia-hmi-skipped-status");
@@ -94,6 +97,9 @@ export function initTiaUi(
     const hmiScanButton = document.getElementById("tia-hmi-scan-button");
     const hmiAuditExistingButton = document.getElementById(
         "tia-hmi-audit-existing"
+    );
+    const hmiExistingQaReportButton = document.getElementById(
+        "tia-hmi-existing-qa-report"
     );
     const hmiExistingQaStatus = document.getElementById(
         "tia-hmi-existing-qa-status"
@@ -1230,6 +1236,13 @@ export function initTiaUi(
             hmiAuditExistingButton.disabled = busy || !isVerified
                 || !selection?.view_path_root;
         }
+        if (hmiExistingQaReportButton) {
+            hmiExistingQaReportButton.disabled = busy || !isVerified
+                || !selection?.view_path_root;
+        }
+        if (hmiQualityReportButton) {
+            hmiQualityReportButton.disabled = busy || !hmiBatchJobId;
+        }
         if (hmiUseScanTotalButton) {
             hmiUseScanTotalButton.disabled =
                 busy || !isVerified || !latestHmiScan
@@ -1453,6 +1466,7 @@ export function initTiaUi(
     }
 
     function showHmiBatchJob(job) {
+        hmiBatchJobId = job.job_id;
         renderHmiBatchProgress(job.completed_unique, job.total_unique);
         hmiSkippedManager.updateJob(job);
         const last = job.last_verified_batch;
@@ -1690,6 +1704,91 @@ export function initTiaUi(
                 "Pause request could not be saved: " + error.message,
                 true
             );
+        }
+    }
+
+
+
+    async function downloadHmiReport(url, filename, requestBody = null) {
+        const response = await fetch(url, requestBody
+            ? {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(requestBody),
+                cache: "no-store",
+            }
+            : {cache: "no-store"});
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || ("XLSX export failed ("
+                + response.status + ")."));
+        }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+            const link = document.createElement("a");
+            link.href = objectUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } finally {
+            // Revoke on the next event-loop turn, after click processing.
+            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+        }
+    }
+
+    async function downloadHmiBatchQualityReport() {
+        if (!hmiBatchJobId || hmiBatchRunning) return;
+        hmiQualityReportButton.disabled = true;
+        setHmiBatchStatus("Downloading checkpoint quality XLSX...");
+        try {
+            await downloadHmiReport(
+                "/api/v1/tia/hmis/batch-translations/"
+                    + hmiBatchJobId + "/quality-report.xlsx",
+                "HMI_batch_" + hmiBatchJobId.slice(0, 12) + "_quality.xlsx"
+            );
+            setHmiBatchStatus(
+                "Batch quality XLSX downloaded from saved checkpoint. "
+                + "TIA was not modified."
+            );
+        } catch (error) {
+            setHmiBatchStatus("Quality XLSX: " + error.message, true);
+        } finally {
+            updateHmiTranslateButtonState();
+        }
+    }
+
+    async function downloadHmiExistingQaReport() {
+        const selection = hmiTranslationSelection();
+        if (!selection?.view_path_root
+            || hmiScanKey(selection) !== verifiedHmiScanKey
+            || hmiAuditInProgress || hmiBatchRunning) return;
+        hmiAuditInProgress = true;
+        updateHmiTranslateButtonState();
+        if (hmiExistingQaStatus) {
+            hmiExistingQaStatus.textContent =
+                "Exporting all suspicious existing HMI targets to XLSX...";
+        }
+        try {
+            await downloadHmiReport(
+                "/api/v1/tia/hmis/audit-existing-translations/quality-report.xlsx",
+                "HMI_existing_QA_quality.xlsx",
+                selection
+            );
+            if (hmiExistingQaStatus) {
+                hmiExistingQaStatus.textContent =
+                    "Existing target QA XLSX downloaded. "
+                    + "This audit did not modify TIA.";
+            }
+        } catch (error) {
+            if (hmiExistingQaStatus) {
+                hmiExistingQaStatus.textContent =
+                    "QA XLSX export failed: " + error.message;
+            }
+        } finally {
+            hmiAuditInProgress = false;
+            updateHmiTranslateButtonState();
         }
     }
 
@@ -7545,6 +7644,12 @@ export function initTiaUi(
     );
     hmiAuditExistingButton?.addEventListener(
         "click", () => { void auditExistingHmiTranslations(); }
+    );
+    hmiExistingQaReportButton?.addEventListener(
+        "click", () => { void downloadHmiExistingQaReport(); }
+    );
+    hmiQualityReportButton?.addEventListener(
+        "click", () => { void downloadHmiBatchQualityReport(); }
     );
     hmiUseScanTotalButton?.addEventListener("click", () => {
         if (!latestHmiScan || !latestHmiScan.eligible
