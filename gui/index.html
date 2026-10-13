@@ -1368,78 +1368,9 @@
                            aria-live="polite">
                             Not scanned yet. Select the HMI, languages and ViewPath root, then click Scan HMI / Count texts.
                         </p>
-                        <section id="tia-hmi-text-lists-panel"
-                                 class="hmi-text-lists-panel hidden" data-hmi-scope="text_lists">
-                        <details id="tia-hmi-text-lists-details"
-                                 class="hmi-text-lists-details">
-                            <summary id="tia-hmi-dedicated-text-lists"
-                                     aria-live="polite">
-                                Text lists — not scanned
-                            </summary>
-                            <div class="hmi-text-lists-detail-body">
-                                <p class="hint">Classic WinCC Text lists use a separate
-                                    Siemens XML export. Review and import exactly one
-                                    selected list at a time. Graphic lists are excluded.</p>
-                                <div id="tia-hmi-text-lists-catalog"
-                                     class="hmi-text-lists-catalog"></div>
-                            </div>
-                        </details>
-                        <div class="hmi-text-lists-main-controls">
-                            <p class="hint">Text lists: select one list, then Prepare,
-                                Review and Import. Project texts automatic batches
-                                are not used for XML lists.</p>
-                                <div class="action-row">
-                                    <label for="tia-hmi-text-list-select">
-                                        Text list to translate
-                                    </label>
-                                    <select id="tia-hmi-text-list-select" disabled>
-                                        <option value="">Scan HMI first</option>
-                                    </select>
-                                    <button id="tia-hmi-text-list-prepare" type="button"
-                                            class="secondary-button" disabled>
-                                        Prepare list translations
-                                    </button>
-                                </div>
-                                <div id="tia-hmi-text-list-preview" class="hidden">
-                                    <h5>Selected list preview — existing TIA texts</h5>
-                                    <p id="tia-hmi-text-list-preview-summary" class="hint"></p>
-                                    <div class="table-wrapper hmi-text-table-wrapper">
-                                        <table class="hmi-text-table">
-                                            <thead><tr>
-                                                <th>Source</th>
-                                                <th>Current target</th>
-                                                <th>Entry</th>
-                                            </tr></thead>
-                                            <tbody id="tia-hmi-text-list-preview-rows"></tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <p id="tia-hmi-text-list-status" class="hint"
-                                   role="status" aria-live="polite"></p>
-                                <section id="tia-hmi-text-list-review" class="hidden">
-                                    <p class="hint">Review or edit proposals before importing.
-                                        Only missing target texts will be changed.
-                                        Import replaces this single list XML, then checks
-                                        all entries by re-export.</p>
-                                    <div class="table-wrapper hmi-text-table-wrapper">
-                                        <table class="hmi-text-table">
-                                            <thead><tr>
-                                                <th>Source text</th>
-                                                <th>Current target</th>
-                                                <th>Proposed target (editable)</th>
-                                            </tr></thead>
-                                            <tbody id="tia-hmi-text-list-review-rows"></tbody>
-                                        </table>
-                                    </div>
-                                    <button id="tia-hmi-text-list-import"
-                                            type="button" class="primary-button" disabled>
-                                        Import reviewed text list into TIA
-                                    </button>
-                                </section>
-                            </div>
-                        </section>
                         <section class="hmi-workflow-step hmi-scope-step" data-hmi-scope="project">
-                            <h5 class="hmi-step-heading">Step 2 — Choose how many texts to process</h5>
+                            <h5 class="hmi-step-heading">Step 2 — Project texts (XLSX) · Batch settings</h5>
+                            <p class="hint"><strong>Project texts only.</strong> The scanned missing-target count excludes all Text lists (XML) and Graphic lists.</p>
                         <div class="form-grid hmi-translation-grid">
                             <div class="field-group">
                                 <label for="tia-hmi-batch-size">Batch size (unique texts)</label>
@@ -1464,6 +1395,62 @@
                                 </button>
                             </div>
                         </div>
+                        </section>
+
+                        <section id="tia-hmi-text-lists-panel"
+                                 class="hmi-workflow-step hmi-scope-step hmi-text-lists-panel hidden"
+                                 data-hmi-scope="text_lists">
+                            <h5 class="hmi-step-heading">Step 2 — Text lists (XML) · Batch settings</h5>
+                            <p class="hint"><strong>Text lists only.</strong> Choose a list and set a limited batch of entries.
+                                Each batch is prepared and reviewed before manual XML import.
+                                Automatic XLSX import never includes these entries.</p>
+                            <div class="form-grid hmi-translation-grid">
+                                <div class="field-group">
+                                    <label for="tia-hmi-text-list-select">Text list to translate</label>
+                                    <select id="tia-hmi-text-list-select" disabled>
+                                        <option value="">Scan HMI first</option>
+                                    </select>
+                                </div>
+                                <div class="field-group">
+                                    <label for="tia-hmi-text-list-batch-size">Batch size (entries per review)</label>
+                                    <input id="tia-hmi-text-list-batch-size" type="number"
+                                           min="1" max="50" step="1" value="5">
+                                    <p class="hint">Maximum 50 entries per reviewed XML batch.</p>
+                                </div>
+                                <div class="field-group">
+                                    <label for="tia-hmi-text-list-total">Total to translate (selected list)</label>
+                                    <input id="tia-hmi-text-list-total" type="number"
+                                           min="1" max="100000" step="1"
+                                           placeholder="Blank = all missing entries in this list">
+                                    <p class="hint">Optional cap across manually approved batches in this list.
+                                        Untranslated eligible entries are determined after Scan.</p>
+                                </div>
+                            </div>
+                            <p id="tia-hmi-text-list-batch-plan" class="hmi-batch-plan" aria-live="polite">
+                                Scan Text lists, then select one list to plan reviewed batches.
+                            </p>
+                            <details id="tia-hmi-text-lists-details" class="hmi-text-lists-details">
+                                <summary id="tia-hmi-dedicated-text-lists" aria-live="polite">
+                                    Text lists — not scanned · Details
+                                </summary>
+                                <div class="hmi-text-lists-detail-body">
+                                    <p class="hint">Names and entry counts, read from the XML export.
+                                        Graphic lists are excluded.</p>
+                                    <div id="tia-hmi-text-lists-catalog" class="hmi-text-lists-catalog"></div>
+                                </div>
+                            </details>
+                            <details id="tia-hmi-text-list-preview" class="hmi-text-lists-details hidden">
+                                <summary>Selected list preview · Details</summary>
+                                <p id="tia-hmi-text-list-preview-summary" class="hint"></p>
+                                <div class="table-wrapper hmi-text-table-wrapper">
+                                    <table class="hmi-text-table">
+                                        <thead><tr>
+                                            <th>Source</th><th>Current target</th><th>Entry / eligibility</th>
+                                        </tr></thead>
+                                        <tbody id="tia-hmi-text-list-preview-rows"></tbody>
+                                    </table>
+                                </div>
+                            </details>
                         </section>
                     </div>
 
@@ -1499,6 +1486,41 @@
                        role="status" aria-live="polite" aria-atomic="true">
                         Select source slot and target language.
                     </p>
+                    </section>
+
+                    <section class="hmi-workflow-step hmi-manual-step hidden"
+                             data-hmi-scope="text_lists">
+                        <h5 class="hmi-step-heading">Step 3 — Text lists (XML) · Prepare, review &amp; import</h5>
+                        <p class="hint">Prepare one batch from the selected Text list.
+                            Verify or edit each proposal before importing that list's XML.
+                            Import is always manual, with re-export verification.</p>
+                        <div class="action-row hmi-translation-actions">
+                            <button id="tia-hmi-text-list-prepare" type="button"
+                                    class="primary-button" disabled>
+                                Prepare XML batch for review
+                            </button>
+                            <button id="tia-hmi-text-list-import" type="button"
+                                    class="primary-button" disabled>
+                                Import reviewed XML batch
+                            </button>
+                        </div>
+                        <p id="tia-hmi-text-list-status" class="status-box hmi-action-status"
+                           role="status" aria-live="polite"></p>
+                        <section id="tia-hmi-text-list-review" class="hidden">
+                            <h5>Reviewed XML batch — one selected list</h5>
+                            <p class="hint">Only missing targets may be changed.
+                                Existing targets remain protected. XML import overwrites
+                                the selected list and verifies all entries by re-export.</p>
+                            <div class="table-wrapper hmi-text-table-wrapper">
+                                <table class="hmi-text-table">
+                                    <thead><tr>
+                                        <th>Source text</th><th>Current target</th>
+                                        <th>Proposed target (editable)</th>
+                                    </tr></thead>
+                                    <tbody id="tia-hmi-text-list-review-rows"></tbody>
+                                </table>
+                            </div>
+                        </section>
                     </section>
 
                     <section class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project">
