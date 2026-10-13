@@ -34,7 +34,7 @@ def test_text_list_controls_are_in_batch_not_standalone_preview():
 
 def test_xml_batches_are_limited_and_still_require_manual_review():
     assert "function textListBatchCount()" in JS
-    assert "return Math.min(size, left, 50);" in JS
+    assert "return Math.min(size, left, 50," in JS
     assert "max_rows: maxRows" in JS
     assert '"/api/v1/tia/hmis/text-lists/prepare"' in JS
     assert '"/api/v1/tia/hmis/text-lists/import"' in JS
