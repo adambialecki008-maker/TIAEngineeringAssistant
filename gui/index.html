@@ -506,22 +506,23 @@
                                 <input type="checkbox" id="tia-hmi-scope-lists">
                                 Text lists (XML)
                             </label>
-                            <p class="hint">Choose one scope at a time. Uncheck both
-                                to disable Scan. Switching scope clears the previous preview.
+                            <p class="hint">Select either text type or both. Uncheck both to disable Scan.
+                                Changing the selection clears both previews.
+                                Project texts use XLSX; Text lists use XML.
                                 Graphic lists are never translated.</p>
                         </fieldset>
                         <section class="hmi-scan-help hmi-workflow-step">
                             <h5 class="hmi-step-heading">Step 1 — Scan the selected HMI</h5>
                             <p>
-                                Select Project texts or Text lists above and choose Source /
+                                Select Project texts, Text lists, or both above, and choose Source /
                                 Target languages. Project texts also require a matching
-                                ViewPath root for import. The Scan button reads only the
-                                chosen scope; it never imports or translates.
+                                ViewPath root for import. Scan reads each selected type
+                                independently; it never imports or translates.
                             </p>
                             <div class="action-row">
                                 <button id="tia-hmi-scan-button"
                                         type="button" class="secondary-button">
-                                    Scan selected scope
+                                    Scan selected texts
                                 </button>
                                 <span id="tia-hmi-scan-instruction" class="hint">
                                     After scanning, the total appears below.
