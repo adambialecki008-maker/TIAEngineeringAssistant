@@ -7,16 +7,20 @@ from database.repository import (
 from engine.models import ProcessSampleInput
 
 
-def test_create_process_samples_table_creates_table():
+def test_create_process_samples_table_creates_table(clean_process_samples):
     connection = get_connection()
 
     try:
         result = connection.execute(
-            "SELECT to_regclass('public.process_samples');"
+            "SELECT current_schema(), to_regclass('process_samples')::oid, "
+            "to_regclass(%s)::oid;",
+            (clean_process_samples + ".process_samples",),
         ).fetchone()
 
         assert result is not None
-        assert result[0] == "process_samples"
+        assert result[0] == clean_process_samples
+        assert result[1] is not None
+        assert result[1] == result[2]
     finally:
         connection.close()
 

@@ -49,7 +49,8 @@ def _ollama_json(endpoint: str, payload: dict | None = None,
             + ": " + detail,
         ) from exc
     except (urllib_error.URLError, ConnectionError, OSError) as exc:
-        if isinstance(exc, (TimeoutError, socket.timeout)):
+        reason = getattr(exc, "reason", exc)
+        if isinstance(reason, (TimeoutError, socket.timeout)):
             raise HTTPException(
                 504, "Ollama did not respond before timeout at " + url,
             ) from exc

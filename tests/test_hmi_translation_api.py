@@ -41,6 +41,9 @@ def test_local_ollama_model_discovery_and_translation(monkeypatch):
         assert data["stream"] is False
         assert data["format"]["type"] == "object"
         assert data["format"]["required"] == ["0", "1"]
+        assert json.loads(data["messages"][1]["content"]) == {
+            "0": "Crusher", "1": "Downstream valve",
+        }
         assert data["options"] == {"temperature": 0}
         assert data["model"] == "qwen2.5:7b"
         return FakeResponse({
@@ -53,9 +56,10 @@ def test_local_ollama_model_discovery_and_translation(monkeypatch):
     monkeypatch.setattr(ollama.urllib_request, "urlopen", fake_urlopen)
     assert ollama.list_ollama_models() == ["gemma3:4b", "qwen2.5:7b"]
     assert ollama.translate_ollama_texts(
-        ["Zgniatarka", "Za zaworem"], "pl-PL", "qwen2.5:7b",
+        ["Crusher", "Downstream valve", "Za zaworem"], "pl-PL", "qwen2.5:7b",
     ) == {
-        "Zgniatarka": "Zgniatarka",
+        "Crusher": "Zgniatarka",
+        "Downstream valve": "Za zaworem",
         "Za zaworem": "Za zaworem",
     }
     assert any(req.full_url.endswith("/api/tags") for req in requests)
@@ -190,3 +194,17 @@ def test_default_ollama_fragment_size_is_one(monkeypatch):
     )
     assert list(result) == ["Label one", "Label two", "Label three"]
     assert batches == [["Label one"], ["Label two"], ["Label three"]]
+
+
+@pytest.mark.parametrize("error", [
+    TimeoutError("timed out"), URLError(TimeoutError("timed out")),
+])
+def test_local_ollama_timeout_returns_504(monkeypatch, error):
+    def timeout(request, timeout):
+        raise error
+
+    monkeypatch.setattr(ollama.urllib_request, "urlopen", timeout)
+    with pytest.raises(HTTPException) as caught:
+        ollama.list_ollama_models()
+    assert caught.value.status_code == 504
+    assert "timeout" in caught.value.detail

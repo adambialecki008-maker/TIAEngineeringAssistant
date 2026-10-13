@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TiaOpennessAdapter")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+934b0838a88b26fc9b88178416f11dece96a6815")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+611d2b44660ce3287d992ee4db92266ee2c8da2d")]
 [assembly: System.Reflection.AssemblyProductAttribute("TiaOpennessAdapter")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TiaOpennessAdapter")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
