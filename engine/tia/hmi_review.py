@@ -257,6 +257,12 @@ def _samples(rows):
     response_model=ExistingHmiQaAuditResponse,
 )
 def audit_existing_hmi_translations(request: TranslateHmiTextsRequest):
+    return _audit_existing_hmi_translations(request, limit=200)
+
+
+def _audit_existing_hmi_translations(
+    request: TranslateHmiTextsRequest, *, limit: int,
+) -> ExistingHmiQaAuditResponse:
     """Read-only semantic audit of ALL existing selected-HMI target rows.
 
     No Ollama calls, language activation, workbook imports or project saves.
@@ -276,7 +282,8 @@ def audit_existing_hmi_translations(request: TranslateHmiTextsRequest):
     filled = 0
     suspicious = 0
     findings = []
-    limit = 200
+    if not 1 <= limit <= 1000000:
+        raise HTTPException(422, "Invalid audit reporting limit.")
     try:
         workbook = load_workbook(path, data_only=True)
         try:
