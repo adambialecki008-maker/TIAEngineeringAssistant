@@ -1943,11 +1943,19 @@ export function initTiaUi(
                             + (item.entry_count_known
                                 ? " (" + item.entry_count + " entries)" : ""))
                         .join(", ");
+                    const examples = (separateLists.lists || [])
+                        .flatMap(item => item.sample_texts || [])
+                        .filter(item => item.culture.toLowerCase()
+                            === selection.source_culture.toLowerCase())
+                        .slice(0, 5)
+                        .map(item => item.text)
+                        .join(" | ");
                     hmiDedicatedTextLists.textContent =
                         "Dedicated Classic Text lists: "
                         + separateLists.text_list_count
                         + " list(s), " + entries + " entries. "
                         + (names ? "Names: " + names + ". " : "")
+                        + (examples ? "Source examples: " + examples + ". " : "")
                         + "Read-only XML inventory: NOT included in the "
                         + "Project texts XLSX translation/import batch. "
                         + "Graphic lists untouched.";
