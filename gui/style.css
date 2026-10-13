@@ -1517,6 +1517,45 @@ td {
     display: block;
     margin-top: 16px;
 }
+.hmi-text-scope-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    align-items: center;
+    margin: 12px 0 16px;
+    padding: 12px 14px;
+    border: 1px solid #344957;
+    border-radius: 7px;
+    background: #192630;
+}
+.hmi-text-scope-options legend {
+    font-weight: 600;
+    font-size: 13px;
+    color: #eef3f7;
+    padding: 0 5px;
+}
+.hmi-text-scope-options > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+    color: #eef3f7;
+    font-size: 14px;
+    min-height: 30px;
+}
+.hmi-text-scope-options input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    margin: 0;
+    accent-color: #80b3dd;
+}
+.hmi-text-scope-options .hint {
+    flex: 1 0 100%;
+    margin: 0;
+    color: #aebdca;
+    font-size: 12px;
+}
 .hmi-scan-help {
     padding: 12px 14px;
     background: #192630;
