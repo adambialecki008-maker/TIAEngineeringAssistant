@@ -1,4 +1,4 @@
-"""HMI Text lists translation through Project texts; Graphic lists untouched."""
+"""Project texts XLSX must exclude Text lists and Graphic lists."""
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -83,7 +83,7 @@ def test_classifies_only_actual_text_list_entries():
     ) != "graphic_list"
 
 
-def test_scan_counts_text_lists_and_never_samples_graphic_lists(monkeypatch):
+def test_project_texts_scan_excludes_text_and_graphic_lists(monkeypatch):
     values = {}
     calls = []
 
@@ -97,15 +97,16 @@ def test_scan_counts_text_lists_and_never_samples_graphic_lists(monkeypatch):
     result = client.post("/api/v1/tia/hmis/preview-texts", json=REQUEST)
     assert result.status_code == 200, result.text
     payload = result.json()
-    assert payload["matched_text_rows"] == 3
-    assert payload["matched_missing_target_rows"] == 3
-    assert payload["matched_text_list_rows"] == 2
-    assert payload["matched_text_list_unique_texts"] == 2
-    assert payload["matched_missing_text_list_rows"] == 2
-    assert payload["matched_missing_text_list_unique_texts"] == 2
+    assert payload["matched_text_rows"] == 1
+    assert payload["matched_missing_target_rows"] == 1
+    assert payload["matched_text_list_rows"] == 0
+    assert payload["matched_text_list_unique_texts"] == 0
+    assert payload["matched_missing_text_list_rows"] == 0
+    assert payload["matched_missing_text_list_unique_texts"] == 0
     assert payload["excluded_graphic_list_rows"] == 1
-    assert {r["source_text"] for r in payload["text_list_sample_rows"]} == {
-        SOURCE_1, SOURCE_2,
+    assert payload["text_list_sample_rows"] == []
+    assert {r["source_text"] for r in payload["sample_rows"]} == {
+        "Awaria pompy",
     }
     assert all("graphic" not in r["category"].lower()
                for r in payload["sample_rows"])
@@ -115,7 +116,7 @@ def test_scan_counts_text_lists_and_never_samples_graphic_lists(monkeypatch):
     assert calls == ["export-project-texts"]
 
 
-def test_reviewed_import_includes_text_lists_but_never_graphics_or_other_hmis(
+def test_project_reviewed_import_excludes_text_lists_graphics_and_other_hmis(
     monkeypatch,
 ):
     values = {}
@@ -156,10 +157,10 @@ def test_reviewed_import_includes_text_lists_but_never_graphics_or_other_hmis(
     )
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["selected_rows"] == 3
+    assert data["selected_rows"] == 1
     assert data["skipped_unique"] == 0
     assert {row["source_text"] for row in data["examples"]} == {
-        "Awaria pompy", SOURCE_1, SOURCE_2,
+        "Awaria pompy",
     }
     assert calls == ["export-project-texts"]
     approved = client.post(
@@ -167,14 +168,14 @@ def test_reviewed_import_includes_text_lists_but_never_graphics_or_other_hmis(
         json={"review_id": data["review_id"]},
     )
     assert approved.status_code == 200, approved.text
-    assert approved.json()["verified_rows"] == 3
-    assert values["textlist-1"] == SOURCE_1
-    assert values["textlist-2"] == SOURCE_2
+    assert approved.json()["verified_rows"] == 1
+    assert "textlist-1" not in values
+    assert "textlist-2" not in values
     assert values["screen-1"] == "Awaria pompy"
     assert "graphic-1" not in values
     assert "other-1" not in values
     assert {key for key, _source, _target in imports} == {
-        "screen-1", "textlist-1", "textlist-2",
+        "screen-1",
     }
     assert all(source == target for _, source, target in imports)
     assert calls.count("import-project-texts") == 1
@@ -182,7 +183,7 @@ def test_reviewed_import_includes_text_lists_but_never_graphics_or_other_hmis(
 
 
 
-def test_automatic_batch_processes_text_lists_without_graphic_import(
+def test_project_batch_does_not_import_text_or_graphic_lists(
     monkeypatch, tmp_path,
 ):
     values = {}
@@ -231,13 +232,15 @@ def test_automatic_batch_processes_text_lists_without_graphic_import(
         )
         assert current.status_code == 200, current.text
     assert current.json()["status"] == "completed"
-    assert current.json()["completed_unique"] == 3
+    assert current.json()["completed_unique"] == 1
     assert current.json()["skipped_unique"] == 0
-    assert values["textlist-1"] == SOURCE_1
-    assert values["textlist-2"] == SOURCE_2
+    assert "textlist-1" not in values
+    assert "textlist-2" not in values
     assert values["screen-1"] == "Awaria pompy"
     assert "graphic-1" not in values
     assert "other-1" not in values
+    assert "textlist-1" not in imported_ids
+    assert "textlist-2" not in imported_ids
     assert "graphic-1" not in imported_ids
     assert "other-1" not in imported_ids
-    assert calls.count("import-project-texts") == 2
+    assert calls.count("import-project-texts") == 1
