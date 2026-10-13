@@ -36,8 +36,9 @@ def test_each_scan_uses_only_its_dedicated_endpoint():
     assert '"/api/v1/tia/hmis/preview-texts"' not in xml
     assert '"/api/v1/tia/hmis/preview-texts"' in xlsx
     assert '"/api/v1/tia/hmis/inspect-text-lists"' not in xlsx
-    assert 'if (hmiWorkScope() === "text_lists")' in xlsx
-    assert 'if (hmiWorkScope() !== "project") return false;' in xlsx
+    assert 'if (!hmiScopeEnabled("project")) return false;' in xlsx
+    assert 'verifiedHmiTextListsScanKey = scanKey;' in xml
+    assert 'verifiedHmiScanKey = hmiScanKey(confirmed);' in xlsx
 
 
 def test_only_selected_scope_shows_related_translation_sections():
