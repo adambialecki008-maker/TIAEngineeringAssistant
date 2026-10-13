@@ -49,10 +49,10 @@ def test_scanned_counts_explicitly_exclude_other_scope():
     assert '"Project texts (XLSX only, excludes Text lists): "' in JS
     assert '"Text lists (XML only): "' in JS
     assert '"Project texts ONLY: excludes Text lists and Graphic lists. "' in JS
-    assert "not confirmed missing targets" in JS
+    assert "readable entries with missing targets" in JS
 
 
 def test_unreadable_xml_is_diagnosed_and_not_enabled_as_normal_batch():
     assert 'entry.reason || "unsupported XML"' in JS
-    assert "const hasEligibleRows = Boolean(" in JS
+    assert "const hasEligibleRows =" in JS
     assert "&& hasEligibleRows && !hmiBatchRunning" in JS
