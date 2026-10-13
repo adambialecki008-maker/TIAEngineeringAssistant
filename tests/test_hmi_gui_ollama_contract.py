@@ -35,7 +35,7 @@ def test_hmi_scope_changes_recalculate_action_buttons():
 
 def test_ollama_model_change_keeps_scan_but_discards_prepared_review():
     script = (ROOT / "gui" / "js" / "tia.js").read_text(encoding="utf-8")
-    scan_key = script.split("function hmiScanKey(selection)", 1)[1]
+    scan_key = script.split("function hmiScanKey(", 1)[1]
     scan_key = scan_key.split("function hmiTranslationKey(", 1)[0]
     assert "ollama_model" not in scan_key
     for field in (
