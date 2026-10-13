@@ -354,3 +354,25 @@ def test_formatted_text_items_value_is_not_plain_text():
         '<Value lang="en-US"><body><p>Awaria PLC</p></body></Value>'
     )
     assert lists._plain_value(simple)[1] == "Awaria PLC"
+
+
+def test_aggregation_name_text_is_recognized_for_safe_manual_prepare(mock_tia):
+    """TIA may use AggregationName rather than CompositionName for Text."""
+    mock_tia["xml"] = XML.replace(
+        'CompositionName="Text"', 'AggregationName="Text"'
+    ).encode("utf-8")
+    result = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE)
+    assert result.status_code == 200, result.text
+    data = result.json()
+    assert data["candidate_count"] == 3
+    assert data["approved_count"] == 3
+    assert len(mock_tia["imported"]) == 0
+
+
+def test_unavailable_source_language_has_explicit_preview_reason(mock_tia):
+    root, entries = lists._parse(mock_tia["xml"], "Auto Status")
+    rows = lists._extract_entries(root, entries, "fr-FR", "pl-PL")
+    assert len(rows) == 4
+    assert all(not row["supported"] for row in rows)
+    assert all("No source text in fr-FR" in row["reason"] for row in rows)
+    assert "en-us" in rows[0]["reason"]
