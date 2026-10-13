@@ -58,10 +58,18 @@
 
         <button
             class="tab-button"
-            data-tab="tia"
+            data-tab="plc"
             type="button"
         >
-            TIA Portal
+            PLC
+        </button>
+
+        <button
+            class="tab-button"
+            data-tab="hmi"
+            type="button"
+        >
+            HMI
         </button>
 
         <button
@@ -172,7 +180,8 @@
                 </h3>
 
                 <p class="hint">
-                    Select the TIA process and Active PLC in the TIA Portal tab.
+                    Select the TIA process and Active PLC in the PLC tab. HMI
+                    engineering and translations are available in the HMI tab.
                     New PLC family selection is available only in Create PLC.
                 </p>
             </div>
@@ -182,18 +191,18 @@
 
         <section
             class="tab-panel"
-            data-tab-panel="tia"
+            data-tab-panel="plc"
         >
 
             <div class="panel-header">
                 <div>
                     <h2>
-                        TIA Portal
+                        PLC
                     </h2>
 
                     <p class="panel-description">
-                        Attach to TIA Portal V21, manage existing PLCs,
-                        or create a new PLC from the local Hardware Catalog.
+                        Connect to TIA Portal V21, inspect PLC hardware, tags,
+                        program blocks and DB/UDT structures, or create a PLC.
                     </p>
                 </div>
             </div>
@@ -361,495 +370,6 @@
                 >
                     Active PLC: not selected
                 </p>
-
-            </div>
-
-
-            <div class="card">
-
-                <div class="card-header">
-                    <div>
-                        <h3>
-                            Existing HMIs
-                        </h3>
-
-                        <p class="hint">
-                            HMI / WinCC software objects detected in the currently open TIA project.
-                            Translate project texts for one selected HMI at a time.
-                        </p>
-                    </div>
-                </div>
-
-
-                <div class="table-wrapper">
-
-                    <table
-                        id="tia-existing-hmis-table"
-                        class="management-table"
-                    >
-                        <thead>
-                            <tr>
-                                <th>Device</th>
-                                <th>HMI</th>
-                                <th>Type</th>
-                                <th>Software</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-
-                        <tbody id="tia-existing-hmis-body">
-                            <tr>
-                                <td
-                                    colspan="5"
-                                    class="empty-table-cell"
-                                >
-                                    Select a TIA process and refresh project context.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                </div>
-
-
-                <div
-                    id="tia-hmi-translation-panel"
-                    class="hmi-translation-panel hidden"
-                >
-
-                    <div class="card-header compact-card-header">
-                        <div>
-                            <h4>
-                                Translate texts — <span id="tia-hmi-translation-title">HMI</span>
-                            </h4>
-
-                            <p class="hint">
-                                Choose Project texts (XLSX) or Text lists (XML) below.
-                                Only the selected scope is scanned and translated.
-                                TIA source slot means the language column containing the original texts,
-                                even if its label differs from the language of the text.
-                            </p>
-                        </div>
-                    </div>
-
-
-                    <div class="form-grid hmi-translation-grid">
-
-                        <div class="field-group">
-                            <label for="tia-hmi-source-language">
-                                TIA source slot:
-                            </label>
-
-                            <select id="tia-hmi-source-language">
-                                <option value="">
-                                    Select source slot
-                                </option>
-                            </select>
-                        </div>
-
-
-                        <div class="field-group">
-                            <label for="tia-hmi-target-language">
-                                Target language:
-                            </label>
-
-                            <select id="tia-hmi-target-language">
-                                <option value="">
-                                    Select target language
-                                </option>
-                            </select>
-                        </div>
-
-                    </div>
-
-
-                    <div class="field-group" data-hmi-scope="project">
-                        <label for="tia-hmi-view-path-root">
-                            Exported ViewPath device/root:
-                        </label>
-                        <select id="tia-hmi-view-path-root">
-                            <option value="">Automatic match (inventory device/HMI name)</option>
-                        </select>
-                        <p class="hint">
-                            If TIA uses a different ViewPath root than the HMI inventory,
-                            use Scan HMI / Count texts to discover it and select the correct device here.
-                            Only that root will be translated.
-                        </p>
-                    </div>
-
-                    <div class="field-group">
-                        <label for="tia-hmi-ollama-model">
-                            Local translation model (Ollama):
-                        </label>
-                        <div class="action-row hmi-ollama-model-row">
-                            <select id="tia-hmi-ollama-model">
-                                <option value="">Loading local Ollama models...</option>
-                            </select>
-                            <button id="tia-hmi-refresh-ollama-models"
-                                    type="button" class="secondary-button">
-                                Refresh models
-                            </button>
-                        </div>
-                        <p id="tia-hmi-ollama-status" class="hint">
-                            Local Ollama server — no OpenAI API key required.
-                        </p>
-                    </div>
-                    <div class="hmi-translation-batch-controls">
-                        <h4>HMI text scan and translation scope</h4>
-                        <fieldset class="hmi-text-scope-options">
-                            <legend>Choose what to scan and translate</legend>
-                            <label for="tia-hmi-scope-project">
-                                <input type="checkbox" id="tia-hmi-scope-project" checked>
-                                Project texts (XLSX)
-                            </label>
-                            <label for="tia-hmi-scope-lists">
-                                <input type="checkbox" id="tia-hmi-scope-lists">
-                                Text lists (XML)
-                            </label>
-                            <p class="hint">Select either text type or both. Uncheck both to disable Scan.
-                                Changing the selection clears both previews.
-                                Project texts use XLSX; Text lists use XML.
-                                Graphic lists are never translated.</p>
-                        </fieldset>
-                        <section class="hmi-scan-help hmi-workflow-step">
-                            <h5 class="hmi-step-heading">Step 1 — Scan the selected HMI</h5>
-                            <p>
-                                Select Project texts, Text lists, or both above, and choose Source /
-                                Target languages. Project texts also require a matching
-                                ViewPath root for import. Scan reads each selected type
-                                independently; it never imports or translates.
-                            </p>
-                            <div class="action-row">
-                                <button id="tia-hmi-scan-button"
-                                        type="button" class="secondary-button">
-                                    Scan selected texts
-                                </button>
-                                <span id="tia-hmi-scan-instruction" class="hint">
-                                    After scanning, the total appears below.
-                                </span>
-                            </div>
-                        </section>
-                        <p id="tia-hmi-scan-summary" class="hmi-scan-result"
-                           aria-live="polite">
-                            Not scanned yet. Select the HMI, languages and ViewPath root, then click Scan HMI / Count texts.
-                        </p>
-                        <section id="tia-hmi-text-lists-panel"
-                                 class="hmi-text-lists-panel hidden" data-hmi-scope="text_lists">
-                        <details id="tia-hmi-text-lists-details"
-                                 class="hmi-text-lists-details">
-                            <summary id="tia-hmi-dedicated-text-lists"
-                                     aria-live="polite">
-                                Text lists — not scanned
-                            </summary>
-                            <div class="hmi-text-lists-detail-body">
-                                <p class="hint">Classic WinCC Text lists use a separate
-                                    Siemens XML export. Review and import exactly one
-                                    selected list at a time. Graphic lists are excluded.</p>
-                                <div id="tia-hmi-text-lists-catalog"
-                                     class="hmi-text-lists-catalog"></div>
-                            </div>
-                        </details>
-                        <div class="hmi-text-lists-main-controls">
-                            <p class="hint">Text lists: select one list, then Prepare,
-                                Review and Import. Project texts automatic batches
-                                are not used for XML lists.</p>
-                                <div class="action-row">
-                                    <label for="tia-hmi-text-list-select">
-                                        Text list to translate
-                                    </label>
-                                    <select id="tia-hmi-text-list-select" disabled>
-                                        <option value="">Scan HMI first</option>
-                                    </select>
-                                    <button id="tia-hmi-text-list-prepare" type="button"
-                                            class="secondary-button" disabled>
-                                        Prepare list translations
-                                    </button>
-                                </div>
-                                <div id="tia-hmi-text-list-preview" class="hidden">
-                                    <h5>Selected list preview — existing TIA texts</h5>
-                                    <p id="tia-hmi-text-list-preview-summary" class="hint"></p>
-                                    <div class="table-wrapper hmi-text-table-wrapper">
-                                        <table class="hmi-text-table">
-                                            <thead><tr>
-                                                <th>Source</th>
-                                                <th>Current target</th>
-                                                <th>Entry</th>
-                                            </tr></thead>
-                                            <tbody id="tia-hmi-text-list-preview-rows"></tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <p id="tia-hmi-text-list-status" class="hint"
-                                   role="status" aria-live="polite"></p>
-                                <section id="tia-hmi-text-list-review" class="hidden">
-                                    <p class="hint">Review or edit proposals before importing.
-                                        Only missing target texts will be changed.
-                                        Import replaces this single list XML, then checks
-                                        all entries by re-export.</p>
-                                    <div class="table-wrapper hmi-text-table-wrapper">
-                                        <table class="hmi-text-table">
-                                            <thead><tr>
-                                                <th>Source text</th>
-                                                <th>Current target</th>
-                                                <th>Proposed target (editable)</th>
-                                            </tr></thead>
-                                            <tbody id="tia-hmi-text-list-review-rows"></tbody>
-                                        </table>
-                                    </div>
-                                    <button id="tia-hmi-text-list-import"
-                                            type="button" class="primary-button" disabled>
-                                        Import reviewed text list into TIA
-                                    </button>
-                                </section>
-                            </div>
-                        </section>
-                        <section class="hmi-workflow-step hmi-scope-step" data-hmi-scope="project">
-                            <h5 class="hmi-step-heading">Step 2 — Choose how many texts to process</h5>
-                        <div class="form-grid hmi-translation-grid">
-                            <div class="field-group">
-                                <label for="tia-hmi-batch-size">Batch size (unique texts)</label>
-                                <input id="tia-hmi-batch-size" type="number"
-                                       min="1" max="200" step="1" value="5">
-                                <p class="hint">Prepare translates one batch of at most this
-                                   many unique texts (maximum 50 for manual review).
-                                   Automatic import uses the same batch size.</p>
-                            </div>
-                            <div class="field-group">
-                                <label for="tia-hmi-total-to-translate">Total to translate (unique texts)</label>
-                                <input id="tia-hmi-total-to-translate" type="number"
-                                       min="1" max="100000" step="1"
-                                       placeholder="Scan HMI to see total">
-                                <p class="hint">Use the scanned eligible unique-text count.
-                                   This limits the total for automatic imports and
-                                   also caps a manual review batch. Blank = all eligible
-                                   texts in the automatic job.</p>
-                                <button id="tia-hmi-use-scan-total"
-                                        class="secondary-button" type="button" disabled>
-                                    Use scanned total
-                                </button>
-                            </div>
-                        </div>
-                        </section>
-                    </div>
-
-                    <section class="hmi-workflow-step hmi-manual-step" data-hmi-scope="project">
-                        <h5 class="hmi-step-heading">Step 3 — Prepare and review translations</h5>
-                        <p class="hint">
-                            Prepare one limited batch and inspect the proposed target texts.
-                            Import reviewed texts only after checking the results.
-                        </p>
-                    <div class="action-row hmi-translation-actions">
-
-                        <button
-                            id="tia-hmi-translate-button"
-                            type="button"
-                            class="primary-button"
-                            disabled
-                        >
-                            Prepare one batch (review)
-                        </button>
-
-                        <button
-                            id="tia-hmi-import-reviewed-button"
-                            type="button"
-                            class="primary-button"
-                            disabled
-                        >
-                            Import reviewed texts
-                        </button>
-
-                    </div>
-                    <p id="tia-hmi-translation-status"
-                       class="status-box hmi-action-status"
-                       role="status" aria-live="polite" aria-atomic="true">
-                        Select source slot and target language.
-                    </p>
-                    </section>
-
-                    <section class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project">
-                        <h5 class="hmi-step-heading">Step 4 — Automatic batch import into TIA</h5>
-                        <p class="hint">
-                            Automated mode: Ollama translates one batch, then TIA imports
-                            and verifies it before the next batch begins.
-                            Unlike the manual review workflow above, individual
-                            translations are not approved before import.
-                            Use only after a successful pilot and project backup.
-                        </p>
-                        <p id="tia-hmi-batch-plan" class="hmi-batch-plan"
-                           aria-live="polite">
-                            Example: batch size 5 and total 50 means 10 batches.
-                            Every completed batch is imported and verified in TIA.
-                        </p>
-                        <label class="hmi-batch-repeat-label" for="tia-hmi-batch-auto-repeat">
-                            <input type="checkbox" id="tia-hmi-batch-auto-repeat" checked>
-                            Continue automatically with the next batch until
-                            Total to translate is reached
-                        </label>
-                        <div class="hmi-batch-start-row">
-                            <div class="action-row hmi-translation-actions">
-                                <button id="tia-hmi-batch-start" type="button"
-                                        class="primary-button" disabled>
-                                    Start batch import
-                                </button>
-                                <button id="tia-hmi-batch-resume" type="button"
-                                        class="secondary-button" disabled>
-                                    Resume saved job
-                                </button>
-                                <button id="tia-hmi-batch-pause" type="button"
-                                        class="secondary-button" disabled>
-                                    Pause after this batch
-                                </button>
-                            </div>
-                            <div class="hmi-batch-progress" role="group"
-                                 aria-label="Verified TIA import progress">
-                                <div class="hmi-batch-progress-caption">
-                                    <strong>Verified in TIA</strong>
-                                    <span id="tia-hmi-batch-progress-text">0 / —</span>
-                                </div>
-                                <progress id="tia-hmi-batch-progress" max="100"
-                                          value="0"></progress>
-                                <p class="hint">Progress advances after TIA import
-                                   and verification, not after Ollama alone.</p>
-                            </div>
-                        </div>
-                        <p id="tia-hmi-batch-readiness" class="hint"
-                           role="status" aria-live="polite">
-                            Choose an HMI and run Scan HMI / Count texts to enable batch import.
-                        </p>
-                        <p id="tia-hmi-batch-status" class="status-box"
-                           aria-live="polite">
-                            No automatic batch import started.
-                        </p>
-                        <button type="button" id="tia-hmi-quality-report"
-                                class="secondary-button" disabled>
-                            Download batch quality XLSX
-                        </button>
-                        <div class="hmi-skipped-manager">
-                            <button type="button" id="tia-hmi-skipped-open"
-                                    class="secondary-button" disabled>
-                                Skipped translations (0)
-                            </button>
-                            <section id="tia-hmi-skipped-panel" class="hidden"
-                                     aria-label="Skipped HMI translations">
-                                <h4>Skipped translations</h4>
-                                <p class="hint">View every skipped text, correct the proposal
-                                    or retry it individually with Ollama. Prepare does not
-                                    import into TIA. Confirm each import explicitly; the
-                                    result must pass validation and re-export verification.</p>
-                                <p id="tia-hmi-skipped-status" class="status-box"
-                                   role="status" aria-live="polite">
-                                    Load a completed batch job to view skips.
-                                </p>
-                                <div id="tia-hmi-skipped-list" class="hmi-skipped-list"></div>
-                            </section>
-                        </div>
-                    </section>
-
-                    <div id="tia-hmi-preview-results" class="hidden" data-hmi-scope="project">
-                        <p id="tia-hmi-preview-summary" class="hint"></p>
-                        <div class="hmi-preview-toolbar">
-                            <label for="tia-hmi-preview-filter">Show sample rows:</label>
-                            <select id="tia-hmi-preview-filter">
-                                <option value="matched">Selected HMI</option>
-                                <option value="unmatched">Other devices (diagnostic)</option>
-                            </select>
-                            <span id="tia-hmi-preview-sample-count" class="hint"></span>
-                        </div>
-                        <div class="table-wrapper hmi-text-table-wrapper">
-                            <table class="hmi-text-table hmi-preview-table">
-                                <colgroup>
-                                    <col style="width: 37%">
-                                    <col style="width: 37%">
-                                    <col style="width: 16%">
-                                    <col style="width: 10%">
-                                </colgroup>
-                                <thead>
-                                    <tr>
-                                        <th>Source text</th>
-                                        <th>Current target (TIA)</th>
-                                        <th>Category</th>
-                                        <th>Details</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tia-hmi-preview-rows"></tbody>
-                            </table>
-                        </div>
-                        <details>
-                            <summary>ViewPath / XLSX diagnostics</summary>
-                            <pre id="tia-hmi-preview-references" class="hmi-preview-references"></pre>
-                        </details>
-                        <section class="hmi-existing-qa">
-                            <h4>Existing target quality audit — read only</h4>
-                            <p class="hint">Inspect every filled target in the selected HMI,
-                                not just the 50 preview samples. Suspected technical
-                                meaning changes require human review; no TIA texts
-                                are modified.</p>
-                            <button id="tia-hmi-audit-existing" type="button"
-                                    class="secondary-button" disabled>
-                                Audit existing target translations
-                            </button>
-                            <button id="tia-hmi-existing-qa-report" type="button"
-                                    class="secondary-button" disabled>
-                                Download existing QA XLSX
-                            </button>
-                            <p id="tia-hmi-existing-qa-status" class="hint"
-                               role="status" aria-live="polite"></p>
-                            <div id="tia-hmi-existing-qa-results" class="hidden">
-                                <div class="table-wrapper hmi-text-table-wrapper">
-                                    <table class="hmi-text-table hmi-qa-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Source</th>
-                                                <th>Current target (TIA)</th>
-                                                <th>Suspicion / reason</th>
-                                                <th>Location</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="tia-hmi-existing-qa-rows"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </section>
-                    </div>
-
-                    <div id="tia-hmi-review-results" class="hidden" data-hmi-scope="project">
-                        <h4>Prepared translations — review before importing</h4>
-                        <p id="tia-hmi-review-summary" class="hint"></p>
-                        <details id="tia-hmi-review-skipped" class="hmi-review-skipped hidden">
-                            <summary id="tia-hmi-review-skipped-summary">Skipped unsafe proposals</summary>
-                            <p class="hint">Correct the rejected proposal below or use the original source text.
-                                Click Validate &amp; add to review for each corrected item.
-                                Only validated rows can be imported after explicit approval.</p>
-                            <div id="tia-hmi-review-skipped-list" class="hmi-review-skipped-list"></div>
-                        </details>
-                        <div class="table-wrapper hmi-text-table-wrapper">
-                            <table class="hmi-text-table hmi-review-table">
-                                <colgroup>
-                                    <col style="width: 30%">
-                                    <col style="width: 28%">
-                                    <col style="width: 32%">
-                                    <col style="width: 10%">
-                                </colgroup>
-                                <thead>
-                                    <tr>
-                                        <th>Source text</th>
-                                        <th>Current target (TIA)</th>
-                                        <th>Proposed translation (AI)</th>
-                                        <th>Details</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tia-hmi-review-rows"></tbody>
-                            </table>
-                        </div>
-                        <p class="hint">Nothing is imported until you click Import reviewed texts. Refreshing the page discards the prepared review.</p>
-                    </div>
-
-
-
-                </div>
-
-
-
 
             </div>
 
@@ -1574,6 +1094,601 @@
             >
                 Not connected.
             </p>
+
+        </section>
+
+
+        <section
+            class="tab-panel"
+            data-tab-panel="hmi"
+        >
+
+            <div class="panel-header">
+                <div>
+                    <h2>HMI</h2>
+                    <p class="panel-description">
+                        Connect to TIA Portal V21, inspect WinCC/HMI objects,
+                        scan and translate Project texts or Text lists.
+                    </p>
+                </div>
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Connection
+                        </h3>
+
+                        <p class="hint">
+                            Running TIA Portal V21 processes detected through Openness.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-hmi-refresh-button"
+                        type="button"
+                    >
+                        Refresh TIA
+                    </button>
+                </div>
+
+
+                <div class="form-row">
+
+                    <label for="tia-hmi-process">
+                        TIA process:
+                    </label>
+
+                    <select id="tia-hmi-process">
+
+                        <option value="">
+                            Select TIA process
+                        </option>
+
+                    </select>
+
+                </div>
+                <p id="tia-hmi-connection-status" class="status-box tia-connection-status"
+                   role="status" aria-live="polite">
+                    Click Refresh TIA to detect available TIA Portal processes.
+                </p>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Project context
+                        </h3>
+
+                        <p class="hint">
+                            Project detected from the selected TIA Portal process.
+                        </p>
+                    </div>
+                </div>
+
+
+                <div class="form-grid">
+
+                    <div class="field-group">
+                        <label>
+                            TIA project:
+                        </label>
+
+                        <div
+                            id="tia-hmi-project-name"
+                            class="read-only-value"
+                        >
+                            Not connected
+                        </div>
+                    </div>
+
+
+                </div>
+
+            </div>
+
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Existing HMIs
+                        </h3>
+
+                        <p class="hint">
+                            HMI / WinCC software objects detected in the currently open TIA project.
+                            Inspect and translate Project texts and Text lists for one selected HMI.
+                        </p>
+                    </div>
+
+                    <button id="tia-hmi-refresh-project-button" type="button">
+                        Refresh project
+                    </button>
+                </div>
+
+
+                <div class="table-wrapper">
+
+                    <table
+                        id="tia-existing-hmis-table"
+                        class="management-table"
+                    >
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>HMI</th>
+                                <th>Type</th>
+                                <th>Software</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="tia-existing-hmis-body">
+                            <tr>
+                                <td
+                                    colspan="5"
+                                    class="empty-table-cell"
+                                >
+                                    Select a TIA process and refresh project context.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+
+                <div
+                    id="tia-hmi-translation-panel"
+                    class="hmi-translation-panel hidden"
+                >
+
+                    <div class="card-header compact-card-header">
+                        <div>
+                            <h4>
+                                Translate texts — <span id="tia-hmi-translation-title">HMI</span>
+                            </h4>
+
+                            <p class="hint">
+                                Choose Project texts (XLSX) or Text lists (XML) below.
+                                Scan Project texts, Text lists, or both independently.
+                                TIA source slot means the language column containing the original texts,
+                                even if its label differs from the language of the text.
+                            </p>
+                        </div>
+                    </div>
+
+
+                    <div class="form-grid hmi-translation-grid">
+
+                        <div class="field-group">
+                            <label for="tia-hmi-source-language">
+                                TIA source slot:
+                            </label>
+
+                            <select id="tia-hmi-source-language">
+                                <option value="">
+                                    Select source slot
+                                </option>
+                            </select>
+                        </div>
+
+
+                        <div class="field-group">
+                            <label for="tia-hmi-target-language">
+                                Target language:
+                            </label>
+
+                            <select id="tia-hmi-target-language">
+                                <option value="">
+                                    Select target language
+                                </option>
+                            </select>
+                        </div>
+
+                    </div>
+
+
+                    <div class="field-group" data-hmi-scope="project">
+                        <label for="tia-hmi-view-path-root">
+                            Exported ViewPath device/root:
+                        </label>
+                        <select id="tia-hmi-view-path-root">
+                            <option value="">Automatic match (inventory device/HMI name)</option>
+                        </select>
+                        <p class="hint">
+                            If TIA uses a different ViewPath root than the HMI inventory,
+                            use Scan HMI / Count texts to discover it and select the correct device here.
+                            Only that root will be translated.
+                        </p>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="tia-hmi-ollama-model">
+                            Local translation model (Ollama):
+                        </label>
+                        <div class="action-row hmi-ollama-model-row">
+                            <select id="tia-hmi-ollama-model">
+                                <option value="">Loading local Ollama models...</option>
+                            </select>
+                            <button id="tia-hmi-refresh-ollama-models"
+                                    type="button" class="secondary-button">
+                                Refresh models
+                            </button>
+                        </div>
+                        <p id="tia-hmi-ollama-status" class="hint">
+                            Local Ollama server — no OpenAI API key required.
+                        </p>
+                    </div>
+                    <div class="hmi-translation-batch-controls">
+                        <h4>HMI text scan and translation scope</h4>
+                        <fieldset class="hmi-text-scope-options">
+                            <legend>Choose what to scan and translate</legend>
+                            <label for="tia-hmi-scope-project">
+                                <input type="checkbox" id="tia-hmi-scope-project" checked>
+                                Project texts (XLSX)
+                            </label>
+                            <label for="tia-hmi-scope-lists">
+                                <input type="checkbox" id="tia-hmi-scope-lists">
+                                Text lists (XML)
+                            </label>
+                            <p class="hint">Select either text type or both. Uncheck both to disable Scan.
+                                Changing the selection clears both previews.
+                                Project texts use XLSX; Text lists use XML.
+                                Graphic lists are never translated.</p>
+                        </fieldset>
+                        <section class="hmi-scan-help hmi-workflow-step">
+                            <h5 class="hmi-step-heading">Step 1 — Scan the selected HMI</h5>
+                            <p>
+                                Select Project texts, Text lists, or both above, and choose Source /
+                                Target languages. Project texts also require a matching
+                                ViewPath root for import. Scan reads each selected type
+                                independently; it never imports or translates.
+                            </p>
+                            <div class="action-row">
+                                <button id="tia-hmi-scan-button"
+                                        type="button" class="secondary-button">
+                                    Scan selected texts
+                                </button>
+                                <span id="tia-hmi-scan-instruction" class="hint">
+                                    After scanning, the total appears below.
+                                </span>
+                            </div>
+                        </section>
+                        <p id="tia-hmi-scan-summary" class="hmi-scan-result"
+                           aria-live="polite">
+                            Not scanned yet. Select the HMI, languages and ViewPath root, then click Scan HMI / Count texts.
+                        </p>
+                        <section id="tia-hmi-text-lists-panel"
+                                 class="hmi-text-lists-panel hidden" data-hmi-scope="text_lists">
+                        <details id="tia-hmi-text-lists-details"
+                                 class="hmi-text-lists-details">
+                            <summary id="tia-hmi-dedicated-text-lists"
+                                     aria-live="polite">
+                                Text lists — not scanned
+                            </summary>
+                            <div class="hmi-text-lists-detail-body">
+                                <p class="hint">Classic WinCC Text lists use a separate
+                                    Siemens XML export. Review and import exactly one
+                                    selected list at a time. Graphic lists are excluded.</p>
+                                <div id="tia-hmi-text-lists-catalog"
+                                     class="hmi-text-lists-catalog"></div>
+                            </div>
+                        </details>
+                        <div class="hmi-text-lists-main-controls">
+                            <p class="hint">Text lists: select one list, then Prepare,
+                                Review and Import. Project texts automatic batches
+                                are not used for XML lists.</p>
+                                <div class="action-row">
+                                    <label for="tia-hmi-text-list-select">
+                                        Text list to translate
+                                    </label>
+                                    <select id="tia-hmi-text-list-select" disabled>
+                                        <option value="">Scan HMI first</option>
+                                    </select>
+                                    <button id="tia-hmi-text-list-prepare" type="button"
+                                            class="secondary-button" disabled>
+                                        Prepare list translations
+                                    </button>
+                                </div>
+                                <div id="tia-hmi-text-list-preview" class="hidden">
+                                    <h5>Selected list preview — existing TIA texts</h5>
+                                    <p id="tia-hmi-text-list-preview-summary" class="hint"></p>
+                                    <div class="table-wrapper hmi-text-table-wrapper">
+                                        <table class="hmi-text-table">
+                                            <thead><tr>
+                                                <th>Source</th>
+                                                <th>Current target</th>
+                                                <th>Entry</th>
+                                            </tr></thead>
+                                            <tbody id="tia-hmi-text-list-preview-rows"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <p id="tia-hmi-text-list-status" class="hint"
+                                   role="status" aria-live="polite"></p>
+                                <section id="tia-hmi-text-list-review" class="hidden">
+                                    <p class="hint">Review or edit proposals before importing.
+                                        Only missing target texts will be changed.
+                                        Import replaces this single list XML, then checks
+                                        all entries by re-export.</p>
+                                    <div class="table-wrapper hmi-text-table-wrapper">
+                                        <table class="hmi-text-table">
+                                            <thead><tr>
+                                                <th>Source text</th>
+                                                <th>Current target</th>
+                                                <th>Proposed target (editable)</th>
+                                            </tr></thead>
+                                            <tbody id="tia-hmi-text-list-review-rows"></tbody>
+                                        </table>
+                                    </div>
+                                    <button id="tia-hmi-text-list-import"
+                                            type="button" class="primary-button" disabled>
+                                        Import reviewed text list into TIA
+                                    </button>
+                                </section>
+                            </div>
+                        </section>
+                        <section class="hmi-workflow-step hmi-scope-step" data-hmi-scope="project">
+                            <h5 class="hmi-step-heading">Step 2 — Choose how many texts to process</h5>
+                        <div class="form-grid hmi-translation-grid">
+                            <div class="field-group">
+                                <label for="tia-hmi-batch-size">Batch size (unique texts)</label>
+                                <input id="tia-hmi-batch-size" type="number"
+                                       min="1" max="200" step="1" value="5">
+                                <p class="hint">Prepare translates one batch of at most this
+                                   many unique texts (maximum 50 for manual review).
+                                   Automatic import uses the same batch size.</p>
+                            </div>
+                            <div class="field-group">
+                                <label for="tia-hmi-total-to-translate">Total to translate (unique texts)</label>
+                                <input id="tia-hmi-total-to-translate" type="number"
+                                       min="1" max="100000" step="1"
+                                       placeholder="Scan HMI to see total">
+                                <p class="hint">Use the scanned eligible unique-text count.
+                                   This limits the total for automatic imports and
+                                   also caps a manual review batch. Blank = all eligible
+                                   texts in the automatic job.</p>
+                                <button id="tia-hmi-use-scan-total"
+                                        class="secondary-button" type="button" disabled>
+                                    Use scanned total
+                                </button>
+                            </div>
+                        </div>
+                        </section>
+                    </div>
+
+                    <section class="hmi-workflow-step hmi-manual-step" data-hmi-scope="project">
+                        <h5 class="hmi-step-heading">Step 3 — Prepare and review translations</h5>
+                        <p class="hint">
+                            Prepare one limited batch and inspect the proposed target texts.
+                            Import reviewed texts only after checking the results.
+                        </p>
+                    <div class="action-row hmi-translation-actions">
+
+                        <button
+                            id="tia-hmi-translate-button"
+                            type="button"
+                            class="primary-button"
+                            disabled
+                        >
+                            Prepare one batch (review)
+                        </button>
+
+                        <button
+                            id="tia-hmi-import-reviewed-button"
+                            type="button"
+                            class="primary-button"
+                            disabled
+                        >
+                            Import reviewed texts
+                        </button>
+
+                    </div>
+                    <p id="tia-hmi-translation-status"
+                       class="status-box hmi-action-status"
+                       role="status" aria-live="polite" aria-atomic="true">
+                        Select source slot and target language.
+                    </p>
+                    </section>
+
+                    <section class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project">
+                        <h5 class="hmi-step-heading">Step 4 — Automatic batch import into TIA</h5>
+                        <p class="hint">
+                            Automated mode: Ollama translates one batch, then TIA imports
+                            and verifies it before the next batch begins.
+                            Unlike the manual review workflow above, individual
+                            translations are not approved before import.
+                            Use only after a successful pilot and project backup.
+                        </p>
+                        <p id="tia-hmi-batch-plan" class="hmi-batch-plan"
+                           aria-live="polite">
+                            Example: batch size 5 and total 50 means 10 batches.
+                            Every completed batch is imported and verified in TIA.
+                        </p>
+                        <label class="hmi-batch-repeat-label" for="tia-hmi-batch-auto-repeat">
+                            <input type="checkbox" id="tia-hmi-batch-auto-repeat" checked>
+                            Continue automatically with the next batch until
+                            Total to translate is reached
+                        </label>
+                        <div class="hmi-batch-start-row">
+                            <div class="action-row hmi-translation-actions">
+                                <button id="tia-hmi-batch-start" type="button"
+                                        class="primary-button" disabled>
+                                    Start batch import
+                                </button>
+                                <button id="tia-hmi-batch-resume" type="button"
+                                        class="secondary-button" disabled>
+                                    Resume saved job
+                                </button>
+                                <button id="tia-hmi-batch-pause" type="button"
+                                        class="secondary-button" disabled>
+                                    Pause after this batch
+                                </button>
+                            </div>
+                            <div class="hmi-batch-progress" role="group"
+                                 aria-label="Verified TIA import progress">
+                                <div class="hmi-batch-progress-caption">
+                                    <strong>Verified in TIA</strong>
+                                    <span id="tia-hmi-batch-progress-text">0 / —</span>
+                                </div>
+                                <progress id="tia-hmi-batch-progress" max="100"
+                                          value="0"></progress>
+                                <p class="hint">Progress advances after TIA import
+                                   and verification, not after Ollama alone.</p>
+                            </div>
+                        </div>
+                        <p id="tia-hmi-batch-readiness" class="hint"
+                           role="status" aria-live="polite">
+                            Choose an HMI and run Scan HMI / Count texts to enable batch import.
+                        </p>
+                        <p id="tia-hmi-batch-status" class="status-box"
+                           aria-live="polite">
+                            No automatic batch import started.
+                        </p>
+                        <button type="button" id="tia-hmi-quality-report"
+                                class="secondary-button" disabled>
+                            Download batch quality XLSX
+                        </button>
+                        <div class="hmi-skipped-manager">
+                            <button type="button" id="tia-hmi-skipped-open"
+                                    class="secondary-button" disabled>
+                                Skipped translations (0)
+                            </button>
+                            <section id="tia-hmi-skipped-panel" class="hidden"
+                                     aria-label="Skipped HMI translations">
+                                <h4>Skipped translations</h4>
+                                <p class="hint">View every skipped text, correct the proposal
+                                    or retry it individually with Ollama. Prepare does not
+                                    import into TIA. Confirm each import explicitly; the
+                                    result must pass validation and re-export verification.</p>
+                                <p id="tia-hmi-skipped-status" class="status-box"
+                                   role="status" aria-live="polite">
+                                    Load a completed batch job to view skips.
+                                </p>
+                                <div id="tia-hmi-skipped-list" class="hmi-skipped-list"></div>
+                            </section>
+                        </div>
+                    </section>
+
+                    <div id="tia-hmi-preview-results" class="hidden" data-hmi-scope="project">
+                        <p id="tia-hmi-preview-summary" class="hint"></p>
+                        <div class="hmi-preview-toolbar">
+                            <label for="tia-hmi-preview-filter">Show sample rows:</label>
+                            <select id="tia-hmi-preview-filter">
+                                <option value="matched">Selected HMI</option>
+                                <option value="unmatched">Other devices (diagnostic)</option>
+                            </select>
+                            <span id="tia-hmi-preview-sample-count" class="hint"></span>
+                        </div>
+                        <div class="table-wrapper hmi-text-table-wrapper">
+                            <table class="hmi-text-table hmi-preview-table">
+                                <colgroup>
+                                    <col style="width: 37%">
+                                    <col style="width: 37%">
+                                    <col style="width: 16%">
+                                    <col style="width: 10%">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Source text</th>
+                                        <th>Current target (TIA)</th>
+                                        <th>Category</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tia-hmi-preview-rows"></tbody>
+                            </table>
+                        </div>
+                        <details>
+                            <summary>ViewPath / XLSX diagnostics</summary>
+                            <pre id="tia-hmi-preview-references" class="hmi-preview-references"></pre>
+                        </details>
+                        <section class="hmi-existing-qa">
+                            <h4>Existing target quality audit — read only</h4>
+                            <p class="hint">Inspect every filled target in the selected HMI,
+                                not just the 50 preview samples. Suspected technical
+                                meaning changes require human review; no TIA texts
+                                are modified.</p>
+                            <button id="tia-hmi-audit-existing" type="button"
+                                    class="secondary-button" disabled>
+                                Audit existing target translations
+                            </button>
+                            <button id="tia-hmi-existing-qa-report" type="button"
+                                    class="secondary-button" disabled>
+                                Download existing QA XLSX
+                            </button>
+                            <p id="tia-hmi-existing-qa-status" class="hint"
+                               role="status" aria-live="polite"></p>
+                            <div id="tia-hmi-existing-qa-results" class="hidden">
+                                <div class="table-wrapper hmi-text-table-wrapper">
+                                    <table class="hmi-text-table hmi-qa-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Source</th>
+                                                <th>Current target (TIA)</th>
+                                                <th>Suspicion / reason</th>
+                                                <th>Location</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tia-hmi-existing-qa-rows"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div id="tia-hmi-review-results" class="hidden" data-hmi-scope="project">
+                        <h4>Prepared translations — review before importing</h4>
+                        <p id="tia-hmi-review-summary" class="hint"></p>
+                        <details id="tia-hmi-review-skipped" class="hmi-review-skipped hidden">
+                            <summary id="tia-hmi-review-skipped-summary">Skipped unsafe proposals</summary>
+                            <p class="hint">Correct the rejected proposal below or use the original source text.
+                                Click Validate &amp; add to review for each corrected item.
+                                Only validated rows can be imported after explicit approval.</p>
+                            <div id="tia-hmi-review-skipped-list" class="hmi-review-skipped-list"></div>
+                        </details>
+                        <div class="table-wrapper hmi-text-table-wrapper">
+                            <table class="hmi-text-table hmi-review-table">
+                                <colgroup>
+                                    <col style="width: 30%">
+                                    <col style="width: 28%">
+                                    <col style="width: 32%">
+                                    <col style="width: 10%">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Source text</th>
+                                        <th>Current target (TIA)</th>
+                                        <th>Proposed translation (AI)</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tia-hmi-review-rows"></tbody>
+                            </table>
+                        </div>
+                        <p class="hint">Nothing is imported until you click Import reviewed texts. Refreshing the page discards the prepared review.</p>
+                    </div>
+
+
+
+                </div>
+
+
+
+
+            </div>
+
+
 
         </section>
 
