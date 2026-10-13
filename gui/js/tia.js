@@ -1354,7 +1354,11 @@ export function initTiaUi(
         const verified = hmiTextListProgressKey === textListBatchIdentity()
             ? hmiTextListImportedCount : 0;
         const left = total === null ? size : Math.max(0, total - verified);
-        return Math.min(size, left, 50);
+        const selected = (hmiTextListsData?.lists || [])
+            .find(item => item.name === hmiTextListSelect?.value);
+        const missing = selected?.eligible_missing_entries;
+        return Math.min(size, left, 50,
+            Number.isInteger(missing) ? missing : 50);
     }
 
     function renderHmiTextListBatchPlan() {
@@ -1380,7 +1384,10 @@ export function initTiaUi(
             name + ": " + (list.entry_count_known
                 ? list.entry_count + " total entries" : "entry count unknown")
             + " (not all necessarily need translation). "
-            + eligiblePreview + " eligible-looking entries in read-only preview"
+            + (Number.isInteger(list.eligible_missing_entries)
+                ? list.eligible_missing_entries
+                    + " eligible missing-target entries in the selected list"
+                : eligiblePreview + " eligible-looking entries in read-only preview")
             + (preview.length < (list.entry_count || 0) ? " (partial)" : "")
             + ". " + verified
             + " entries imported and verified in this browser session. "
@@ -2031,14 +2038,15 @@ export function initTiaUi(
         const selection = hmiTranslationSelection();
         const list = (hmiTextListsData?.lists || [])
             .find(item => item.name === hmiTextListSelect?.value);
-        const hasEligibleRows = Boolean(
-            list?.preview_rows?.some(
-                entry => entry.supported && entry.source_text?.trim()
-                    && (!entry.target_text?.trim()
-                        || entry.target_text?.trim() === "Text")
-            ) || (list?.entry_count_known
-                && list.entry_count > (list.preview_rows || []).length)
-        );
+        const hasEligibleRows =
+            Number.isInteger(list?.eligible_missing_entries)
+                ? list.eligible_missing_entries > 0
+                : Boolean(list?.preview_rows?.some(
+                    entry => entry.supported && entry.source_text?.trim()
+                        && (!entry.target_text?.trim()
+                            || entry.target_text?.trim() === "Text")
+                ) || (list?.entry_count_known
+                    && list.entry_count > (list.preview_rows || []).length));
         return Boolean(hmiScopeEnabled("text_lists")
             && hmiScanKey(selection, "text_lists") === verifiedHmiTextListsScanKey
             && selection && hmiTextListsData?.lists?.length
@@ -2235,6 +2243,12 @@ export function initTiaUi(
         discardHmiTextListReview();
         const list = (hmiTextListsData?.lists || [])
             .find(item => item.name === hmiTextListSelect?.value);
+        if (hmiTextListTotalInput) {
+            hmiTextListTotalInput.placeholder = Number.isInteger(
+                list?.eligible_missing_entries
+            ) ? "Eligible entries: " + list.eligible_missing_entries
+              : "Blank = all eligible entries";
+        }
         if (!list || !hmiScopeEnabled("text_lists")) {
             hmiTextListPreview?.classList.add("hidden");
             return;
@@ -2319,8 +2333,12 @@ export function initTiaUi(
             if (hmiScanSummary) {
                 hmiScanSummary.textContent =
                     data.text_list_count + " lists · " + entries
-                    + " entries TOTAL (not confirmed missing targets). "
-                    + "Select one list in Step 2. Graphic lists excluded.";
+                    + " total entries · "
+                    + (data.eligible_missing_known
+                        ? data.eligible_missing_entries
+                            + " readable entries with missing targets"
+                        : "missing-target count unavailable")
+                    + ". Select one list in Step 2. Graphic lists excluded.";
             }
             verifiedHmiTextListsScanKey = scanKey;
             renderSelectedTextListPreview();
