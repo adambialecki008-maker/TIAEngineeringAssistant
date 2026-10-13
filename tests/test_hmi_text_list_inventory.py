@@ -69,6 +69,9 @@ def test_classic_text_list_inventory_counts_entries_and_lists(monkeypatch):
     assert data["text_list_count"] == 1
     assert data["entry_count"] == 2
     assert data["entry_count_known"] is True
+    assert data["eligible_missing_known"] is True
+    assert data["eligible_missing_entries"] == 1
+    assert data["lists"][0]["eligible_missing_entries"] == 1
     assert data["lists"][0]["name"] == "Auto Status"
     assert data["lists"][0]["sample_texts"][0]["text"] == "Karuzela gotowa"
     preview = data["lists"][0]["preview_rows"]
@@ -77,6 +80,7 @@ def test_classic_text_list_inventory_counts_entries_and_lists(monkeypatch):
     assert preview[0]["target_text"] == ""
     assert preview[0]["supported"] is True
     assert preview[1]["supported"] is False
+    assert "Unsupported Text aggregation" in preview[1]["reason"]
     assert data["translation_scope"] == "read_only_inventory"
     assert len(calls) == 1
 
