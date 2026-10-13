@@ -1386,7 +1386,9 @@ export function initTiaUi(
             + " entries imported and verified in this browser session. "
             + (count === null ? "Enter a valid batch size (1–50) and optional total."
                 : eligiblePreview === 0
-                    ? "No readable missing-target entries in preview; see Details."
+                    ? (preview.length < (list.entry_count || 0)
+                        ? "No eligible entry in the displayed sample; other entries may qualify."
+                        : "No readable missing-target entries; see Details.")
                 : count === 0 ? "Configured total reached."
                 : "Next reviewed XML batch: at most " + count
                     + " eligible entries.")
@@ -2029,10 +2031,13 @@ export function initTiaUi(
         const selection = hmiTranslationSelection();
         const list = (hmiTextListsData?.lists || [])
             .find(item => item.name === hmiTextListSelect?.value);
-        const hasEligibleRows = list?.preview_rows?.some(
-            entry => entry.supported && entry.source_text?.trim()
-                && (!entry.target_text?.trim()
-                    || entry.target_text?.trim() === "Text")
+        const hasEligibleRows = Boolean(
+            list?.preview_rows?.some(
+                entry => entry.supported && entry.source_text?.trim()
+                    && (!entry.target_text?.trim()
+                        || entry.target_text?.trim() === "Text")
+            ) || (list?.entry_count_known
+                && list.entry_count > (list.preview_rows || []).length)
         );
         return Boolean(hmiScopeEnabled("text_lists")
             && hmiScanKey(selection, "text_lists") === verifiedHmiTextListsScanKey
