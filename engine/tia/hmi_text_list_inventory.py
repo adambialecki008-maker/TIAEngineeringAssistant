@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 
 from engine.tia.compat import run_adapter
 from engine.tia.models import TranslateHmiTextsRequest
+from engine.tia.hmi_text_safety import needs_target_fill
 
 
 router = APIRouter()
@@ -104,6 +105,7 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
             )
         results = []
         entries_known = True
+        missing_known = True
         for filename, name in exported:
             parsed = _parse_classic_text_list(
                 Path(temp_dir) / filename,
@@ -113,6 +115,8 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
             # Never run Project texts XLSX export to discover list contents.
             sample_rows = []
             preview_warning = None
+            eligible_missing = None
+            supported_count = None
             try:
                 from engine.tia.hmi_text_list_translation import (
                     _parse, _extract_entries,
@@ -122,6 +126,12 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
                 entries = _extract_entries(
                     root, entry_nodes,
                     request.source_culture, request.target_culture,
+                )
+                supported_count = sum(bool(item["supported"]) for item in entries)
+                eligible_missing = sum(
+                    1 for item in entries
+                    if item["supported"] and
+                    needs_target_fill(item["source"], item["target"])
                 )
                 sample_rows = [
                     {
@@ -142,8 +152,11 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
                 "name": name, **parsed,
                 "preview_rows": sample_rows,
                 "preview_warning": preview_warning,
+                "eligible_missing_entries": eligible_missing,
+                "supported_entries": supported_count,
             })
             entries_known = entries_known and parsed["entry_count_known"]
+            missing_known = missing_known and eligible_missing is not None
         return {
             "hmi_name": request.hmi_name,
             "export_format": "Classic HMI XML",
@@ -153,6 +166,11 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
                 if entries_known else None
             ),
             "entry_count_known": entries_known,
+            "eligible_missing_entries": (
+                sum(item["eligible_missing_entries"] for item in results)
+                if missing_known else None
+            ),
+            "eligible_missing_known": missing_known,
             "lists": results[:100],
             "sample_limit": 100,
             "translation_scope": "read_only_inventory",
