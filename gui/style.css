@@ -1572,6 +1572,7 @@ td {
     margin-top: 12px;
 }
 .hmi-scan-result {
+    white-space: pre-line;
     padding: 12px 14px;
     border-left: 3px solid #608fa8;
     background: #101c25;
@@ -1579,6 +1580,21 @@ td {
     font-size: 13px;
     line-height: 1.6;
     overflow-wrap: anywhere;
+}
+.hmi-text-lists-panel .hmi-translation-grid {
+    margin-top: 12px;
+}
+.hmi-text-lists-panel > .hint {
+    margin: 8px 0 12px;
+}
+#tia-hmi-text-list-preview:not([open]) {
+    overflow: hidden;
+}
+#tia-hmi-text-list-preview .hmi-text-table-wrapper {
+    margin: 0 12px 12px;
+}
+#tia-hmi-text-list-preview-summary {
+    margin: 12px;
 }
 .hmi-text-lists-details {
     border: 1px solid #304b5c;
