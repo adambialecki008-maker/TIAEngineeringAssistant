@@ -1721,6 +1721,7 @@ export function initTiaUi(
     }
 
     async function resumeHmiBatchImport() {
+        if (hmiWorkScope() !== "project") return;
         const jobId = savedHmiBatchJobId();
         if (!jobId) {
             setHmiBatchStatus("No saved job for this HMI.", true);
@@ -1768,6 +1769,7 @@ export function initTiaUi(
     }
 
     async function pauseHmiBatchImport() {
+        if (hmiWorkScope() !== "project") return;
         if (!hmiBatchJobId || !hmiBatchRunning) {
             return;
         }
@@ -2226,10 +2228,7 @@ export function initTiaUi(
                     + latestHmiScan.missingUnique
                     + " unique texts have an empty or 'Text' target "
                     + "(recommended Total to translate). "
-                    + "Text lists in Project texts XLSX: " + latestHmiScan.textListRows + " entries ("
-                    + latestHmiScan.missingTextListRows
-                    + " missing/placeholder targets). "
-                    + "Graphic lists: not translated. "
+                    + "Text and Graphic lists excluded from this scope. "
                     + "Missing-target counts are estimates, not confirmed "
                     + "untranslated-text counts.";
             }
@@ -2251,8 +2250,7 @@ export function initTiaUi(
                     + `target column: ${result.target_column_header || "unknown"}. `
                     + `${result.matched_text_rows} matched of ${result.total_text_rows} text rows `
                     + `across ${result.worksheets_found} sheet(s). `
-                    + "These samples include only list entries present in XLSX; "
-                    + "graphic lists are excluded. "
+                    + "Text and Graphic lists are excluded from Project texts. "
                     + "Rows below are samples, not the entire export.";
             }
             if (hmiViewPathRootSelect) {
