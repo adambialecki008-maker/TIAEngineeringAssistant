@@ -1541,6 +1541,72 @@ td {
     line-height: 1.6;
     overflow-wrap: anywhere;
 }
+.hmi-text-lists-details {
+    border: 1px solid #304b5c;
+    border-radius: 6px;
+    background: #101c25;
+    margin: 10px 0 16px;
+    color: #c5d2dd;
+}
+.hmi-text-lists-details > summary {
+    padding: 11px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #a7d7ff;
+}
+.hmi-text-lists-details > summary:hover {
+    background: #1a2a35;
+}
+.hmi-text-lists-detail-body {
+    padding: 10px 14px 14px;
+    border-top: 1px solid #30404d;
+}
+.hmi-text-lists-detail-body .action-row {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
+.hmi-text-lists-detail-body select {
+    max-width: min(100%, 380px);
+    min-width: 200px;
+}
+.hmi-text-lists-catalog {
+    max-height: 210px;
+    overflow-y: auto;
+}
+.hmi-text-lists-catalog ul {
+    margin: 6px 0;
+    padding-left: 22px;
+    columns: 2;
+    column-width: 220px;
+    font-size: 12px;
+}
+.hmi-text-lists-catalog li {
+    break-inside: avoid;
+    margin: 3px 0;
+}
+#tia-hmi-text-list-review {
+    margin-top: 12px;
+}
+#tia-hmi-text-list-review textarea {
+    width: 100%;
+    min-height: 60px;
+    resize: vertical;
+    padding: 8px;
+    background: #101820;
+    border: 1px solid #3a5365;
+    border-radius: 4px;
+    color: #eef3f7;
+}
+#tia-hmi-text-list-import {
+    margin-top: 12px;
+}
+@media (max-width: 640px) {
+    .hmi-text-lists-catalog ul { columns: 1; }
+}
+
 #tia-hmi-use-scan-total {
     align-self: flex-start;
     width: auto;
