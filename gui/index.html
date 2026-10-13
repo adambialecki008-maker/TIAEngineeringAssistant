@@ -424,9 +424,10 @@
                             </h4>
 
                             <p class="hint">
-                                Only rows whose Project texts Reference points to this HMI are changed.
-                                TIA source slot means the language column that currently contains the texts.
-                                The actual language is detected from the text content, even if the TIA column label is wrong.
+                                Choose Project texts (XLSX) or Text lists (XML) below.
+                                Only the selected scope is scanned and translated.
+                                TIA source slot means the language column containing the original texts,
+                                even if its label differs from the language of the text.
                             </p>
                         </div>
                     </div>
@@ -741,7 +742,6 @@
                             <label for="tia-hmi-preview-filter">Show sample rows:</label>
                             <select id="tia-hmi-preview-filter">
                                 <option value="matched">Selected HMI</option>
-                                <option value="text_lists">Text lists in Project texts XLSX only</option>
                                 <option value="unmatched">Other devices (diagnostic)</option>
                             </select>
                             <span id="tia-hmi-preview-sample-count" class="hint"></span>
