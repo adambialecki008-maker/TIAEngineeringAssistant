@@ -19,6 +19,9 @@ from engine.tia.hmi_review import (
 from engine.tia.hmi_batches import (
     router as hmi_batches_router,
 )
+from engine.tia.hmi_quality_report import (
+    router as hmi_quality_report_router,
+)
 from engine.tia.languages import (
     router as languages_router,
 )
@@ -60,6 +63,7 @@ for subrouter in (
     hmi_translation_router,
     hmi_review_router,
     hmi_batches_router,
+    hmi_quality_report_router,
     program_router,
     cross_references_router,
     structures_router,
