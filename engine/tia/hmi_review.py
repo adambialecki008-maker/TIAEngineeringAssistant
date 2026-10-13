@@ -220,7 +220,7 @@ def _matching_rows(workbook, request):
                 continue
             if _hmi_project_text_kind(
                 _text(sheet.cell(row_index, category_col).value), view_path,
-            ) == "graphic_list":
+            ) != "other":
                 continue
             source = _text(sheet.cell(row_index, src_col).value)
             if not source.strip():
@@ -654,7 +654,7 @@ def _import_reviewed_hmi_translations(
                     kind = _hmi_project_text_kind(
                         _text(sheet.cell(index, category_col).value), ref
                     )
-                    if kind != "graphic_list" and _reference_matches_hmi(
+                    if kind == "other" and _reference_matches_hmi(
                         ref, requested.device_name, requested.hmi_name,
                         requested.view_path_root
                     ):
