@@ -304,3 +304,53 @@ def test_no_second_import_can_run_during_an_active_import(mock_tia):
     assert result.status_code == 409
     assert "in progress" in result.json()["detail"]
     assert not mock_tia["imported"]
+
+
+
+def test_text_items_value_lang_format_supports_safe_translation(mock_tia):
+    mock_tia["xml"] = b"""<?xml version="1.0" encoding="utf-8"?>
+<Document><Hmi.TextGraphicList.TextList ID="0">
+  <AttributeList><Name>Auto Status</Name></AttributeList>
+  <ObjectList><Hmi.TextGraphicList.TextListEntry ID="1" CompositionName="Entries">
+    <AttributeList><SelectionValue>1</SelectionValue></AttributeList>
+    <ObjectList><MultilingualText ID="2" CompositionName="Text">
+      <AttributeList><TextItems>
+        <Value lang="en-US"><body><p>Open valve</p></body></Value>
+      </TextItems></AttributeList>
+    </MultilingualText></ObjectList>
+  </Hmi.TextGraphicList.TextListEntry></ObjectList>
+</Hmi.TextGraphicList.TextList></Document>
+"""
+    prep = CLIENT.post(
+        "/api/v1/tia/hmis/text-lists/prepare", json=BASE
+    )
+    assert prep.status_code == 200, prep.text
+    item = prep.json()["rows"][0]
+    assert item["source"] == "Open valve"
+    assert item["proposal"] == "Otwórz zawór"
+    done = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prep.json()["review_id"],
+        "proposals": [{"entry_index": item["entry_index"],
+                       "proposal": item["proposal"]}],
+    })
+    assert done.status_code == 200, done.text
+    assert done.json()["verified_entries"] == 1
+    root, entries = lists._parse(mock_tia["xml"], "Auto Status")
+    snapshot = lists._extract_entries(root, entries, "en-US", "pl-PL")
+    assert snapshot[0]["source"] == "Open valve"
+    assert snapshot[0]["target"] == "Otwórz zawór"
+    # Siemens TextItems Value culture added without an artificial object ID.
+    values = [node for node in root.iter()
+              if node.tag == "Value" and node.attrib.get("lang")]
+    assert [node.attrib["lang"] for node in values] == ["en-US", "pl-PL"]
+
+
+def test_formatted_text_items_value_is_not_plain_text():
+    formatted = ET.fromstring(
+        '<Value lang="en-US"><body><p>Mary<field ref="0"/></p></body></Value>'
+    )
+    assert lists._plain_value(formatted) is None
+    simple = ET.fromstring(
+        '<Value lang="en-US"><body><p>Awaria PLC</p></body></Value>'
+    )
+    assert lists._plain_value(simple)[1] == "Awaria PLC"
