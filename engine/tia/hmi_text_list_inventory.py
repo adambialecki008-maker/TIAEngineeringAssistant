@@ -125,7 +125,9 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
             "translation_scope": "read_only_inventory",
             "note": (
                 "Dedicated Classic TextLists XML export; separate from "
-                "Project texts XLSX. These entries are not yet eligible "
-                "for Project texts batch import. Graphic lists untouched."
+                "Project texts XLSX. Use the separate reviewed "
+                "Text lists prepare/import workflow for these entries. "
+                "They are not part of the Project texts XLSX batch. "
+                "Graphic lists untouched."
             ),
         }
