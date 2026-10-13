@@ -30,6 +30,16 @@ export function initTiaUi(
         document.getElementById(
             "tia-process"
         );
+    // PLC and HMI tabs show the same TIA session; these are mirror controls.
+    // The original processSelect remains the single source of truth.
+    const hmiProcessSelect = document.getElementById("tia-hmi-process");
+    const hmiRefreshButton = document.getElementById("tia-hmi-refresh-button");
+    const hmiRefreshProjectButton =
+        document.getElementById("tia-hmi-refresh-project-button");
+    const hmiConnectionStatus =
+        document.getElementById("tia-hmi-connection-status");
+    const hmiProjectNameElement =
+        document.getElementById("tia-hmi-project-name");
     const tiaConnectionStatus =
         document.getElementById("tia-connection-status");
 
@@ -563,6 +573,34 @@ export function initTiaUi(
     }
 
 
+    function syncHmiConnectionControls() {
+        if (hmiProcessSelect && processSelect) {
+            // Mirror options, value and disabled state without a second API call.
+            hmiProcessSelect.replaceChildren(
+                ...Array.from(processSelect.options, option => option.cloneNode(true))
+            );
+            hmiProcessSelect.value = processSelect.value;
+            hmiProcessSelect.disabled = processSelect.disabled;
+        }
+        if (hmiRefreshButton && refreshButton)
+            hmiRefreshButton.disabled = refreshButton.disabled;
+        if (hmiRefreshProjectButton && refreshPlcsButton)
+            hmiRefreshProjectButton.disabled = refreshPlcsButton.disabled;
+        if (hmiConnectionStatus && tiaConnectionStatus) {
+            hmiConnectionStatus.textContent = tiaConnectionStatus.textContent;
+            hmiConnectionStatus.classList.toggle(
+                "error", tiaConnectionStatus.classList.contains("error")
+            );
+            hmiConnectionStatus.classList.toggle(
+                "success", tiaConnectionStatus.classList.contains("success")
+            );
+        }
+        if (hmiProjectNameElement) {
+            hmiProjectNameElement.textContent =
+                currentProjectName || "Not connected";
+        }
+    }
+
     function setTiaConnectionStatus(message, type = "normal") {
         if (!tiaConnectionStatus) {
             return;
@@ -570,6 +608,7 @@ export function initTiaUi(
         tiaConnectionStatus.textContent = message;
         tiaConnectionStatus.classList.toggle("error", type === "error");
         tiaConnectionStatus.classList.toggle("success", type === "success");
+        syncHmiConnectionControls();
     }
 
     function selectedProcessId() {
@@ -746,6 +785,7 @@ export function initTiaUi(
                 ||
                 "Not connected";
         }
+        syncHmiConnectionControls();
 
 
         if (readTagsButton) {
@@ -6690,6 +6730,7 @@ export function initTiaUi(
         refreshButton.disabled = true;
 
         processSelect.disabled = true;
+        syncHmiConnectionControls();
 
         refreshPlcsButton.disabled = true;
 
@@ -6877,6 +6918,7 @@ export function initTiaUi(
 
             createPlcButton.disabled =
                 false;
+            syncHmiConnectionControls();
         }
     }
 
@@ -6912,6 +6954,7 @@ export function initTiaUi(
 
 
         refreshPlcsButton.disabled = true;
+        syncHmiConnectionControls();
 
 
         renderEmptyPlcs(
@@ -7018,6 +7061,7 @@ export function initTiaUi(
         } finally {
             refreshPlcsButton.disabled =
                 false;
+            syncHmiConnectionControls();
         }
     }
 
@@ -7754,6 +7798,14 @@ export function initTiaUi(
         "click",
         refreshProcesses
     );
+    hmiRefreshButton?.addEventListener("click", refreshProcesses);
+    hmiRefreshProjectButton?.addEventListener("click", refreshProjectPlcs);
+    // Both tabs are views of the same running TIA process. The change event
+    // follows the existing PLC handler and refreshes PLC/HMI inventory once.
+    hmiProcessSelect?.addEventListener("change", () => {
+        processSelect.value = hmiProcessSelect.value;
+        processSelect.dispatchEvent(new Event("change"));
+    });
 
 
     refreshPlcsButton.addEventListener(
@@ -8104,6 +8156,7 @@ export function initTiaUi(
 
 
     updateTargetSummary();
+    syncHmiConnectionControls();
     renderHmiBatchProgress(0, 0);
     renderHmiBatchPlan();
     applyHmiScope();
