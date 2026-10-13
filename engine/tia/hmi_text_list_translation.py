@@ -332,9 +332,32 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
             "Prepare again from a fresh scan."
         )
     root, entries = _parse(xml, selection.text_list_name)
+    # Siemens supports advanced XML for linked/formatted texts. ImportOptions
+    # Override would rewrite the entire list, not just our selected entries.
+    # Block such lists rather than risk damaged formatting or OpenLinks.
+    if any(_local(node.tag).casefold() in {
+        "openlink", "formattedtext", "richtext",
+    } for node in root.iter()):
+        raise HTTPException(
+            409, "This TextList contains formatted or linked XML texts. "
+            "No import was attempted."
+        )
     before = _extract_entries(
         root, entries, selection.source_culture, selection.target_culture
     )
+    if any(
+        any(
+            _local(item.tag) == "Text" and len(item)
+            for element in entry.iter()
+            if _local(element.tag) == "MultilingualTextItem"
+            for item in element.iter()
+        )
+        for entry in entries
+    ):
+        raise HTTPException(
+            409, "TextList contains non-plain multilingual text. "
+            "Cannot safely replace the list through XML."
+        )
     for index, proposal in provided.items():
         row = before[index]
         expected = approved[index]
