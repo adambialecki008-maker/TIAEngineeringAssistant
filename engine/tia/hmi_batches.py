@@ -184,6 +184,9 @@ def start_hmi_batch_job(request: StartBatchJobRequest):
         "completed_rows": 0,
         "skipped": [],
         "recovered": {},
+        # New jobs persist verified per-text outcomes for the XLSX report.
+        # Older checkpoints stay readable; their proposals remain unknown.
+        "verified_details": {},
         "status": "ready",
         "error": None,
         "last_verified_batch": None,
@@ -344,6 +347,7 @@ def import_skipped_hmi_translation(
                 "verified_rows": verified.verified_rows,
                 "timestamp": time.time(),
                 "mode": prepared["model"],
+                "proposal": prepared["rows"][0]["proposal"],
             }
             current["completed_rows"] += verified.verified_rows
             current["updated_at"] = time.time()
@@ -408,6 +412,9 @@ def run_next_hmi_batch(job_id: str, action: BatchJobAction):
             current["next_offset"] = result["next_offset"]
             current["completed_rows"] += result["verified_rows"]
             current.setdefault("skipped", []).extend(result["skipped"])
+            current.setdefault("verified_details", {}).update(
+                result["verified_details"]
+            )
             current["last_batch"] = {
                 "batch_index": result["batch_index"],
                 "verified_unique": result["verified_unique"],
@@ -498,6 +505,7 @@ def _perform_one_batch(job: dict) -> dict:
     # proposals are skipped, not copied, retried, or sent to TIA.
     valid_proposals = {}
     skipped = []
+    repaired_sources = set()
     auto_repaired = 0
     for index, source in enumerate(selected):
         proposal = normalize_hmi_translation(source, translations.get(source))
@@ -519,6 +527,7 @@ def _perform_one_batch(job: dict) -> dict:
             )
             if fixed is not None:
                 valid_proposals[source] = fixed
+                repaired_sources.add(source)
                 auto_repaired += 1
                 continue
             skipped.append({
@@ -536,6 +545,7 @@ def _perform_one_batch(job: dict) -> dict:
             row["proposal"] = valid_proposals[row["source"]]
             safe_rows.append(row)
 
+    verified_details = {}
     verified_rows = 0
     import_state = "skipped_no_import"
     import_log = None
@@ -560,6 +570,18 @@ def _perform_one_batch(job: dict) -> dict:
         import_state = verified.import_state
         import_log = verified.import_log
 
+    # This section runs only after the import/re-export verifier has returned.
+    # We do not claim per-text verification for a failed/uncertain batch.
+    for index, source in enumerate(selected):
+        if source in valid_proposals:
+            verified_details[str(offset + index)] = {
+                "proposal": valid_proposals[source],
+                "auto_repaired": source in repaired_sources,
+                "verified_rows": sum(
+                    row["source"] == source for row in safe_rows
+                ),
+                "batch_index": batch_index,
+            }
     review._record_progress(
         job["job_id"], "verified" if safe_rows else "skipped",
         offset + len(selected), len(job["candidates"]),
@@ -569,6 +591,7 @@ def _perform_one_batch(job: dict) -> dict:
         "verified_unique": len(valid_proposals),
         "verified_rows": verified_rows,
         "auto_repaired_unique": auto_repaired,
+        "verified_details": verified_details,
         "skipped": skipped,
         "import_state": import_state,
         "import_log": import_log,
