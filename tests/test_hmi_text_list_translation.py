@@ -416,3 +416,15 @@ def test_formatted_link_text_exposes_read_only_diagnostics_but_is_not_eligible()
     assert parsed[0]["preview_source"] == "Open"
     assert "structured XML" in parsed[0]["reason"]
     assert parsed[1]["supported"] is True
+
+
+def test_unknown_text_aggregation_still_shows_read_only_language_preview():
+    xml = XML.replace(
+        'CompositionName="Text"', 'CompositionName="UnknownTextAggregation"'
+    ).encode("utf-8")
+    root, entries = lists._parse(xml, "Auto Status")
+    rows = lists._extract_entries(root, entries, "en-US", "pl-PL")
+    assert rows[0]["supported"] is False
+    assert rows[0]["source"] == ""
+    assert rows[0]["preview_source"] == "Open valve"
+    assert "Unsupported Text aggregation" in rows[0]["reason"]
