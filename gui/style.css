@@ -2482,15 +2482,14 @@ button, input:not([type="checkbox"]), textarea, select {
     line-height: 1.35;
     border-radius: var(--ui-radius);
 }
-button:not(.plc-member-toggle) {
+/* Low specificity preserves active tabs, tree toggles and specialized tools. */
+button {
     font-weight: 500;
     border-color: var(--ui-border);
-}
-button:not(.primary-button):not(.danger-button):not(:disabled) {
     background: var(--ui-surface-raised);
     color: var(--ui-text);
 }
-button:not(.primary-button):not(.danger-button):hover:not(:disabled) {
+button:hover:not(:disabled) {
     background: var(--ui-surface-hover);
     border-color: #5687a5;
 }
