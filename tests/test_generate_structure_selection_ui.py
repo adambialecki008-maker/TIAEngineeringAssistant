@@ -66,3 +66,12 @@ def test_preflight_includes_dependency_udts_and_discloses_them_for_confirmation(
     assert 'request.approved_create != current["will_create"]' in API
     assert 'Automatically required UDTs to create:' in SOURCE_UI
     assert 'Required UDTs added:' in SOURCE_UI
+
+
+def test_preflight_details_collapse_and_refresh_after_successful_import():
+    assert 'function appendDetailsCell(row, value)' in SOURCE_UI
+    assert 'details.className = "source-import-details";' in SOURCE_UI
+    assert 'summary.textContent = "Details";' in SOURCE_UI
+    assert 'function renderAppliedReport(plan, result)' in SOURCE_UI
+    assert 'status: "imported"' in SOURCE_UI
+    assert 'Created and compiler-confirmed in the current TIA import batch.' in SOURCE_UI

@@ -177,6 +177,20 @@ export function initSourceImportUi() {
         row.appendChild(cell);
     }
 
+    function appendDetailsCell(row, value) {
+        const cell = document.createElement("td");
+        const details = document.createElement("details");
+        details.className = "source-import-details";
+        const summary = document.createElement("summary");
+        summary.textContent = "Details";
+        const body = document.createElement("div");
+        body.className = "source-import-details-body";
+        body.textContent = String(value ?? "");
+        details.append(summary, body);
+        cell.appendChild(details);
+        row.appendChild(cell);
+    }
+
     function renderReport(result) {
         if (!report || !reportRows) return;
         lastReport = result;
@@ -186,20 +200,22 @@ export function initSourceImportUi() {
             const row = document.createElement("tr");
             appendCell(row, item.kind?.toUpperCase());
             appendCell(row, item.name);
-            const state = item.status === "create" ? "Create"
+            const state = item.status === "imported" ? "Imported in current batch"
+                : item.status === "create" ? "Create"
                 : item.status === "identical" ? "Identical — skip"
                 : item.status === "compatible" ? "Existing compatible UDT — reuse"
                 : item.status === "unknown" ? "Unverified — manual TIA review"
                 : item.status === "blocked" ? "Blocked dependency — skip"
                 : "Conflict — skip";
             appendCell(row, state);
-            appendCell(row, item.reason
+            appendDetailsCell(row, item.reason
                 + ((item.metadata_warnings || []).length
                     ? " Metadata: " + item.metadata_warnings.join(" ") : ""));
             reportRows.appendChild(row);
         }
         if (reportCounts) reportCounts.textContent =
             "Missing: " + (result.counts?.create || 0)
+            + " · Imported this batch: " + (result.counts?.imported || 0)
             + " · Identical/skipped: " + (result.counts?.identical || 0)
             + " · Compatible UDTs/reused: " + (result.counts?.compatible || 0)
             + " · Unverified: " + (result.counts?.unknown || 0)
@@ -210,6 +226,33 @@ export function initSourceImportUi() {
             + ". " + (result.can_apply
                 ? "Only eligible missing objects will be created after confirmation."
                 : "Nothing eligible for creation.");
+    }
+
+    function renderAppliedReport(plan, result) {
+        const created = new Set(result.created || []);
+        const compiledDbs = new Set(result.compiled_dbs || []);
+        const imported = created.size;
+        renderReport({
+            ...plan,
+            can_apply: false,
+            will_create: [],
+            counts: {
+                ...(plan.counts || {}),
+                create: Math.max(0, (plan.counts?.create || 0) - imported),
+                imported,
+            },
+            items: (plan.items || []).map((item) => {
+                if (!created.has(item.name)) return item;
+                const compiled = item.kind === "db" && compiledDbs.has(item.name);
+                return {
+                    ...item,
+                    status: "imported",
+                    reason: compiled
+                        ? "Created and compiler-confirmed in the current TIA import batch."
+                        : "Created in the current TIA import batch. Inspect TIA before further changes.",
+                };
+            }),
+        });
     }
 
     function csvCell(value) {
@@ -328,6 +371,7 @@ export function initSourceImportUi() {
 
         applyButton.disabled = true;
         planButton.disabled = true;
+        const appliedPlan = prepared;
         status.textContent = "Creating missing structures in TIA. Do not close TIA dialogs…";
         try {
             const result = await postJson(
@@ -343,6 +387,7 @@ export function initSourceImportUi() {
                 + ". Project saved: " + (result.project_saved || "unconfirmed")
                 + ". Compiled DBs: " + ((result.compiled_dbs || []).join(", ") || "none")
                 + ". Inspect objects in TIA Portal.";
+            renderAppliedReport(appliedPlan, result);
         } catch (error) {
             status.textContent = "IMPORT FAILED / UNCERTAIN — " + error.message
                 + " Inspect the OPEN TIA project before retrying.";

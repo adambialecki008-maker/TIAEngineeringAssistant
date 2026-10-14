@@ -253,6 +253,14 @@ def test_reviewed_mode_waits_for_confirmation_between_batches():
     assert 'hmiCombinedApprovedCount <= before' in approval
 
 
+def test_review_mode_can_be_changed_without_interrupting_current_run():
+    state = JS.split('function updateHmiTranslateButtonState()', 1)[1]
+    state = state.split('if (hmiRunDescription)', 1)[0]
+    assert 'hmiReviewEachBatch.disabled = false;' in state
+    assert 'const appliesToNextRun = busy || hmiReviewQueueActive;' in state
+    assert 'Changes apply to the next run.' in state
+
+
 def test_one_csv_report_covers_skipped_xlsx_xml_and_blocks_formulas():
     assert 'id="tia-hmi-run-report"' in HTML
     for text in (

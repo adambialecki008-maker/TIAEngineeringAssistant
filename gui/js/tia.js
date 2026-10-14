@@ -1515,10 +1515,14 @@ export function initTiaUi(
         if (hmiScopeProject) hmiScopeProject.disabled = busy || hmiReviewQueueActive;
         if (hmiScopeLists) hmiScopeLists.disabled = busy || hmiReviewQueueActive;
         if (hmiReviewEachBatch) {
-            hmiReviewEachBatch.disabled = busy || hmiReviewQueueActive;
+            // The current queue keeps the mode selected when it began. This
+            // control configures the next run without interrupting TIA work.
+            hmiReviewEachBatch.disabled = false;
             const isReview = hmiReviewEachBatch.checked;
+            const appliesToNextRun = busy || hmiReviewQueueActive;
             if (hmiModeDescription) hmiModeDescription.textContent = isReview
                 ? "ON: translate one batch → edit in Step 2 → approve in Step 3 → verified import → next batch."
+                    + (appliesToNextRun ? " Changes apply to the next run." : "")
                 : "OFF: translate and import automatically, with verification after every batch.";
             if (hmiStep3Description) hmiStep3Description.textContent = isReview
                 ? "Edit prepared translations in Step 2; approve and import each batch here in Step 3."
@@ -8367,6 +8371,7 @@ export function initTiaUi(
 
 
         if (!processId) {
+            clearTarget();
             existingPlcs = [];
 
             existingHmis = [];
@@ -8474,6 +8479,7 @@ export function initTiaUi(
             );
 
         } catch (error) {
+            clearTarget();
             existingPlcs = [];
 
             existingHmis = [];
