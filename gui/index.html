@@ -1201,67 +1201,6 @@
 
 
             <div class="card">
-                <details id="tia-hmi-device-menu" class="hmi-device-management">
-                    <summary>Add / Clone HMI device</summary>
-                    <p class="hint">Create a new HMI panel from an existing configured
-                        Classic WinCC HMI in this project. The source must have an
-                        existing PLC connection. The selected PLC, tag connections,
-                        program objects and source display size must be verified
-                        before the new project is saved.</p>
-                    <div class="form-grid">
-                        <div class="field-group">
-                            <label for="tia-hmi-clone-source">Source HMI (name / IP)</label>
-                            <select id="tia-hmi-clone-source">
-                                <option value="">Select a configured existing HMI</option>
-                            </select>
-                        </div>
-                        <div class="field-group">
-                            <label for="tia-hmi-clone-plc">Existing PLC in project</label>
-                            <select id="tia-hmi-clone-plc">
-                                <option value="">Select PLC</option>
-                            </select>
-                        </div>
-                        <div class="field-group">
-                            <label for="tia-hmi-clone-connection">Existing source HMI connection</label>
-                            <select id="tia-hmi-clone-connection">
-                                <option value="">Select source HMI first</option>
-                            </select>
-                        </div>
-                        <div class="field-group">
-                            <label for="tia-hmi-clone-device-name">New HMI device name</label>
-                            <input id="tia-hmi-clone-device-name" type="text"
-                                   maxlength="128" placeholder="HMI_2">
-                        </div>
-                        <div class="field-group">
-                            <label for="tia-hmi-clone-ip">New HMI IP address</label>
-                            <input id="tia-hmi-clone-ip" type="text"
-                                   maxlength="15" placeholder="192.168.1.21">
-                        </div>
-                    </div>
-                    <p class="hint">Clone creates a new device of the <strong>same hardware
-                        model and resolution</strong>. Its PLC connection and tag links must
-                        remain valid; otherwise it is rejected. Cross-resolution
-                        screen scaling is not enabled because Siemens V21 does not
-                        automatically resize imported screen objects.</p>
-                    <label class="hmi-batch-repeat-label">
-                        <input id="tia-hmi-clone-backup" type="checkbox">
-                        I am working on a backup/copy of the TIA project
-                    </label>
-                    <div class="action-row">
-                        <button id="tia-hmi-clone-button" type="button"
-                                class="primary-button" disabled>
-                            Clone as new HMI device
-                        </button>
-                    </div>
-                    <p id="tia-hmi-clone-status" class="status-box"
-                       role="status" aria-live="polite">
-                        Select an existing configured Classic HMI and PLC.
-                    </p>
-                </details>
-            </div>
-
-
-            <div class="card">
 
                 <div class="card-header">
                     <div>
@@ -1292,7 +1231,6 @@
                                 <th>Device</th>
                                 <th>HMI</th>
                                 <th>IP address</th>
-                                <th>Connections</th>
                                 <th>Type</th>
                                 <th>Software</th>
                                 <th>Actions</th>
@@ -1302,7 +1240,7 @@
                         <tbody id="tia-existing-hmis-body">
                             <tr>
                                 <td
-                                    colspan="7"
+                                    colspan="6"
                                     class="empty-table-cell"
                                 >
                                     Select a TIA process and refresh project context.

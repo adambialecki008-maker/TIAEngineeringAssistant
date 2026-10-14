@@ -82,6 +82,7 @@ def test_tia_project_context_is_parsed(
                 "Siemens.Engineering.Hmi.HmiTarget|"
                 "HMI_1"
             ),
+            "HMI_NETWORK|Panel_1|HMI_1|192.168.1.3",
         ]
 
     monkeypatch.setattr(
@@ -211,17 +212,20 @@ def test_tia_project_context_is_parsed(
                     "HMI_1",
 
                 "ip_address":
-                    "",
+                    "192.168.1.3",
 
-                "plc_connections":
-                    [],
-                "connections": [],
-                "connection_read_status": "unavailable",
-                "connection_diagnostic":
-                    "Connection status was not returned by the adapter.",
             },
         ],
     }
+
+
+def test_hmi_clone_route_is_absent():
+    response = client.post(
+        "/api/v1/tia/hmis/clone",
+        json={},
+    )
+
+    assert response.status_code == 404
 
 
 def test_tia_project_info_is_parsed(

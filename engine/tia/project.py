@@ -1,11 +1,7 @@
-import base64
-import binascii
-
 from fastapi import APIRouter, HTTPException, Query
 
 from engine.tia.compat import run_adapter
 from engine.tia.models import (
-    HmiConnection,
     PlcResourceAttribute,
     PlcResourceRow,
     ProjectHmi,
@@ -89,8 +85,6 @@ def get_project_context(
     plcs = []
     hmis = []
     hmi_networks = {}
-    hmi_connections = {}
-    hmi_connection_statuses = {}
     metrics_by_target = {}
     resources_by_target = {}
     resource_attributes_by_target = {}
@@ -113,60 +107,12 @@ def get_project_context(
                 project_name = parts[1].strip()
 
 
-        elif line.startswith("HMI_CONNECTION|"):
-            parts = line.split("|")
-            if len(parts) != 9:
-                continue
-            try:
-                fields = [
-                    base64.b64decode(part, validate=True).decode("utf-8")
-                    for part in parts[1:]
-                ]
-            except (ValueError, binascii.Error, UnicodeDecodeError):
-                continue
-            device, hmi, name, driver, station, partner, node, online = fields
-            if not name:
-                continue
-            key = (device.casefold(), hmi.casefold())
-            hmi_connections.setdefault(key, []).append(
-                HmiConnection(
-                    name=name,
-                    communication_driver=driver,
-                    station=station,
-                    partner=partner,
-                    node=node,
-                    online={"true": True, "false": False,
-                            "1": True, "0": False}.get(online.casefold()),
-                )
-            )
-
-        elif line.startswith("HMI_CONNECTION_STATUS|"):
-            parts = line.split("|")
-            if len(parts) != 5 or parts[3] not in (
-                "complete", "partial", "unavailable"
-            ):
-                continue
-            try:
-                device, hmi, diagnostic = [
-                    base64.b64decode(part, validate=True).decode("utf-8")
-                    for part in (parts[1], parts[2], parts[4])
-                ]
-            except (ValueError, binascii.Error, UnicodeDecodeError):
-                continue
-            hmi_connection_statuses[(device.casefold(), hmi.casefold())] = (
-                parts[3], diagnostic
-            )
-
         elif line.startswith("HMI_NETWORK|"):
             parts = line.split("|", 4)
-            if len(parts) == 5:
-                hmi_networks[(parts[1].casefold(), parts[2].casefold())] = {
-                    "ip_address": parts[3],
-                    "plc_connections": [
-                        part.strip() for part in parts[4].split(",")
-                        if part.strip()
-                    ],
-                }
+            if len(parts) >= 4:
+                hmi_networks[(parts[1].casefold(), parts[2].casefold())] = (
+                    parts[3]
+                )
 
         elif line.startswith(
             "HMI|"
@@ -342,28 +288,9 @@ def get_project_context(
 
 
     for hmi in hmis:
-        network = hmi_networks.get(
-            (hmi.device_name.casefold(), hmi.hmi_name.casefold()), {}
+        hmi.ip_address = hmi_networks.get(
+            (hmi.device_name.casefold(), hmi.hmi_name.casefold()), ""
         )
-        hmi.ip_address = network.get("ip_address", "")
-        key = (hmi.device_name.casefold(), hmi.hmi_name.casefold())
-        status, diagnostic = hmi_connection_statuses.get(
-            key, ("unavailable", "Connection status was not returned by the adapter.")
-        )
-        structured = hmi_connections.get(key, [])
-        legacy_names = network.get("plc_connections", [])
-        if key not in hmi_connection_statuses:
-            if legacy_names:
-                status = "partial"
-                diagnostic = "Legacy adapter returned names without a completeness status."
-                structured = [HmiConnection(name=name) for name in legacy_names]
-            elif structured:
-                status = "partial"
-                diagnostic = "Connection entries were returned without a status."
-        hmi.connections = structured
-        hmi.plc_connections = [connection.name for connection in structured]
-        hmi.connection_read_status = status
-        hmi.connection_diagnostic = diagnostic
 
     for plc in plcs:
         key = (

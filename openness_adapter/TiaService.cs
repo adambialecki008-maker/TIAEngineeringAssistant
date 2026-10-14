@@ -5,7 +5,6 @@ using System.IO;
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using System.Xml;
 
 using Siemens.Engineering;
 using Siemens.Engineering.CrossReference;
@@ -3324,12 +3323,7 @@ namespace TiaOpennessAdapter
                         "HMI_NETWORK|" +
                         SanitizeOutput(device.Name) + "|" +
                         SanitizeOutput(item.Name) + "|" +
-                        SanitizeOutput(ReadDeviceIpAddress(device)) + "|" +
-                        SanitizeOutput(ReadHmiConnectionNames(software))
-                    );
-
-                    WriteHmiConnectionDetails(
-                        device.Name, item.Name, software
+                        SanitizeOutput(ReadDeviceIpAddress(device))
                     );
 
                     Console.WriteLine(
@@ -3394,144 +3388,6 @@ namespace TiaOpennessAdapter
                 }
             }
             return "";
-        }
-
-        // HmiTarget.Connections is limited to non-integrated Classic
-        // connections in V21. Preserve the API order and report partial
-        // coverage instead of treating an empty composition as proof of none.
-        private static void WriteHmiConnectionDetails(
-            string deviceName, string hmiName, object software
-        )
-        {
-            string device = CrossRefEncoded(deviceName);
-            string hmi = CrossRefEncoded(hmiName);
-            if (!(software is Siemens.Engineering.Hmi.HmiTarget target))
-            {
-                Console.WriteLine(
-                    "HMI_CONNECTION_STATUS|" + device + "|" + hmi
-                    + "|unavailable|" + CrossRefEncoded(
-                        "Connection API for this HMI software is unavailable."
-                    )
-                );
-                return;
-            }
-
-            try
-            {
-                var rows = new List<string>();
-                foreach (var connection in target.Connections)
-                {
-                    var fields = ReadHmiConnectionExport(connection);
-                    Func<string, string> value = name =>
-                        fields.TryGetValue(name, out string found) ? found : "";
-                    string driver = value("Driver");
-                    if (driver == "OPC_UA") driver = "OPC UA";
-                    rows.Add("HMI_CONNECTION|" + string.Join("|", new[] {
-                        device, hmi, CrossRefEncoded(connection.Name),
-                        CrossRefEncoded(driver),
-                        CrossRefEncoded(value("Station")),
-                        CrossRefEncoded(value("Partner")),
-                        CrossRefEncoded(value("Node")),
-                        CrossRefEncoded(value("Online"))
-                    }));
-                }
-                foreach (string row in rows) Console.WriteLine(row);
-                Console.WriteLine(
-                    "HMI_CONNECTION_STATUS|" + device + "|" + hmi
-                    + "|partial|" + CrossRefEncoded(
-                        "TIA Openness V21 exposes non-integrated Classic HMI connections here; integrated connections may be missing."
-                    )
-                );
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(
-                    "HMI_CONNECTION_STATUS|" + device + "|" + hmi
-                    + "|unavailable|" + CrossRefEncoded(
-                        "Connection read failed: " + ex.GetType().Name
-                    )
-                );
-            }
-        }
-
-        // Export is read-only for the TIA project. V21 exposes Driver and
-        // Online in the Simatic ML AttributeList even when GetAttributeInfos
-        // advertises only Name (verified on a V21 Classic OPC UA connection).
-        private static Dictionary<string, string> ReadHmiConnectionExport(
-            Siemens.Engineering.Hmi.Communication.Connection connection
-        )
-        {
-            var fields = new Dictionary<string, string>(
-                StringComparer.OrdinalIgnoreCase
-            );
-            string path = Path.Combine(Path.GetTempPath(),
-                "tia-hmi-connection-" + Guid.NewGuid().ToString("N") + ".xml");
-            try
-            {
-                connection.Export(new FileInfo(path), ExportOptions.WithDefaults);
-                var settings = new XmlReaderSettings {
-                    DtdProcessing = DtdProcessing.Prohibit,
-                    XmlResolver = null
-                };
-                var document = new XmlDocument { XmlResolver = null };
-                using (XmlReader reader = XmlReader.Create(path, settings))
-                    document.Load(reader);
-                XmlNode attributes = document.SelectSingleNode(
-                    "/Document/Hmi.Communication.Connection/AttributeList"
-                );
-                if (attributes != null)
-                {
-                    foreach (string name in new[] {
-                        "Driver", "Station", "Partner", "Node", "Online"
-                    })
-                    {
-                        XmlNode field = attributes.SelectSingleNode(name);
-                        if (field != null) fields[name] = field.InnerText;
-                    }
-                }
-            }
-            catch
-            {
-                // Preserve the connection name when optional export fails.
-            }
-            finally
-            {
-                try
-                {
-                    if (File.Exists(path)) File.Delete(path);
-                }
-                catch
-                {
-                    // A temporary export cleanup failure must not hide TIA data.
-                }
-            }
-            return fields;
-        }
-
-        // Connection name discovery is intentionally non-mutating. V21 Classic
-        // and Unified expose different engineering object models.
-        private static string ReadHmiConnectionNames(object software)
-        {
-            try
-            {
-                object connections = software.GetType()
-                    .GetProperty("Connections")?.GetValue(software, null);
-                if (!(connections is IEnumerable collection)) return "";
-                List<string> names = new List<string>();
-                foreach (object connection in collection)
-                {
-                    object value = connection.GetType()
-                        .GetProperty("Name")?.GetValue(connection, null);
-                    string name = Convert.ToString(value) ?? "";
-                    if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
-                }
-                return string.Join(", ", names.Distinct(
-                    StringComparer.OrdinalIgnoreCase));
-            }
-            catch
-            {
-                return "";
-            }
         }
 
         private static bool TypeIsOrDerivesFrom(

@@ -40,15 +40,6 @@ class ProjectPlc(BaseModel):
     )
 
 
-class HmiConnection(BaseModel):
-    name: str
-    communication_driver: str = ""
-    station: str = ""
-    partner: str = ""
-    node: str = ""
-    online: bool | None = None
-
-
 class ProjectHmi(BaseModel):
     device_name: str
     hmi_name: str
@@ -57,10 +48,6 @@ class ProjectHmi(BaseModel):
     software_type: str = ""
     software_name: str = ""
     ip_address: str = ""
-    plc_connections: list[str] = Field(default_factory=list)
-    connections: list[HmiConnection] = Field(default_factory=list)
-    connection_read_status: Literal["complete", "partial", "unavailable"] = "unavailable"
-    connection_diagnostic: str = ""
 
 
 class TiaProjectInfo(BaseModel):

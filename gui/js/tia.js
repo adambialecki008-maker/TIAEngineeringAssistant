@@ -12,7 +12,6 @@ import {
 
 import { createPlcMemberTree } from "./plc_member_tree.js";
 import { createHmiSkippedManager } from "./hmi_skipped_manager.js";
-import { initHmiDeviceManagement } from "./hmi_device_management.js";
 
 
 const MANUAL_SELECTION =
@@ -503,14 +502,6 @@ export function initTiaUi(
 
     let existingHmis = [];
 
-    const hmiDeviceManagement = initHmiDeviceManagement({
-        getHmis: () => existingHmis,
-        getPlcs: () => existingPlcs,
-        getProcessId: () => selectedProcessId(),
-        postJson,
-        refreshProject: () => refreshProjectPlcs(),
-    });
-
     let projectLanguages = [];
 
     let selectedHmiForTranslation = null;
@@ -954,7 +945,7 @@ export function initTiaUi(
             );
 
         cell.colSpan =
-            7;
+            6;
 
         cell.className =
             "empty-table-cell";
@@ -972,62 +963,6 @@ export function initTiaUi(
         );
     }
 
-
-    function hmiConnectionsCell(hmi) {
-        const cell = document.createElement("td");
-        const connections = hmi.connections?.length
-            ? hmi.connections
-            : (hmi.connection_read_status
-                ? []
-                : (hmi.plc_connections || []).map(name => ({name})));
-        const status = hmi.connection_read_status || "unavailable";
-        const diagnostic = hmi.connection_diagnostic || "";
-        if (!connections.length) {
-            cell.textContent = status === "complete"
-                ? "No connections" : "Connections unavailable";
-            cell.title = diagnostic;
-            return cell;
-        }
-
-        const first = document.createElement("span");
-        first.textContent = connections[0].name;
-        cell.appendChild(first);
-        if (connections.length > 1) {
-            const details = document.createElement("details");
-            details.className = "hmi-connection-details";
-            const summary = document.createElement("summary");
-            summary.textContent = "+" + (connections.length - 1);
-            details.appendChild(summary);
-            for (const connection of connections) {
-                const item = document.createElement("div");
-                item.className = "hmi-connection-item";
-                const fields = [
-                    ["Name", connection.name],
-                    ["Driver", connection.communication_driver],
-                    ["Partner", connection.partner],
-                    ["Station", connection.station],
-                    ["Node", connection.node],
-                    ["Online", connection.online === null
-                        || connection.online === undefined
-                        ? "" : String(connection.online)],
-                ];
-                item.textContent = fields
-                    .filter(([, value]) => value)
-                    .map(([label, value]) => label + ": " + value)
-                    .join(" | ");
-                details.appendChild(item);
-            }
-            cell.appendChild(details);
-        }
-        if (status !== "complete") {
-            const note = document.createElement("span");
-            note.className = "hmi-connection-status";
-            note.textContent = " (partial)";
-            note.title = diagnostic || "Connection list may be incomplete.";
-            cell.appendChild(note);
-        }
-        return cell;
-    }
 
     function renderExistingHmis() {
         if (!existingHmisBody) {
@@ -1069,7 +1004,6 @@ export function initTiaUi(
                     "—",
 
                     hmi.ip_address || "—",
-                    null,
 
                     hmi.hmi_type_identifier
                     ||
@@ -1089,10 +1023,6 @@ export function initTiaUi(
                         "td"
                     );
 
-                if (value === null) {
-                    row.appendChild(hmiConnectionsCell(hmi));
-                    continue;
-                }
                 cell.textContent =
                     value;
 
@@ -1117,13 +1047,6 @@ export function initTiaUi(
                         openHmiTranslation(
                             hmi
                         )
-                )
-            );
-
-            actionsCell.appendChild(
-                createActionButton(
-                    "Clone",
-                    () => hmiDeviceManagement.openFor(hmi)
                 )
             );
 
@@ -7148,7 +7071,6 @@ export function initTiaUi(
             renderEmptyHmis(
                 "Select a TIA process first."
             );
-            hmiDeviceManagement.render();
 
             await refreshProjectLanguages();
 
@@ -7227,7 +7149,6 @@ export function initTiaUi(
             renderExistingPlcs();
 
             renderExistingHmis();
-            hmiDeviceManagement.render();
 
             await refreshProjectLanguages();
 
@@ -7255,7 +7176,6 @@ export function initTiaUi(
             renderEmptyHmis(
                 "HMI discovery failed."
             );
-            hmiDeviceManagement.render();
 
 
             setStatus(
