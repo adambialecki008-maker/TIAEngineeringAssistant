@@ -184,7 +184,7 @@ def test_project_text_review_editor_submits_validated_proposals():
     assert "hmi-project-review-editor" in js
     assert "textarea.hmi-project-review-editor[data-source-text]" in js
     assert re.search(
-        r"\\{\\s*review_id\\s*:\\s*review\\.reviewId\\s*,\\s*proposals\\s*\\}", js
+        r"\{\s*review_id\s*:\s*review\.reviewId\s*,\s*proposals\s*\}", js
     )
     backend = (ROOT / "engine/tia/hmi_review.py").read_text(
         encoding="utf-8"
@@ -213,14 +213,14 @@ def test_reviewed_xml_distinguishes_verified_import_from_followup_scan_failure()
     # are XLSX, Text lists are XML. Verify that a confirmed import followed
     # by a failed read-only scan is reported for either format.
     assert re.search(
-        r'const importType\\s*=\\s*hmiReviewQueueCurrentScope\\s*===\\s*"project"'
-        r'\\s*\\?\\s*"XLSX"\\s*:\\s*"XML"\\s*;', queue
+        r'const importType\s*=\s*hmiReviewQueueCurrentScope\s*===\s*"project"'
+        r'\s*\?\s*"XLSX"\s*:\s*"XML"\s*;', queue
     )
     verified_refresh_branch = queue.split(
         'if (completed?.state === "verified_refresh_failed") {', 1
     )[1].split('if (completed?.state === "prewrite_rejected")', 1)[0]
     assert re.search(
-        r"appendHmiRunIssue\\(\\s*importType\\s*,\\s*reviewListName\\b",
+        r"appendHmiRunIssue\(\s*importType\s*,\s*reviewListName\b",
         verified_refresh_branch,
     )
 
