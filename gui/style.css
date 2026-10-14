@@ -2447,3 +2447,145 @@ button.primary-button:disabled {
     opacity: .72;
     cursor: not-allowed;
 }
+
+
+/* Application-wide design system v1:
+   One color palette, typography, buttons, form inputs, tables and disclosures
+   for the complete PLC / Hardware / HMI / Import / Project GUI. */
+:root {
+    --ui-bg: #101820;
+    --ui-surface: #182630;
+    --ui-surface-raised: #202e39;
+    --ui-surface-hover: #273b4a;
+    --ui-border: #365268;
+    --ui-border-soft: #2b4050;
+    --ui-text: #ecf4fa;
+    --ui-text-muted: #b4c7d6;
+    --ui-primary: #286f98;
+    --ui-primary-hover: #3786b0;
+    --ui-primary-disabled: #215875;
+    --ui-blue-accent: #8ac9f6;
+    --ui-focus: #78bbec;
+    --ui-danger: #ef9da2;
+    --ui-success: #8cdfa9;
+    --ui-radius: 6px;
+    --ui-font: Arial, Helvetica, sans-serif;
+}
+/* Consistent metrics and font: preserve specialized component dimensions. */
+body, button, input, textarea, select, option, label, summary, table,
+th, td, .app-shell, .card {
+    font-family: var(--ui-font);
+}
+body { font-size: 14px; line-height: 1.45; }
+button, input:not([type="checkbox"]), textarea, select {
+    font-size: 14px;
+    line-height: 1.35;
+    border-radius: var(--ui-radius);
+}
+button:not(.plc-member-toggle) {
+    font-weight: 500;
+    border-color: var(--ui-border);
+}
+button:not(.primary-button):not(.danger-button):not(:disabled) {
+    background: var(--ui-surface-raised);
+    color: var(--ui-text);
+}
+button:not(.primary-button):not(.danger-button):hover:not(:disabled) {
+    background: var(--ui-surface-hover);
+    border-color: #5687a5;
+}
+button.primary-button {
+    border: 1px solid #3588b7;
+    background: var(--ui-primary);
+    color: #fff;
+    font-weight: 600;
+}
+button.primary-button:hover:not(:disabled) {
+    border-color: var(--ui-blue-accent);
+    background: var(--ui-primary-hover);
+}
+button.primary-button:disabled {
+    color: #d2e5f1;
+    background: var(--ui-primary-disabled);
+    border-color: #367b9d;
+    opacity: .72;
+}
+button.danger-button {
+    color: var(--ui-danger);
+    border-color: #8b464b;
+    background: #2a1d20;
+}
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 2px;
+}
+button:disabled { cursor: not-allowed; }
+label, legend { color: var(--ui-text); }
+input:not([type="checkbox"]), select, textarea {
+    color: var(--ui-text);
+    background: #111c25;
+    border: 1px solid var(--ui-border);
+}
+input:not([type="checkbox"]):disabled, select:disabled, textarea:disabled {
+    color: var(--ui-text-muted);
+    background: #16232d;
+    opacity: .65;
+}
+input[type="checkbox"] {
+    border-color: #7da3bc;
+    border-radius: 4px;
+}
+input[type="checkbox"]:checked {
+    border-color: var(--ui-blue-accent);
+    background: var(--ui-primary);
+}
+/* All HTML <details> controls share one custom chevron, not browser-
+   dependent black triangles. Native keyboard/summary behavior is retained. */
+details > summary {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    list-style: none;
+    color: var(--ui-text);
+    font-size: 14px;
+    line-height: 1.4;
+    font-weight: 600;
+    cursor: pointer;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::marker { content: ""; }
+details > summary::before {
+    content: "";
+    box-sizing: border-box;
+    display: inline-block;
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--ui-blue-accent);
+    border-bottom: 2px solid var(--ui-blue-accent);
+    transform: rotate(-45deg);
+    transition: transform 130ms ease;
+}
+details[open] > summary::before { transform: rotate(45deg); }
+details > summary:hover { color: #fff; }
+details[open] > summary { border-bottom-color: var(--ui-border-soft); }
+/* Readable blue information/counts, consistent with the HMI scan details. */
+.hmi-scan-details-status, .hmi-queue-subtitle {
+    color: var(--ui-blue-accent);
+    font-weight: 500;
+}
+/* Consistent panel/table hierarchy across every tab. */
+th { color: var(--ui-text); font-size: 13px; font-weight: 600; }
+td { color: var(--ui-text); font-size: 13px; }
+caption, .hint, .target-summary { color: var(--ui-text-muted); }
+details:not([open]) { border-color: var(--ui-border-soft); }
+.hmi-edit-details, .tia-inventory-details, .hmi-text-lists-details {
+    border-radius: var(--ui-radius);
+}
+@media (prefers-reduced-motion: reduce) {
+    details > summary::before { transition: none; }
+}
