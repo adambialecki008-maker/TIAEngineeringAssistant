@@ -157,6 +157,27 @@ function labeledControl(text, control) {
     return label;
 }
 
+function optionalBooleanSelect(id, value) {
+    const select = document.createElement("select");
+    select.id = id;
+    for (const [key, text] of [
+        ["", "TIA default"],
+        ["true", "Enabled"],
+        ["false", "Disabled"],
+    ]) {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = text;
+        select.appendChild(option);
+    }
+    select.value = value == null ? "" : String(value);
+    return select;
+}
+
+function optionalBooleanValue(select) {
+    return select.value === "" ? null : select.value === "true";
+}
+
 function selectStoredType(select, value) {
     if (!value) return;
     if (![...select.options].some((option) => option.value === value)) {
@@ -198,6 +219,37 @@ export function createMemberEditor({
     );
     root.appendChild(row);
 
+    // These are optional explicit SCL attributes. Empty means TIA default,
+    // preserving the behavior of projects saved before this editor change.
+    const optionsRow = document.createElement("div");
+    optionsRow.className = "editor-row member-options-row";
+    const startValueInput = createInput(prefix + "-start-value", "Start value");
+    startValueInput.value = member?.start_value ?? "";
+    const startValueLabel = labeledControl("Start value (optional)", startValueInput);
+    const visibleSelect = optionalBooleanSelect(
+        prefix + "-visible", member?.hmi_visible
+    );
+    const accessibleSelect = optionalBooleanSelect(
+        prefix + "-accessible", member?.hmi_accessible
+    );
+    const writableSelect = optionalBooleanSelect(
+        prefix + "-writable", member?.hmi_writable
+    );
+    optionsRow.append(
+        startValueLabel,
+        labeledControl("Visible in HMI", visibleSelect),
+        labeledControl("Accessible from HMI/OPC UA", accessibleSelect),
+        labeledControl("Writable from HMI/OPC UA", writableSelect)
+    );
+    root.appendChild(optionsRow);
+    const optionsNote = document.createElement("p");
+    optionsNote.className = "hint";
+    optionsNote.textContent = "TIA default leaves this attribute unspecified. "
+        + "Start values currently support Bool, integer and Real/LReal scalar "
+        + "members. Retain applies to the whole DB in this version; Setpoint "
+        + "(FB only) and Supervision require separate engineering support.";
+    root.appendChild(optionsNote);
+
     const complexArea = document.createElement("div");
     root.appendChild(complexArea);
     const message = document.createElement("p");
@@ -223,6 +275,11 @@ export function createMemberEditor({
         rememberArray();
         complexArea.replaceChildren();
         elementSelect = lowerInput = upperInput = null;
+        const scalar = !["Array", "Struct"].includes(typeSelect.value);
+        startValueInput.disabled = !scalar;
+        startValueLabel.title = scalar
+            ? "Initial value for this scalar variable"
+            : "Set values on scalar members of a Struct/UDT";
         if (typeSelect.value === "Array") {
             const arrayRow = document.createElement("div");
             arrayRow.className = "editor-row";
@@ -285,6 +342,11 @@ export function createMemberEditor({
             name,
             data_type: dataType,
             comment: commentInput.value.trim() || null,
+            start_value: startValueInput.disabled
+                ? null : (startValueInput.value.trim() || null),
+            hmi_visible: optionalBooleanValue(visibleSelect),
+            hmi_accessible: optionalBooleanValue(accessibleSelect),
+            hmi_writable: optionalBooleanValue(writableSelect),
             array_element_type: null,
             array_lower_bound: null,
             array_upper_bound: null,
@@ -317,6 +379,10 @@ export function createMemberEditor({
         if (!member) {
             nameInput.value = "";
             commentInput.value = "";
+            startValueInput.value = "";
+            visibleSelect.value = "";
+            accessibleSelect.value = "";
+            writableSelect.value = "";
             typeSelect.value = "";
             structMembers = [];
             arrayElement = "";
