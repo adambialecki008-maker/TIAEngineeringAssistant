@@ -376,3 +376,43 @@ def test_unavailable_source_language_has_explicit_preview_reason(mock_tia):
     assert all(not row["supported"] for row in rows)
     assert all("No source text in fr-FR" in row["reason"] for row in rows)
     assert "en-us" in rows[0]["reason"]
+
+
+def test_simple_body_p_inside_text_item_supports_reviewed_import(mock_tia):
+    """A plain Siemens body/p wrapper is readable and writable without links."""
+    mock_tia["xml"] = XML.replace(
+        "<Text>Open valve</Text>",
+        "<Text><body><p>Open valve</p></body></Text>",
+    ).encode("utf-8")
+    prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE)
+    assert prepared.status_code == 200, prepared.text
+    rows = prepared.json()["rows"]
+    assert rows[0]["source"] == "Open valve"
+    approved = [
+        {"entry_index": row["entry_index"], "proposal": row["proposal"]}
+        for row in rows
+    ]
+    imported = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared.json()["review_id"], "proposals": approved,
+    })
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["verified_entries"] == 3
+    root, entries = lists._parse(mock_tia["xml"], "Auto Status")
+    current = lists._extract_entries(root, entries, "en-US", "pl-PL")
+    assert current[0]["source"] == "Open valve"
+    assert current[0]["target"] == "Otwórz zawór"
+
+
+def test_formatted_link_text_exposes_read_only_diagnostics_but_is_not_eligible():
+    xml = XML.replace(
+        "<Text>Open valve</Text>",
+        '<Text><body><p>Open <field ref="0"/></p></body></Text>',
+    ).encode("utf-8")
+    root, entries = lists._parse(xml, "Auto Status")
+    parsed = lists._extract_entries(root, entries, "en-US", "pl-PL")
+    assert len(parsed) == 4
+    assert parsed[0]["supported"] is False
+    assert parsed[0]["source"] == ""
+    assert parsed[0]["preview_source"] == "Open"
+    assert "structured XML" in parsed[0]["reason"]
+    assert parsed[1]["supported"] is True
