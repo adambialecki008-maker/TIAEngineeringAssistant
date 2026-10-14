@@ -2215,10 +2215,10 @@ export function initTiaUi(
         if ((!reviewed && !automatic) || hmiReviewQueueStopRequested
             || hmiUnifiedStopRequested) return;
         if (!confirm(
-            "STOP HMI TRANSLATION?\\n\\n"
+            "STOP HMI TRANSLATION?\n\n"
             + "Prepared but unimported translations will be discarded. "
             + "Any operation already writing to TIA must finish and be verified "
-            + "before the queue unlocks. Nothing will be retried automatically.\\n"
+            + "before the queue unlocks. Nothing will be retried automatically.\n"
             + "After stopping, you can change the Project texts/Text lists checkboxes."
         )) return;
         if (reviewed) {
