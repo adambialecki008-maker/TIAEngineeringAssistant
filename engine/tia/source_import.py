@@ -358,7 +358,7 @@ def preview_selected_plc_sources(request: SelectedProjectPreviewRequest) -> dict
     all_known = [u.name for u in request.project.udts]
     definitions = _definitions(selected, known_udts=all_known)
     return {
-        "source": "\\n\\n".join(item["source"] for item in definitions),
+        "source": "\n\n".join(item["source"] for item in definitions),
         "items": [{"kind": item["kind"], "name": item["name"]}
                   for item in definitions],
     }
