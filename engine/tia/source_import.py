@@ -23,6 +23,7 @@ from functions.tia_source_generator import generate_db_source, generate_udt_sour
 
 router = APIRouter()
 _VALID_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_VALID_TYPE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\\[[0-9]+\\])?$")
 
 
 class PlcStructureImportRequest(BaseModel):
@@ -49,6 +50,24 @@ def _source_files(spec: ProjectSpecification) -> tuple[str, str, str, str]:
         )
     if udt.name.casefold() == db.name.casefold():
         raise HTTPException(422, "UDT and DB names must be different.")
+    # The source generator interpolates member identifiers into SCL. Validate
+    # all nested names and type declarations before the text reaches Openness.
+    def validate_members(members):
+        for member in members:
+            if not _VALID_NAME.fullmatch(member.name):
+                raise HTTPException(422, "Invalid SCL member name: " + member.name)
+            kind = member.data_type.casefold()
+            if kind == "struct":
+                validate_members(member.struct_members or [])
+            else:
+                element = (member.array_element_type if kind == "array"
+                           else member.data_type)
+                if not element or not _VALID_TYPE.fullmatch(element):
+                    raise HTTPException(422, "Invalid SCL member data type: "
+                                        + str(element))
+
+    validate_members(udt.fields)
+    validate_members(db.members)
     # The pilot does not resolve dependencies between multiple newly generated
     # UDTs; reject self references before attempting to modify a live project.
     def uses_type(members, sought):
@@ -184,6 +203,11 @@ def apply_plc_structure_import(request: PlcStructureApplyRequest) -> dict:
         (line.split("|", 1)[1] for line in lines
          if line.startswith("PROJECT_SAVED|")), None
     )
+    if saved != current["project_name"]:
+        raise HTTPException(
+            502, "Objects were reported as generated but TIA project SAVE was "
+                 "not confirmed. Inspect the open project before retrying."
+        )
     return {
         "status": "imported",
         "project_name": current["project_name"],
