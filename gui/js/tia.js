@@ -117,6 +117,7 @@ export function initTiaUi(
     const hmiAutomationControls = document.querySelector(".hmi-automation-controls");
     const hmiUnifiedStatus = document.getElementById("tia-hmi-unified-status");
     const hmiRunReportButton = document.getElementById("tia-hmi-run-report");
+    const hmiSkipReviewedButton = document.getElementById("tia-hmi-skip-reviewed");
     const hmiRunReportSummary = document.getElementById("tia-hmi-report-summary");
     const hmiReviewEachBatch = document.getElementById("tia-hmi-review-each-batch");
     const hmiModeDescription = document.getElementById("tia-hmi-mode-description");
@@ -1605,6 +1606,15 @@ export function initTiaUi(
                 || hmiUnifiedPauseRequested)
                 && (!hmiReviewQueueActive || hmiReviewQueuePaused);
         }
+        if (hmiSkipReviewedButton) {
+            hmiSkipReviewedButton.classList.toggle("hidden",
+                !hmiReviewQueuePending);
+            hmiSkipReviewedButton.disabled = busy || !hmiReviewQueuePending;
+        }
+        if (hmiBatchSizeInput) hmiBatchSizeInput.disabled = busy
+            || hmiReviewQueueActive;
+        if (hmiBatchTotalInput) hmiBatchTotalInput.disabled = busy
+            || hmiReviewQueueActive;
     }
 
     async function refreshHmiOllamaModels() {
@@ -2300,12 +2310,16 @@ export function initTiaUi(
         if (!completed || hmiCombinedApprovedCount <= before) {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 "Import not verified or approval cancelled. Queue stopped. "
-                + "Inspect the proposed values / TIA project before proceeding.";
-            // Manual editors remain visible for corrections where the backend
-            // retained the review token; no automatic retry is attempted.
-            hmiReviewQueueActive = false;
-            hmiReviewQueuePending = false;
-            updateHmiTranslateButtonState();
+                + "Inspect TIA: never retry an uncertain write automatically.";
+            // Unknown write status may not be treated as a skipped translation.
+            appendHmiRunIssue(hmiReviewQueueCurrentScope === "project"
+                    ? "XLSX" : "XML",
+                hmiTextListSelect?.value || "Current reviewed batch",
+                "", "", "Approval cancelled, rejected or import not verified",
+                "Interrupted — inspect TIA");
+            finishReviewedHmiQueue(
+                "Stopped: import status not verified. Inspect TIA before restarting.", true
+            );
             return;
         }
         hmiReviewQueuePending = false;
@@ -2319,6 +2333,40 @@ export function initTiaUi(
         );
         if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
             "Verified in TIA. Preparing next batch in queue...";
+        await prepareNextReviewedHmiBatch();
+    }
+
+    async function skipReviewedHmiQueueBatch() {
+        if (!hmiReviewQueueActive || !hmiReviewQueuePending) return;
+        if (!confirm("Skip THIS prepared batch WITHOUT importing it into TIA? "
+            + "All skipped entries will appear in the combined run report. "
+            + "Continue with the next eligible queue item?")) return;
+        const project = hmiReviewQueueCurrentScope === "project";
+        const name = project ? "Project texts" : hmiTextListSelect?.value || "Text list";
+        if (project) {
+            const editors = [...(hmiReviewRows?.querySelectorAll(
+                "textarea.hmi-project-review-editor[data-source-text]") || [])];
+            for (const element of editors) {
+                appendHmiRunIssue("XLSX", name, element.dataset.sourceText,
+                    element.value, "Reviewer skipped this prepared batch");
+            }
+            // Project prepare always selects the first remaining candidate
+            // set. Do not loop on the same intentionally skipped targets.
+            hmiReviewQueueProjectExhausted = true;
+            discardHmiReview();
+        } else {
+            for (const element of hmiTextListReviewRows?.querySelectorAll(
+                "textarea[data-entry-index]") || []) {
+                const row = element.closest("tr");
+                appendHmiRunIssue("XML", name,
+                    row?.cells?.[0]?.textContent || "", element.value,
+                    "Reviewer skipped this prepared batch");
+            }
+            hmiReviewQueueBlockedLists.add(name);
+            discardHmiTextListReview();
+        }
+        hmiReviewQueuePending = false;
+        hmiReviewQueuePendingSkippedList = null;
         await prepareNextReviewedHmiBatch();
     }
 
@@ -9057,6 +9105,9 @@ export function initTiaUi(
     });
 
     hmiRunReportButton?.addEventListener("click", downloadHmiRunReport);
+    hmiSkipReviewedButton?.addEventListener("click", () => {
+        void skipReviewedHmiQueueBatch();
+    });
     hmiBatchStartButton?.addEventListener(
         "click", () => { void translateAllSelectedHmi(); }
     );
