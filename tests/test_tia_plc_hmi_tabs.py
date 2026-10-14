@@ -59,7 +59,8 @@ def test_hmi_translation_and_xml_list_workflow_are_not_in_plc_tab():
     hmi = _tab("hmi")
     for control in ("tia-existing-hmis-table", "tia-hmi-translation-panel",
                     "tia-hmi-scope-project", "tia-hmi-scope-lists",
-                    "tia-hmi-text-list-import"):
+                    "tia-hmi-import-reviewed-button",
+                    "tia-hmi-text-list-review"):
         assert f'id="{control}"' in hmi
         assert f'id="{control}"' not in plc
 
