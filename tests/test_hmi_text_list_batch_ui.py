@@ -392,3 +392,42 @@ def test_stop_during_inflight_prepare_or_import_never_aborts_tia_write():
     assert 'if (hmiBatchRunning) void pauseHmiBatchImport();' in stop
     assert 'if (hmiXmlAutoRunning) pauseAutomaticXmlBatches();' in stop
     assert 'run_adapter(' not in stop
+
+
+def test_xlsx_backend_verification_is_not_confused_with_followup_ui_scan():
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    importer = js.split('async function importReviewedHmiTexts()', 1)[1].split(
+        'async function refreshProjectLanguages()', 1
+    )[0]
+    # Backend verifies the actual edited target cells via independent XLSX
+    # re-export; frontend never promotes an unverified response to success.
+    assert '"/api/v1/tia/hmis/import-reviewed-translations"' in importer
+    assert 'result?.status !== "verified"' in importer
+    assert 'count !== imported || count !== review.rowCount' in importer
+    assert 'hmiCombinedApprovedCount += review.rowCount;' in importer
+    assert importer.index('result?.status !== "verified"') < importer.index(
+        'hmiCombinedApprovedCount += review.rowCount;')
+    assert 'return {state: "uncertain", detail: reason};' in importer
+    assert 'state: "verified_refresh_failed"' in importer
+    assert 'Post-import UI refresh failed:' in importer
+    assert 'return true;' in importer
+    assert 'return refreshVerified;' not in importer
+    approval = js.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
+        'async function skipReviewedHmiQueueBatch()', 1
+    )[0]
+    assert 'const importType = hmiReviewQueueCurrentScope === "project"' in approval
+    assert 'completed?.state === "verified_refresh_failed"' in approval
+    assert '"Verified in TIA — re-scan required"' in approval
+    assert 'renderHmiBatchProgress(' in approval
+    assert '"Stopped: " + importType' in approval
+    assert 'XML/TIA import status uncertain' not in approval
+
+
+def test_translate_label_and_modal_are_consistent():
+    html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    assert '>Translate</button>' in html
+    assert 'click Translate.' in html
+    assert '>Translate all</button>' not in html
+    assert 'TRANSLATE SELECTED HMI TEXTS?' in js
+    assert 'TRANSLATE ALL SELECTED HMI TEXTS?' not in js
