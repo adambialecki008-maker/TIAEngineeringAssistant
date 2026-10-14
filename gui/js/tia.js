@@ -3488,6 +3488,17 @@ export function initTiaUi(
                     blockedLists.add(list.name);
                     continue;
                 }
+                // Prepare is read-only and may take time (Ollama). Stop/Pause
+                // requested while awaiting it must prevent a NEW TIA write.
+                // A preexisting import is never aborted in the middle of write.
+                if (hmiXmlAutoPauseRequested || hmiUnifiedPauseRequested
+                    || hmiUnifiedStopRequested) {
+                    xmlResult = "paused";
+                    if (hmiXmlAutoStatus) hmiXmlAutoStatus.textContent =
+                        "XML preparation finished after Stop/Pause. "
+                        + "No new TIA import started.";
+                    break;
+                }
                 if (hmiXmlAutoStatus)
                     hmiXmlAutoStatus.textContent = "XML batch "
                         + completedBatches + ": importing and verifying "

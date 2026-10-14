@@ -81,3 +81,67 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
                             capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "XML progress async regression passed" in result.stdout
+
+
+def test_automatic_xml_stop_during_prepare_never_starts_tia_import():
+    """Stop during read-only Ollama prepare must prevent an XML write."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js required for XML stop-state regression")
+    source = (Path(__file__).resolve().parents[1] / "gui/js/tia.js").read_text("utf-8")
+    function = source.split(
+        "async function startAutomaticXmlBatches({confirmed = false} = {})", 1
+    )[1].split("function pauseAutomaticXmlBatches()", 1)[0]
+    script = r"""
+const assert = require("node:assert/strict");
+let hmiXmlAutoRunning = false, hmiTextListBusy = false;
+let hmiBatchRunning = false, hmiXmlAutoPauseRequested = false;
+let hmiUnifiedPauseRequested = false, hmiUnifiedStopRequested = false;
+let hmiXmlAutoVerified = 0, hmiCombinedApprovedCount = 0;
+let hmiTextListImportedCount = 0;
+const verifiedHmiTextListsScanKey = "valid";
+const hmiBatchSizeInput = {value:"3"};
+const hmiBatchTotalInput = {value:"3"};
+const hmiXmlAutoStatus = {textContent:""};
+const hmiXmlAutoProgress = {textContent:""};
+const hmiTextListsData = {lists:[{name:"Status", eligible_missing_entries:3}]};
+function hmiTranslationSelection() {return {ollama_model:"test", hmi_name:"HMI_RT_1"};}
+function hmiScanKey() {return "valid";}
+function hmiScopeEnabled(scope) {return scope === "text_lists";}
+function eligibleXmlEntries() {return 3;}
+function updateHmiTranslateButtonState() {}
+function discardHmiTextListReview() {}
+function discardHmiReview() {}
+function appendHmiRunIssue() {}
+function renderUnifiedHmiProgress() {}
+async function scanHmiTextLists() {return true;}
+let resolvePrepare, importCalls = 0;
+async function postTextListWithProgress(path) {
+    if (path.endsWith("/prepare")) {
+        return await new Promise(resolve => {resolvePrepare = resolve;});
+    }
+    importCalls++;
+    throw new Error("A new TIA import must NOT start after Stop");
+}
+async function startAutomaticXmlBatches({confirmed = false} = {})""" + function + r"""
+(async () => {
+    const pending = startAutomaticXmlBatches({confirmed: true});
+    assert.equal(typeof resolvePrepare, "function");
+    // User presses Stop while Ollama is preparing a read-only batch.
+    hmiUnifiedPauseRequested = true;
+    hmiUnifiedStopRequested = true;
+    resolvePrepare({
+        review_id:"prepared", approved_count:1, skipped:[],
+        rows:[{entry_index:0, proposal:"Translated"}],
+    });
+    const state = await pending;
+    assert.equal(state, "paused");
+    assert.equal(importCalls, 0);
+    assert.equal(hmiCombinedApprovedCount, 0);
+    assert.equal(hmiXmlAutoRunning, false);
+    assert.equal(hmiTextListBusy, false);
+})().catch(error => {console.error(error); process.exitCode = 1;});
+"""
+    result = subprocess.run([node, "-e", script], capture_output=True,
+                            text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
