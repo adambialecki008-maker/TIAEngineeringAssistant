@@ -88,6 +88,8 @@ export function initHmiDeviceManagement({
         const ipUsed = getHmis().some(item =>
             item.ip_address === address);
         const ready = from && targetPlc && connectionSelect?.value
+            && from.ip_address && from.plc_connections?.length
+            && from.software_type?.includes("Siemens.Engineering.Hmi.HmiTarget")
             && name && name.length <= 128
             && name.toLowerCase() !== from.device_name.toLowerCase()
             && !nameUsed && !ipUsed && validIp(address)
@@ -107,6 +109,11 @@ export function initHmiDeviceManagement({
         options(plcSelect, getPlcs().map(item => ({
             label: item.plc_name + " (" + item.device_name + ")",
         })), "Select existing PLC");
+        // A refreshed project may contain entirely different device indices.
+        // Never carry approval or source/PLC selection across a refresh.
+        if (sourceSelect) sourceSelect.value = "";
+        if (plcSelect) plcSelect.value = "";
+        if (backup) backup.checked = false;
         updateConnectionOptions();
         update();
     }
