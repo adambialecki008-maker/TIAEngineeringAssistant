@@ -47,10 +47,21 @@ def normalize_hmi_translation(source: str, translated: str) -> str:
     source is replaced with a space.
     Only the PROPOSED target is normalized, never the TIA source cell.
     """
-    if not isinstance(translated, str) or r"\n" not in translated:
+    if not isinstance(translated, str):
         return translated
-    separator = "\n" if ("\n" in source or r"\n" in source) else " "
-    return re.sub(r"[ \t]*\\n[ \t]*", lambda _match: separator, translated)
+    if r"\n" in translated:
+        separator = "\n" if ("\n" in source or r"\n" in source) else " "
+        translated = re.sub(
+            r"[ \t]*\\n[ \t]*", lambda _match: separator, translated
+        )
+    # Narrow repair for Ollama adding decorative braces around an HMI label.
+    # Accept ONLY if removing exactly those invented braces reconstructs the
+    # source, not if a genuine {tag}, placeholder or wording could be affected.
+    if source and "{" not in source and "}" not in source:
+        without_braces = re.sub(r"\(\{([^{}]+)\}\)", r"(\1)", translated)
+        if without_braces == source:
+            return without_braces
+    return translated
 
 
 def validate_hmi_translation(source: str, translated: str) -> None:
