@@ -1031,6 +1031,18 @@ namespace TiaOpennessAdapter
                     )
                 )
                 {
+                    // Network name is distinct from Device.Name (TIA station
+                    // name) and never replaces stable I/O mapping identifiers.
+                    string pnName = ReadProfinetDeviceName(device);
+                    if (!string.IsNullOrWhiteSpace(pnName))
+                    {
+                        Console.WriteLine(
+                            "PN_DEVICE_NAME|" +
+                            SanitizeOutput(device.Name) + "|" +
+                            SanitizeOutput(pnName)
+                        );
+                    }
+
                     foreach (
                         DeviceItemPath itemPath
                         in EnumerateDeviceItems(
@@ -3377,6 +3389,43 @@ namespace TiaOpennessAdapter
                     );
                 }
             }
+        }
+
+
+        // Read-only PROFINET IO device name, stored on the Ethernet node.
+        // Device.Name is the project station label and can differ entirely.
+        private static string ReadProfinetDeviceName(Device device)
+        {
+            foreach (DeviceItemPath path in EnumerateDeviceItems(device))
+            {
+                NetworkInterface network;
+                try
+                {
+                    network = path.Item.GetService<NetworkInterface>();
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (network == null) continue;
+                foreach (var node in network.Nodes)
+                {
+                    try
+                    {
+                        string value = Convert.ToString(
+                            node.GetAttribute("PnDeviceName")) ?? "";
+                        if (!string.IsNullOrWhiteSpace(value))
+                            return value.Trim();
+                    }
+                    catch
+                    {
+                        // Non-PROFINET and unsupported interfaces do not
+                        // necessarily expose this dynamic attribute.
+                    }
+                }
+            }
+            return "";
         }
 
 
