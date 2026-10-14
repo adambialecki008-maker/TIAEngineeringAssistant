@@ -327,7 +327,8 @@ def test_unsafe_manual_approval_is_blocked_before_any_import(mock_tia):
     result = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
         "review_id": prepared["review_id"], "proposals": proposals,
     })
-    assert result.status_code == 502
+    assert result.status_code == 422
+    assert "TEXT_LIST_REVIEW_EDIT_INVALID:" in result.json()["detail"]
     assert not mock_tia["imported"]
 
 
