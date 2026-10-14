@@ -47,6 +47,8 @@ class ProjectHmi(BaseModel):
     hmi_type_identifier: str = ""
     software_type: str = ""
     software_name: str = ""
+    ip_address: str = ""
+    plc_connections: list[str] = Field(default_factory=list)
 
 
 class TiaProjectInfo(BaseModel):
