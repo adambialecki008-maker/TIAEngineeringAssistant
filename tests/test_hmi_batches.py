@@ -412,7 +412,7 @@ def test_entire_job_can_finish_with_only_skips_without_import(monkeypatch, tmp_p
     monkeypatch.setattr(
         review, "_translate_texts",
         lambda texts, culture, model, progress=None: {
-            text: "({Hydrauliczna})" for text in texts
+            text: "({Inna hydraulika})" for text in texts
         },
     )
     created = client.post(
