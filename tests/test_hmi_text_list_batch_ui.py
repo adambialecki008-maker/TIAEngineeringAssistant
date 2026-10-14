@@ -10,6 +10,16 @@ JS = (ROOT / "gui" / "js" / "tia.js").read_text(encoding="utf-8")
 def test_one_batch_form_for_checked_scopes():
     assert HTML.count('id="tia-hmi-batch-size"') == 1
     assert HTML.count('id="tia-hmi-total-to-translate"') == 1
+    assert HTML.count('id="tia-hmi-translation-queue"') == 1
+    assert 'Combined translation queue (XLSX → XML)' in HTML
+    assert 'function renderHmiTranslationQueue()' in JS
+    assert 'renderHmiTranslationQueue();' in JS
+    queue = JS.split('function renderHmiTranslationQueue()', 1)[1]
+    queue = queue.split('function renderHmiBatchPlan()', 1)[0]
+    assert queue.index('if (hmiScopeEnabled("project"))') < queue.index(
+        'if (hmiScopeEnabled("text_lists"))')
+    assert 'for (const list of lists)' in queue
+    assert 'list.eligible_missing_entries' in queue
     assert HTML.count('id="tia-hmi-translate-button"') == 1
     assert HTML.count('id="tia-hmi-import-reviewed-button"') == 1
     assert 'Step 2 — Batch settings (selected text types)' in HTML
