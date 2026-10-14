@@ -670,3 +670,60 @@ assert.deepEqual(rendered, [10, 10]);
     assert "hmiUnifiedQuota = quota + carriedVerified;" in auto
     assert "hmiUnifiedCarryVerified + hmiUnifiedXlsxVerified + hmiXmlAutoVerified" in JS
     assert "hmiUnifiedCarryVerified\n                    + hmiUnifiedXlsxVerified" in auto
+
+
+def test_xlsx_job_updates_do_not_replace_shared_verified_progress():
+    """Review -> auto: retain 5/10 while a new XLSX job starts at 0/5."""
+    import shutil
+    import subprocess
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js required for live HMI progress regression")
+    source = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    handler = source.split("function showHmiBatchJob(job)", 1)[1].split(
+        "async function pollHmiBatchProgress(", 1
+    )[0]
+    shared = source.split("function renderUnifiedHmiProgress()", 1)[1].split(
+        "function renderHmiBatchProgress(", 1
+    )[0]
+    script = r"""
+const assert = require("node:assert/strict");
+let hmiUnifiedRunning = true, hmiUnifiedCarryVerified = 5;
+let hmiUnifiedXlsxVerified = 0, hmiXmlAutoVerified = 0;
+let hmiUnifiedQuota = 10, hmiBatchJobId = null;
+const recorded = [];
+const hmiSkippedManager = {updateJob() {}};
+function renderHmiBatchProgress(done, total) {recorded.push([done, total]);}
+function setHmiBatchStatus() {}
+function renderUnifiedHmiProgress()""" + shared + r"""
+function showHmiBatchJob(job)""" + handler + r"""
+const job = {
+    job_id: "test", status: "ready", total_unique: 5,
+    completed_unique: 0, processed_unique: 0,
+    skipped_unique: 0, completed_rows: 0, batch_index: 1, total_batches: 1,
+};
+showHmiBatchJob(job);
+assert.deepEqual(recorded, [[5, 10]]);
+job.completed_unique = 5;
+job.processed_unique = 5;
+job.status = "completed";
+showHmiBatchJob(job);
+assert.deepEqual(recorded, [[5, 10], [10, 10]]);
+assert.equal(hmiBatchJobId, "test");
+// An XLSX-only run still uses its own actual job denominator.
+hmiUnifiedRunning = false;
+recorded.length = 0;
+job.completed_unique = 2;
+showHmiBatchJob(job);
+assert.deepEqual(recorded, [[2, 5]]);
+"""
+    result = subprocess.run([node, "-e", script], capture_output=True,
+                            text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+    init = source.split("async function startHmiBatchImport(", 1)[1].split(
+        "async function resumeHmiBatchImport()", 1
+    )[0]
+    assert 'if (!hmiUnifiedRunning) {' in init
+    assert "renderHmiBatchProgress(0, xlsxLimit" in init

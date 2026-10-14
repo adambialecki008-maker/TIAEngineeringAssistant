@@ -1956,10 +1956,14 @@ export function initTiaUi(
 
     function showHmiBatchJob(job) {
         hmiBatchJobId = job.job_id;
-        renderHmiBatchProgress(job.completed_unique, job.total_unique);
+        // The unified workflow owns a shared counter (reviewed + XLSX + XML).
+        // A per-job render here briefly replaced e.g. 5/10 with 0/5 during
+        // review -> automatic continuation. Never mix the two denominators.
         if (hmiUnifiedRunning) {
             hmiUnifiedXlsxVerified = Number(job.completed_unique) || 0;
             renderUnifiedHmiProgress();
+        } else {
+            renderHmiBatchProgress(job.completed_unique, job.total_unique);
         }
         hmiSkippedManager.updateJob(job);
         const last = job.last_verified_batch;
@@ -2789,7 +2793,11 @@ export function initTiaUi(
         hmiBatchStarting = true;
         updateHmiTranslateButtonState();
         setHmiBatchStatus("Initializing batch job from TIA project texts...");
-        renderHmiBatchProgress(0, xlsxLimit ?? latestHmiScan?.missingUnique ?? 0);
+        // Do not reset the shared progress after a reviewed batch has already
+        // verified entries. The job-specific counter is displayed only alone.
+        if (!hmiUnifiedRunning) {
+            renderHmiBatchProgress(0, xlsxLimit ?? latestHmiScan?.missingUnique ?? 0);
+        }
         try {
             const job = await postJson(
                 "/api/v1/tia/hmis/batch-translations/start",
