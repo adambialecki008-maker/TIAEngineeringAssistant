@@ -557,6 +557,11 @@ function buildIoModuleSummaries(
                         record.device_name
                         ?? "",
 
+                    profinet_device_name:
+                        hardwareInventory.profinet_device_names?.[
+                            record.device_name
+                        ] ?? "",
+
                     item_name:
                         record.item_name
                         ?? "",
@@ -2857,7 +2862,7 @@ export function initDevicesUi() {
                 );
 
             const values = [
-                module.device_name,
+                module.profinet_device_name || module.device_name,
                 module.item_name,
                 module.io_type,
 
@@ -2893,14 +2898,11 @@ export function initDevicesUi() {
                         Boolean
                     );
 
-            if (
-                rawPaths.length > 0
-            ) {
-                row.title =
-                    rawPaths.join(
-                        "\n"
-                    );
-            }
+            const identity = module.profinet_device_name
+                ? ("PROFINET: " + module.profinet_device_name + "\n"
+                    + "TIA station: " + module.device_name)
+                : ("TIA station: " + module.device_name);
+            row.title = [identity, ...rawPaths].join("\n");
 
             hardwareItemsBody.appendChild(
                 row
@@ -2974,7 +2976,9 @@ export function initDevicesUi() {
             for (
                 const value
                 of [
-                    channel.device_name,
+                    hardwareInventory.profinet_device_names?.[
+                        channel.device_name
+                    ] || channel.device_name,
                     channel.item_name,
 
                     String(
@@ -3150,7 +3154,7 @@ export function initDevicesUi() {
                     option.textContent =
                         `${logicalAddress} | `
                         +
-                        `${channel.device_name} / `
+                        `${hardwareInventory.profinet_device_names?.[channel.device_name] || channel.device_name} / `
                         +
                         `${channel.item_name} / `
                         +
