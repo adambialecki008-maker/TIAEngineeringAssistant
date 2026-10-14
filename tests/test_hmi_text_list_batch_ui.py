@@ -143,10 +143,14 @@ class _ContainerScanner(HTMLParser):
     def handle_starttag(self, tag, attrs):
         data = dict(attrs)
         classes = set((data.get("class") or "").split())
-        marker = (tag, classes)
-        self.stack.append(marker)
+        is_void = tag in {
+            "area", "base", "br", "col", "embed", "hr", "img",
+            "input", "link", "meta", "param", "source", "track", "wbr",
+        }
+        if not is_void:
+            self.stack.append((tag, classes))
         if data.get("id"):
-            self.parents_by_id[data["id"]] = set().union(
+            self.parents_by_id[data["id"]] = classes.union(
                 *(entry[1] for entry in self.stack)
             )
 
