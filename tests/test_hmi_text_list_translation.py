@@ -376,6 +376,7 @@ def test_unavailable_source_language_has_explicit_preview_reason(mock_tia):
     assert all(not row["supported"] for row in rows)
     assert all("No source text in fr-FR" in row["reason"] for row in rows)
     assert "en-us" in rows[0]["reason"]
+    assert rows[0]["preview_source"] == "[en-us] Open valve"
 
 
 def test_simple_body_p_inside_text_item_supports_reviewed_import(mock_tia):
