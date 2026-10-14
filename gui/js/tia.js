@@ -555,6 +555,7 @@ export function initTiaUi(
     let hmiReviewQueueProjectExhausted = false;
     let hmiReviewQueuePendingSkippedList = null;
     const hmiReviewQueueBlockedLists = new Set();
+    const hmiReviewQueueExcludedXml = new Map();
     let hmiRunReport = [];
     let hmiRunStartedAt = null;
     let hmiRunReportSelection = null;
@@ -1419,8 +1420,11 @@ export function initTiaUi(
         return (hmiTextListsData?.lists || []).find(item =>
             Number.isInteger(item.eligible_missing_entries)
                 && item.eligible_missing_entries > 0
-                && (!hmiReviewQueueActive
-                    || !hmiReviewQueueBlockedLists.has(item.name))
+                && (!hmiReviewQueueActive || (
+                    !hmiReviewQueueBlockedLists.has(item.name)
+                    && item.eligible_missing_entries
+                        > (hmiReviewQueueExcludedXml.get(item.name)?.size || 0)
+                ))
         ) || null;
     }
 
@@ -2230,6 +2234,7 @@ export function initTiaUi(
         hmiReviewQueueProjectExhausted = false;
         hmiReviewQueuePendingSkippedList = null;
         hmiReviewQueueBlockedLists.clear();
+        hmiReviewQueueExcludedXml.clear();
         startHmiRunReport();
         if (hmiEditDetails) hmiEditDetails.open = true;
         renderHmiBatchProgress(0, quota);
@@ -2264,6 +2269,7 @@ export function initTiaUi(
             return;
         }
         hmiReviewQueueCurrentScope = project ? "project" : "text_lists";
+        const pendingListName = project ? null : nextEligibleTextList()?.name || null;
         if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
             "Preparing " + (project ? "Project texts" : "the next Text list")
             + " batch — maximum " + Math.min(Number(hmiBatchSizeInput?.value), remaining)
@@ -2281,9 +2287,9 @@ export function initTiaUi(
         if (!prepared) {
             // No import occurred: QA-rejected batch may safely advance.
             if (project) hmiReviewQueueProjectExhausted = true;
-            else {
-                const name = hmiTextListSelect?.value;
-                if (name) hmiReviewQueueBlockedLists.add(name);
+            else if (pendingListName) {
+                // No valid entries remaining for this specific list.
+                hmiReviewQueueBlockedLists.add(pendingListName);
             }
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 "No safe proposal — skipped. Continuing with next queue item.";
@@ -2323,10 +2329,6 @@ export function initTiaUi(
             return;
         }
         hmiReviewQueuePending = false;
-        if (hmiReviewQueuePendingSkippedList) {
-            hmiReviewQueueBlockedLists.add(hmiReviewQueuePendingSkippedList);
-            hmiReviewQueuePendingSkippedList = null;
-        }
         renderHmiBatchProgress(
             hmiCombinedApprovedCount - hmiReviewQueueStartApproved,
             hmiReviewQueueQuota
@@ -2654,22 +2656,24 @@ export function initTiaUi(
                 + hmiTextListSelect.value + " — no import yet...";
         }
         try {
+            const listName = hmiTextListSelect.value;
+            const excluded = hmiReviewQueueExcludedXml.get(listName) || new Set();
             const result = await postJson(
                 "/api/v1/tia/hmis/text-lists/prepare",
-                {...selection, text_list_name: hmiTextListSelect.value, max_rows: maxRows}
+                {...selection, text_list_name: listName, max_rows: maxRows,
+                    exclude_entry_indices: hmiReviewQueueActive
+                        ? [...excluded] : []}
             );
             if (identity !== textListReviewKey()) return;
             hmiTextListReviewToken = result.review_id;
             hmiTextListPreparedKey = identity;
             if (hmiReviewQueueActive) {
                 for (const item of result.skipped || []) {
-                    appendHmiRunIssue("XML", hmiTextListSelect.value,
+                    appendHmiRunIssue("XML", listName,
                         item.source, item.proposal, item.reason);
+                    excluded.add(item.entry_index);
                 }
-                if (result.skipped?.length) {
-                    // Do not change list selection before this review is imported.
-                    hmiReviewQueuePendingSkippedList = hmiTextListSelect.value;
-                }
+                hmiReviewQueueExcludedXml.set(listName, excluded);
             }
             if (hmiTextListReviewRows) {
                 hmiTextListReviewRows.replaceChildren();
