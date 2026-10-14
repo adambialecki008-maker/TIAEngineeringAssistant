@@ -1201,6 +1201,11 @@ export function initTiaUi(
     function applyHmiScope() {
         const scope = hmiWorkScope();
         for (const element of hmiScopeSections) {
+            if (element.closest(".hmi-automation-controls")) {
+                // Detailed XLSX/XML backend state is diagnostic, not another UI.
+                element.classList.add("hidden");
+                continue;
+            }
             element.classList.toggle("hidden",
                 !hmiScopeEnabled(element.dataset.hmiScope));
         }
@@ -1729,41 +1734,73 @@ export function initTiaUi(
         hmiTranslationQueue.replaceChildren();
         const selection = hmiTranslationSelection();
         let position = 0;
-        const append = (label, count) => {
+        const append = (type, label, count, ready) => {
             const tr = document.createElement("tr");
+            tr.className = "hmi-queue-row";
             addHmiTextCell(tr, ++position);
+            const typeCell = document.createElement("td");
+            if (type) {
+                const icon = document.createElement("span");
+                icon.className = "hmi-file-icon " + (
+                    type === "project" ? "hmi-file-xlsx" : "hmi-file-xml"
+                );
+                icon.textContent = type === "project" ? "X" : "XML";
+                icon.setAttribute("aria-hidden", "true");
+                typeCell.append(icon, document.createTextNode(
+                    type === "project" ? " Project texts" : " Text list"
+                ));
+            } else {
+                typeCell.textContent = "—";
+            }
+            tr.appendChild(typeCell);
             addHmiTextCell(tr, label);
             addHmiTextCell(tr, String(count));
+            const stateCell = document.createElement("td");
+            const state = document.createElement("span");
+            const reviewing = hmiReviewQueuePending
+                && hmiReviewQueueCurrentScope === type;
+            const running = hmiReviewQueueActive
+                && hmiReviewQueueCurrentScope === type;
+            const empty = ready && count === 0;
+            state.className = "hmi-queue-status "
+                + (reviewing ? "hmi-queue-reviewing"
+                    : running ? "hmi-queue-running"
+                    : empty ? "hmi-queue-done" : "hmi-queue-pending");
+            state.textContent = reviewing ? "Awaiting approval"
+                : running ? "Preparing" : empty ? "Done"
+                : ready ? "Pending" : "Scan required";
+            stateCell.appendChild(state);
+            tr.appendChild(stateCell);
             hmiTranslationQueue.appendChild(tr);
         };
-        // The queue always starts with Project texts if checked.
+        // Project texts always precede individual XML Text lists.
         if (hmiScopeEnabled("project")) {
             const scanned = Boolean(selection && verifiedHmiScanKey
                 && hmiScanKey(selection) === verifiedHmiScanKey);
-            append("Project texts (XLSX)",
-                scanned ? (latestHmiScan?.missingUnique ?? 0) : "Scan required");
+            append("project", "HMI project texts",
+                scanned ? (latestHmiScan?.missingUnique ?? 0) : "—", scanned);
         }
         if (hmiScopeEnabled("text_lists")) {
             const scanned = Boolean(selection && verifiedHmiTextListsScanKey
                 && hmiScanKey(selection, "text_lists")
                     === verifiedHmiTextListsScanKey);
             if (!scanned) {
-                append("Text lists (XML)", "Scan required");
+                append("text_lists", "Text lists", "—", false);
             } else {
                 const lists = (hmiTextListsData?.lists || []).filter(item =>
                     Number.isInteger(item.eligible_missing_entries)
                     && item.eligible_missing_entries > 0);
                 if (!lists.length) {
-                    append("Text lists (XML)", 0);
+                    append("text_lists", "Text lists", 0, true);
                 } else {
                     for (const list of lists) {
-                        append("Text list: " + list.name + " (XML)",
-                            list.eligible_missing_entries);
+                        append("text_lists", list.name,
+                            list.eligible_missing_entries, true);
                     }
                 }
             }
         }
-        if (!position) append("Select Project texts and/or Text lists", "—");
+        if (!position) append(null, "Select text types to scan", "—", false);
     }
 
     function renderHmiBatchPlan() {
