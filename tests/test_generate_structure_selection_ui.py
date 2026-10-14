@@ -15,8 +15,10 @@ def test_independent_udt_and_db_selection_in_generate_tab():
         "source-selection-status",
     ):
         assert f'id="{control}"' in HTML
-    assert 'selected_udts: projectConfig.udts' in SOURCE_UI
-    assert 'selected_dbs: projectConfig.dbs' in SOURCE_UI
+    # The current checked DOM state, not every configured UDT/DB,
+    # defines the effective Generate selection.
+    assert 'selected_udts: checked(udtList, "UDT", projectConfig.udts' in SOURCE_UI
+    assert 'selected_dbs: checked(dbList, "DB", projectConfig.dbs' in SOURCE_UI
     assert "selectedUdts = new Set()" in SOURCE_UI
     assert "selectedDbs = new Set()" in SOURCE_UI
     assert 'input.type = "checkbox"' in SOURCE_UI
