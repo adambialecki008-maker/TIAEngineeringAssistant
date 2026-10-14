@@ -2256,6 +2256,31 @@
 
             </div>
 
+            <div class="card">
+                <h3>Import UDT + DB to TIA (pilot)</h3>
+                <p class="panel-description">
+                    Create exactly one UDT and one global DB in the selected
+                    offline PLC. Existing objects are never overwritten.
+                    Use a copy/backup of the TIA project; a failed import may
+                    leave partial unsaved changes in the open project.
+                </p>
+                <div class="action-row">
+                    <button id="source-import-plan-button" type="button">
+                        Check target and prepare import
+                    </button>
+                    <button id="source-import-apply-button" type="button" disabled>
+                        Import to TIA Portal
+                    </button>
+                </div>
+                <label class="checkbox-label">
+                    <input id="source-import-backup-confirmed" type="checkbox">
+                    I confirm the open TIA project is a test/backup copy
+                </label>
+                <p id="source-import-status" class="target-summary" aria-live="polite">
+                    Preview and preflight required before import.
+                </p>
+            </div>
+
         </section>
 
     </main>
