@@ -163,7 +163,11 @@ class _ContainerScanner(HTMLParser):
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
-        self.handle_endtag(tag)
+        if tag not in {
+            "area", "base", "br", "col", "embed", "hr", "img",
+            "input", "link", "meta", "param", "source", "track", "wbr",
+        }:
+            self.handle_endtag(tag)
 
 
 def test_scan_disclosures_and_review_actions_belong_to_exactly_three_steps():
