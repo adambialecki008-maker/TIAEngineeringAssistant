@@ -457,7 +457,7 @@ def import_text_list(request: ImportTextListRequest):
     try:
         with _LOCK:
             _prune()
-            prepared = _REVIEWS.pop(request.review_id, None)
+            prepared = _REVIEWS.get(request.review_id)
         if not prepared:
             raise HTTPException(404, "TextList review expired or already used.")
         return _perform_reviewed_import(prepared, request)
@@ -475,9 +475,16 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
     # and exact snapshot comparison.
     for entry_index, proposal in provided.items():
         row = approved[entry_index]
-        review.validate_hmi_translation_quality(
-            row["source"], proposal, selection.target_culture
-        )
+        try:
+            review.validate_hmi_translation_quality(
+                row["source"], proposal, selection.target_culture
+            )
+        except HTTPException as exc:
+            if exc.status_code != 502:
+                raise
+            raise HTTPException(
+                422, "TEXT_LIST_REVIEW_EDIT_INVALID: " + str(exc.detail)
+            ) from exc
         if not needs_target_fill(row["source"], row["current_target"]):
             raise HTTPException(409, "Prepared target was already populated.")
 
@@ -545,6 +552,11 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
         ET.ElementTree(root).write(
             path, encoding="utf-8", xml_declaration=True
         )
+        # Consume exactly once only AFTER all read-only QA/snapshot checks.
+        # After this point a TIA write may be uncertain: never auto-retry.
+        with _LOCK:
+            if _REVIEWS.pop(request.review_id, None) is not prepared:
+                raise HTTPException(404, "TextList review expired or already used.")
         lines = run_adapter(
             "import-hmi-text-list",
             str(selection.process_id),
