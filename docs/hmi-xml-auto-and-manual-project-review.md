@@ -2,6 +2,24 @@
 
 Two independent import mechanisms coexist.
 
+## Unified three-step HMI interface
+
+The HMI screen contains **only Step 1, Step 2 and Step 3**.
+The `Project texts (XLSX)` and `Text lists (XML)` checkboxes determine
+which controls and details appear. They do not create separate workflow
+windows.
+
+- **Step 1 — Scan**: two matching blue/white expandable disclosures:
+  **Text lists** followed by **Project texts**. Each includes its own
+  read-only scanned data; Project texts details contain the XLSX table,
+  ViewPath diagnostics and read-only audit.
+- **Step 2 — Batch settings**: one shared batch size and total count.
+- **Step 3 — Prepare and review**: one pair of manual review/import actions,
+  both editable review tables, and a single **Automatic import (optional)**
+  area. Within this area XML and XLSX actions appear only when their
+  respective checkbox is selected. Their execution and verification remain
+  independent; selecting both does not silently mix formats in one write.
+
 ## Project texts (XLSX)
 
 1. Select HMI, source language, target language and Ollama model.
