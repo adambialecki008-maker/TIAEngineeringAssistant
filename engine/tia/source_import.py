@@ -250,12 +250,66 @@ def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecificatio
     )
 
 
+def _reference_type(value: str) -> str:
+    name = (value or "").strip().strip('"').casefold()
+    if re.fullmatch(r"(w?string)\\[\\d+\\]", name):
+        return name.split("[", 1)[0]
+    return name
+
+
+def _include_required_udts(
+    configured: ProjectSpecification,
+    selected: ProjectSpecification,
+    existing_udts: set[str],
+) -> tuple[ProjectSpecification, set[str]]:
+    """Add configured UDTs required by checked DBs and UDTs when TIA lacks them.
+
+    Transitive dependencies are resolved before generating sources. Objects not
+    present in local definitions are left to the preflight blocker logic.
+    """
+    configured_udts = {u.name.casefold(): u for u in configured.udts}
+    included = {u.name.casefold(): u for u in selected.udts}
+    explicit = set(included)
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def inspect(members):
+        for reference in _references(members):
+            key = _reference_type(reference)
+            if key in _BUILTIN_TYPES or key in existing_udts:
+                continue
+            udt = configured_udts.get(key)
+            if udt is None:
+                continue  # preflight will block dependent on unavailable type
+            visit(udt)
+
+    def visit(udt):
+        key = udt.name.casefold()
+        if key in visiting:
+            raise HTTPException(422, "Circular UDT dependency: " + udt.name)
+        if key in visited:
+            return
+        visiting.add(key)
+        inspect(udt.fields)
+        visiting.remove(key)
+        visited.add(key)
+        included[key] = udt
+
+    for udt in selected.udts:
+        visit(udt)
+    for db in selected.dbs:
+        inspect(db.members)
+    resolved = ProjectSpecification(
+        plc_family=selected.plc_family,
+        udts=list(included.values()),
+        dbs=list(selected.dbs),
+    )
+    return resolved, set(included) - explicit
+
+
 def _make_plan(request: PlcStructureImportRequest) -> dict:
     selected = _selected_project(request)
-    # Validate *all* selected definitions before any Openness call. Invalid
-    # identifiers, source encoding, duplicate names or dependency cycles
-    # must fail as HTTP 422 without even reading a live TIA project.
-    # Re-generate below with the names of live UDTs for correct SCL quoting.
+    # Reject invalid explicitly selected definitions before any Openness call.
     _definitions(selected)
     context = get_project_context(request.process_id)
     targets = [plc for plc in context.plcs
@@ -265,6 +319,10 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
         raise HTTPException(404, "Selected PLC is not in the open TIA project.")
     structures = get_plc_structures(
         request.process_id, request.device_name, request.plc_name)
+    selected, auto_udts = _include_required_udts(
+        request.project, selected,
+        {u.name.casefold() for u in structures.udts},
+    )
     definitions = _definitions(
         selected, known_udts=[u.name for u in structures.udts])
     existing = {}
@@ -285,6 +343,8 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
         report.append({
             "kind": definition["kind"], "name": definition["name"],
             "status": state, "reason": reason, "source": definition["source"],
+            "auto_dependency": definition["kind"] == "udt"
+                and definition["name"].casefold() in auto_udts,
         })
 
     # Independent objects may be imported even when other selected objects
@@ -302,7 +362,7 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
                    else definition["spec"].members)
         blockers = []
         for reference in _references(members):
-            key = reference.casefold().strip().strip('"')
+            key = _reference_type(reference)
             if key in _BUILTIN_TYPES:
                 continue
             selected_ref = selected_state.get(key)
@@ -353,6 +413,10 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
                    for status in ("create", "identical", "conflict", "blocked")},
         "can_apply": bool(create),
         "will_create": create,
+        "auto_dependencies": [
+            row["name"] for row in report
+            if row["auto_dependency"] and row["status"] == "create"
+        ],
     }
 
 
@@ -361,10 +425,15 @@ def preview_selected_plc_sources(request: SelectedProjectPreviewRequest) -> dict
     # No process/TIA connection is required to generate the selected SCL.
     selected = _selected_project(request)
     all_known = [u.name for u in request.project.udts]
+    # Offline preview includes dependent UDTs from the configuration. At
+    # preflight, UDTs already installed in TIA are excluded from creation.
+    selected, auto_udts = _include_required_udts(request.project, selected, set())
     definitions = _definitions(selected, known_udts=all_known)
     return {
         "source": "\n\n".join(item["source"] for item in definitions),
-        "items": [{"kind": item["kind"], "name": item["name"]}
+        "items": [{"kind": item["kind"], "name": item["name"],
+                   "auto_dependency": item["kind"] == "udt"
+                       and item["name"].casefold() in auto_udts}
                   for item in definitions],
     }
 
