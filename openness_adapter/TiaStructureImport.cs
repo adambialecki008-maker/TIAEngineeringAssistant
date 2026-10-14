@@ -131,6 +131,111 @@ namespace TiaOpennessAdapter
             return 0;
         }
 
+        // Multi-object create-only import. Preflight checks EVERY selected
+        // object under one ExclusiveAccess before generating any SCL source.
+        // The manifest is written only by the trusted FastAPI backend:
+        // KIND|NAME|ABSOLUTE_PATH (UDTs in dependency order, followed by DBs).
+        public static int ImportPlcStructureBatch(
+            int processId, string deviceName, string plcName,
+            string expectedProjectName, string manifestPath)
+        {
+            if (!File.Exists(manifestPath))
+            {
+                Console.Error.WriteLine("STRUCTURE_MANIFEST_MISSING");
+                return 8;
+            }
+            string[][] entries = File.ReadAllLines(manifestPath)
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => line.Split(new[] { '|' }, 3))
+                .ToArray();
+            if (entries.Length == 0
+                || entries.Any(e => e.Length != 3
+                    || (e[0] != "UDT" && e[0] != "DB")
+                    || string.IsNullOrWhiteSpace(e[1])
+                    || !File.Exists(e[2]))
+                || entries.Select(e => e[1]).Distinct(
+                    StringComparer.OrdinalIgnoreCase).Count() != entries.Length)
+            {
+                Console.Error.WriteLine("INVALID_STRUCTURE_MANIFEST");
+                return 8;
+            }
+
+            TiaPortalProcess process = FindProcess(processId);
+            if (process == null) return WriteProcessNotFound(processId);
+            using (TiaPortal portal = process.Attach())
+            {
+                Project project = GetSingleOpenProject(
+                    portal, out int errorCode);
+                if (project == null) return errorCode;
+                if (!string.Equals(project.Name, expectedProjectName,
+                        StringComparison.Ordinal))
+                {
+                    Console.Error.WriteLine("PROJECT_CHANGED|"
+                        + SanitizeOutput(project.Name));
+                    return 9;
+                }
+                using (ExclusiveAccess access = portal.ExclusiveAccess(
+                    "TIA Engineering Assistant: verified create-only batch "
+                    + "UDT/DB import in a backup project"))
+                {
+                    PlcTarget target = FindPlcTarget(
+                        project, deviceName, plcName);
+                    if (target == null)
+                    {
+                        Console.Error.WriteLine("PLC_NOT_FOUND|"
+                            + SanitizeOutput(deviceName) + "|"
+                            + SanitizeOutput(plcName));
+                        return 7;
+                    }
+                    // Repeat ALL collision checks inside the final write lock.
+                    var present = new System.Collections.Generic.HashSet<string>(
+                        StringComparer.OrdinalIgnoreCase);
+                    foreach (PlcType t in EnumeratePlcTypes(target.Software))
+                        present.Add(t.Name);
+                    foreach (PlcBlock b in EnumeratePlcBlocks(target.Software))
+                        present.Add(b.Name);
+                    foreach (string[] entry in entries)
+                    {
+                        if (present.Contains(entry[1]))
+                        {
+                            Console.Error.WriteLine("PLC_STRUCTURE_NAME_EXISTS|"
+                                + SanitizeOutput(entry[0]) + "|"
+                                + SanitizeOutput(entry[1]));
+                            return 9;
+                        }
+                    }
+
+                    // Error during generation may leave partial UNSAVED changes;
+                    // never claim an atomic rollback and never overwrite.
+                    foreach (string[] entry in entries)
+                    {
+                        bool udt = entry[0] == "UDT";
+                        GenerateSingleStructureSource(target, entry[2],
+                            udt ? ".udt" : ".db");
+                        bool created = udt
+                            ? EnumeratePlcTypes(target.Software).Any(t =>
+                                string.Equals(t.Name, entry[1],
+                                    StringComparison.OrdinalIgnoreCase))
+                            : EnumeratePlcBlocks(target.Software)
+                                .OfType<DataBlock>().Any(b =>
+                                string.Equals(b.Name, entry[1],
+                                    StringComparison.OrdinalIgnoreCase));
+                        if (!created)
+                        {
+                            Console.Error.WriteLine("PLC_STRUCTURE_NOT_CREATED|"
+                                + SanitizeOutput(entry[0]) + "|"
+                                + SanitizeOutput(entry[1]));
+                            return 10;
+                        }
+                        Console.WriteLine("STRUCTURE_IMPORTED|"
+                            + entry[0] + "|" + SanitizeOutput(entry[1]));
+                    }
+                    SaveProject(project);
+                }
+            }
+            return 0;
+        }
+
         private static void GenerateSingleStructureSource(
             PlcTarget target,
             string sourcePath,
