@@ -1474,8 +1474,41 @@
                     </div>
                     </section>
 
+                    <section class="hmi-batch-panel hmi-workflow-step"
+                             data-hmi-scope="text_lists" id="tia-hmi-xml-auto-section">
+                        <h5 class="hmi-step-heading">Step 4 — Automatic Text lists (XML) import</h5>
+                        <p class="hint">
+                            Automatic XML mode: process eligible plain-text entries in
+                            consecutive batches (max. 50), one Text list at a time.
+                            Every list is freshly exported, validated, imported and
+                            verified by re-export before the next one starts.
+                            Unsupported/unsafe proposals are skipped.
+                            This mode does NOT show an individual manual review:
+                            use Step 3 instead if you want to edit translations.
+                            Back up the project before starting; no automatic retries
+                            after a failed or uncertain import.
+                        </p>
+                        <div class="action-row hmi-translation-actions">
+                            <button id="tia-hmi-xml-auto-start" type="button"
+                                    class="primary-button" disabled>
+                                Start automatic XML batches
+                            </button>
+                            <button id="tia-hmi-xml-auto-pause" type="button"
+                                    class="secondary-button" disabled>
+                                Pause after current XML batch
+                            </button>
+                        </div>
+                        <p id="tia-hmi-xml-auto-status" class="status-box"
+                           role="status" aria-live="polite">
+                            Scan Text lists to enable automatic XML imports.
+                        </p>
+                        <p id="tia-hmi-xml-auto-progress" class="hint">
+                            Verified in TIA: 0
+                        </p>
+                    </section>
+
                     <section class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project">
-                        <h5 class="hmi-step-heading">Step 4 — Automatic Project texts (XLSX) import</h5>
+                        <h5 class="hmi-step-heading">Step 5 — Automatic Project texts (XLSX) import</h5>
                         <p class="hint">
                             XLSX only: Ollama translates one batch, then TIA imports
                             and verifies it before the next batch begins.
@@ -1638,14 +1671,14 @@
                                     <tr>
                                         <th>Source text</th>
                                         <th>Current target (TIA)</th>
-                                        <th>Proposed translation (AI)</th>
+                                        <th>Proposed translation (editable)</th>
                                         <th>Details</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tia-hmi-review-rows"></tbody>
                             </table>
                         </div>
-                        <p class="hint">Nothing is imported until you click Import reviewed texts. Refreshing the page discards the prepared review.</p>
+                        <p class="hint">Every validated Project text proposal above can be edited manually or replaced with the original source. All edits are validated again before TIA import. Nothing is written until you approve the reviewed batch. Refreshing the page discards the prepared review.</p>
                     </div>
 
 
