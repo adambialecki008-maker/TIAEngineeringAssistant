@@ -126,41 +126,61 @@ def _multilingual_entry(entry):
     return None, [], None
 
 
+def _preview_text(node):
+    """Read-only best-effort text for Details; NEVER use for XML import."""
+    if node is None:
+        return ""
+    return "".join(node.itertext()).strip()[:500]
+
+
 def _extract_entries(root, entries, source_culture: str, target_culture: str):
     result = []
     for i, node in enumerate(entries):
         parent, items, storage = _multilingual_entry(node)
         languages = {}
+        previews = {}
         complex_text = False
+        reasons = []
         for item in items:
             if storage == "values":
                 culture = item.attrib.get("lang", "")
                 parsed = _plain_value(item)
+                text_node, value = parsed if parsed is not None else (None, None)
+                preview = _preview_text(item)
                 if parsed is None:
                     complex_text = True
-                    break
-                text_node, value = parsed
+                    reasons.append("Value has formatted or linked XML")
             else:
                 culture_node = _attribute(item, "Culture")
-                text_node = _attribute(item, "Text")
+                text = _attribute(item, "Text")
                 culture = _node_text(culture_node)
-                value = _node_text(text_node)
-                if value is None:
+                parsed = _plain_value(text)
+                text_node, value = parsed if parsed is not None else (None, None)
+                preview = _preview_text(text)
+                if parsed is None:
                     complex_text = True
-                    break
-            if not culture or culture.casefold() in languages:
+                    reasons.append("Text contains structured XML")
+            if not culture:
                 complex_text = True
-                break
-            languages[culture.casefold()] = (item, text_node, value)
+                reasons.append("Missing language Culture/lang attribute")
+                continue
+            key = culture.casefold()
+            if key in previews:
+                complex_text = True
+                reasons.append("Duplicate language: " + culture)
+                continue
+            previews[key] = preview
+            if text_node is not None:
+                languages[key] = (item, text_node, value)
         source = languages.get(source_culture.casefold())
         target = languages.get(target_culture.casefold())
         reason = None
         if parent is None:
             reason = "Unsupported Text aggregation (XML layout)"
         elif complex_text:
-            reason = "Formatted, linked or ambiguous multilingual XML"
+            reason = "; ".join(dict.fromkeys(reasons)) or "Ambiguous multilingual XML"
         elif source is None:
-            available = ", ".join(sorted(languages)) or "none"
+            available = ", ".join(sorted(previews)) or "none"
             reason = ("No source text in " + source_culture
                       + " (available cultures: " + available + ")")
         result.append({
@@ -171,6 +191,8 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
             "languages": languages,
             "source": source[2] if source else "",
             "target": target[2] if target else "",
+            "preview_source": previews.get(source_culture.casefold(), ""),
+            "preview_target": previews.get(target_culture.casefold(), ""),
             "supported": not complex_text and parent is not None
                          and source is not None,
             "reason": reason,
@@ -244,10 +266,11 @@ def _write_proposal(root, row, target_culture, proposal):
         clone.set("ID", str(max(existing_ids or {0}) + 1))
         culture = _attribute(clone, "Culture")
         text = _attribute(clone, "Text")
-        if culture is None or text is None or len(text):
+        plain = _plain_value(text)
+        if culture is None or plain is None:
             raise HTTPException(409, "Cannot safely add target language to TextList.")
         culture.text = target_culture
-        text.text = proposal
+        plain[0].text = proposal
     row["parent"].append(clone)
 
 
@@ -408,7 +431,7 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
         )
     if any(
         any(
-            _local(item.tag) == "Text" and len(item)
+            _local(item.tag) == "Text" and _plain_value(item) is None
             for element in entry.iter()
             if _local(element.tag) == "MultilingualTextItem"
             for item in element.iter()
