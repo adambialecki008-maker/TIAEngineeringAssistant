@@ -2518,40 +2518,56 @@ export function initTiaUi(
             updateHmiTranslateButtonState();
             return;
         }
+        const importType = hmiReviewQueueCurrentScope === "project"
+            ? "XLSX" : "XML";
         if (completed?.state === "verified_refresh_failed") {
-            appendHmiRunIssue("XML", reviewListName, "", "",
+            renderHmiBatchProgress(
+                hmiCombinedApprovedCount - hmiReviewQueueStartApproved,
+                hmiReviewQueueQuota
+            );
+            appendHmiRunIssue(importType, reviewListName, "", "",
                 completed.detail, "Verified in TIA — re-scan required");
             finishReviewedHmiQueue(
-                "Import VERIFIED in TIA. Follow-up XML catalog scan failed; "
-                + "no further import started. Scan again before continuing.");
+                importType + " import VERIFIED in TIA. "
+                + "Follow-up read-only scan failed; no next batch imported. "
+                + "Run a fresh scan before continuing. " + completed.detail);
             return;
         }
         if (completed?.state === "prewrite_rejected") {
-            // No import was attempted. Other lists can be processed safely,
-            // but refresh the inventory before preparing anything else.
-            appendHmiRunIssue("XML", reviewListName, "", "",
+            // Safely reject only this prepared item before any TIA write.
+            // Other independent targets may proceed after a fresh scan.
+            appendHmiRunIssue(importType, reviewListName, "", "",
                 completed.detail, "Skipped — no import attempted");
-            hmiReviewQueueBlockedLists.add(reviewListName);
             hmiReviewQueuePending = false;
-            const refreshed = await scanHmiTextLists();
-            if (!refreshed) {
+            if (importType === "XML") {
+                hmiReviewQueueBlockedLists.add(reviewListName);
+                const refreshed = await scanHmiTextLists();
+                if (!refreshed) {
+                    finishReviewedHmiQueue(
+                        "XML skipped before import, but the next catalog scan "
+                        + "failed. No further imports attempted.");
+                    return;
+                }
+                await prepareNextReviewedHmiBatch();
+            } else {
+                // Do not skip all XLSX texts because of one preflight issue.
+                // Require a new scan rather than retrying a stale review.
                 finishReviewedHmiQueue(
-                    "XML skipped safely, but the next catalog scan failed. "
-                    + "No further imports attempted.");
-                return;
+                    "XLSX was rejected BEFORE import: " + completed.detail
+                    + ". Scan Project texts again before continuing.");
             }
-            await prepareNextReviewedHmiBatch();
             return;
         }
         // Unknown TIA write outcome MUST NEVER be treated as an ordinary skip.
-        if (!completed || hmiCombinedApprovedCount <= before) {
+        if (!completed || completed?.state === "uncertain"
+            || hmiCombinedApprovedCount <= before) {
             const reason = completed?.detail
                 || "No TIA import verification returned from the backend.";
-            appendHmiRunIssue(hmiReviewQueueCurrentScope === "project"
-                    ? "XLSX" : "XML",
+            appendHmiRunIssue(importType,
                 reviewListName, "", "", reason, "Interrupted — inspect TIA");
             finishReviewedHmiQueue(
-                "Stopped: XML/TIA import status uncertain — " + reason
+                "Stopped: " + importType
+                + "/TIA import status uncertain — " + reason
                 + " Inspect TIA before retrying.", true
             );
             return;
