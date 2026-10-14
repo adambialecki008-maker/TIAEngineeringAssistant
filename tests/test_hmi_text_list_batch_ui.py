@@ -370,8 +370,11 @@ def test_stop_during_inflight_prepare_or_import_never_aborts_tia_write():
     assert 'await prepareHmiTextList()' in prepare
     assert 'hmiReviewQueueOperation = null;' in prepare
     assert 'if (hmiReviewQueueStopRequested)' in prepare
-    assert prepare.index('if (hmiReviewQueueStopRequested) {\n            finishStoppedReviewedHmiQueue();') > prepare.index(
-        'hmiReviewQueueOperation = null;')
+    # Crucially there must be a SECOND stop boundary after the awaited
+    # read-only prepare returns, not only before it starts.
+    after_prepare = prepare.split('hmiReviewQueueOperation = null;', 1)[1]
+    assert 'if (hmiReviewQueueStopRequested)' in after_prepare
+    assert 'finishStoppedReviewedHmiQueue();' in after_prepare
     approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
