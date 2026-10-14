@@ -116,6 +116,12 @@ export function initTiaUi(
     const hmiDedicatedProjectTexts = document.getElementById("tia-hmi-dedicated-project-texts");
     const hmiAutomationControls = document.querySelector(".hmi-automation-controls");
     const hmiUnifiedStatus = document.getElementById("tia-hmi-unified-status");
+    const hmiReviewEachBatch = document.getElementById("tia-hmi-review-each-batch");
+    const hmiModeDescription = document.getElementById("tia-hmi-mode-description");
+    const hmiStep3Description = document.getElementById("tia-hmi-step3-description");
+    const hmiRunDescription = document.getElementById("tia-hmi-run-description");
+    const hmiEditDetails = document.getElementById("tia-hmi-edit-details");
+    const hmiEditCaption = document.getElementById("tia-hmi-edit-caption");
     const hmiTextListCatalog = document.getElementById("tia-hmi-text-lists-catalog");
     const hmiTextListSelect = document.getElementById("tia-hmi-text-list-select");
     const hmiTextListStatus = document.getElementById("tia-hmi-text-list-status");
@@ -536,6 +542,13 @@ export function initTiaUi(
     let hmiUnifiedPauseRequested = false;
     let hmiUnifiedQuota = 0;
     let hmiUnifiedXlsxVerified = 0;
+    let hmiReviewQueueActive = false;
+    let hmiReviewQueuePending = false;
+    let hmiReviewQueuePaused = false;
+    let hmiReviewQueueQuota = 0;
+    let hmiReviewQueueStartApproved = 0;
+    let hmiReviewQueueTypes = {project: false, text_lists: false};
+    let hmiReviewQueueCurrentScope = null;
     let latestHmiScan = null;
     let hmiBatchRunning = false;
     let hmiBatchStarting = false;
@@ -1418,16 +1431,14 @@ export function initTiaUi(
     }
 
     function nextHmiManualScope() {
-        const selectedXml = nextEligibleTextList();
-        const xmlVerified = hmiScopeEnabled("text_lists")
-            && hmiScanKey(hmiTranslationSelection(), "text_lists")
-                === verifiedHmiTextListsScanKey;
-        // XML batches are reviewed one list at a time, without a visible
-        // separate scope selector. Once XML entries are exhausted, use XLSX.
-        if (xmlVerified && selectedXml) return "text_lists";
+        // One combined queue: all eligible Project texts BEFORE XML lists.
+        const selection = hmiTranslationSelection();
         const projectVerified = hmiScopeEnabled("project")
-            && hmiScanKey(hmiTranslationSelection()) === verifiedHmiScanKey;
+            && hmiScanKey(selection) === verifiedHmiScanKey;
         if (projectVerified && latestHmiScan?.missingUnique) return "project";
+        const xmlVerified = hmiScopeEnabled("text_lists")
+            && hmiScanKey(selection, "text_lists") === verifiedHmiTextListsScanKey;
+        if (xmlVerified && nextEligibleTextList()) return "text_lists";
         return null;
     }
 
@@ -1442,8 +1453,26 @@ export function initTiaUi(
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress
             || hmiTextListBusy || hmiXmlAutoRunning || hmiUnifiedRunning;
-        if (hmiScopeProject) hmiScopeProject.disabled = busy;
-        if (hmiScopeLists) hmiScopeLists.disabled = busy;
+        if (hmiScopeProject) hmiScopeProject.disabled = busy || hmiReviewQueueActive;
+        if (hmiScopeLists) hmiScopeLists.disabled = busy || hmiReviewQueueActive;
+        if (hmiReviewEachBatch) {
+            hmiReviewEachBatch.disabled = busy || hmiReviewQueueActive;
+            const isReview = hmiReviewEachBatch.checked;
+            if (hmiModeDescription) hmiModeDescription.textContent = isReview
+                ? "ON: translate one batch → edit in Step 2 → approve → verified import → next batch."
+                : "OFF: translate and import automatically, with verification after every batch.";
+            if (hmiStep3Description) hmiStep3Description.textContent = isReview
+                ? "Each batch awaits explicit approval in the Step 2 editor before import."
+                : "Import eligible translations automatically for the checked types.";
+        }
+        if (hmiRunDescription) {
+            const order = projectSelected && listsSelected
+                ? "Project texts → Text lists"
+                : projectSelected ? "Project texts"
+                : listsSelected ? "Text lists" : "No text type selected";
+            hmiRunDescription.textContent = "Queue: " + order
+                + ". Checked types only. TIA imports are validated and verified.";
+        }
         // One shared action pair; internal XML list is selected automatically.
         if (hmiTextListSelect) {
             hmiTextListSelect.value = nextEligibleTextList()?.name || "";
@@ -1466,7 +1495,7 @@ export function initTiaUi(
                 ? "Prepare XML batch for review"
                 : activeManualScope === "project"
                     ? "Prepare XLSX batch for review" : "Prepare selected batch";
-            hmiTranslateButton.disabled = busy || !activeManualScope
+            hmiTranslateButton.disabled = busy || hmiReviewQueueActive || !activeManualScope
                 || !hasTranslationEngine || !validBatchSize || !validTotal
                 || !count || !quotaRemaining;
             hmiTranslateButton.title = activeManualScope === "text_lists"
@@ -1497,12 +1526,12 @@ export function initTiaUi(
                 && preparedHmiReview?.selectionKey === reviewKey;
             const xmlReviewReady = listsSelected && hmiTextListReviewToken
                 && hmiTextListPreparedKey === textListReviewKey();
-            hmiImportReviewedButton.disabled =
-                busy || !(projectReviewReady || xmlReviewReady);
-            hmiImportReviewedButton.textContent = xmlReviewReady
-                ? "Import reviewed XML batch"
-                : projectReviewReady ? "Import reviewed XLSX batch"
-                : "Import reviewed batch";
+            hmiImportReviewedButton.disabled = busy
+                || !(projectReviewReady || xmlReviewReady)
+                || (hmiReviewQueueActive && !hmiReviewQueuePending);
+            hmiImportReviewedButton.classList.toggle("hidden",
+                !hmiReviewQueuePending);
+            hmiImportReviewedButton.textContent = "Approve & import reviewed batch";
         }
         // XML imports use their own one-list-at-a-time validated protocol.
         if (hmiXmlAutoStart) {
@@ -1525,7 +1554,7 @@ export function initTiaUi(
             const cannotStart = busy || !scope || !selection || !hasTranslationEngine
                 || !validBatchSize || !validTotal || !quotaRemaining
                 || combinedMissingCount() < 1 || !projectReady || !xmlReady;
-            hmiBatchStartButton.disabled = cannotStart;
+            hmiBatchStartButton.disabled = cannotStart || hmiReviewQueueActive;
             if (hmiBatchReadiness) {
                 let hint = "";
                 if (!scope || !selection) {
@@ -1549,12 +1578,16 @@ export function initTiaUi(
             }
         }
         if (hmiBatchResumeButton) {
-            hmiBatchResumeButton.classList.toggle("hidden", !projectSelected);
-            hmiBatchResumeButton.disabled = busy || !projectSelected || !savedHmiBatchJobId();
+            hmiBatchResumeButton.classList.toggle("hidden",
+                !hmiReviewQueuePaused);
+            hmiBatchResumeButton.disabled = !hmiReviewQueuePaused
+                || hmiReviewQueuePending || busy;
+            hmiBatchResumeButton.textContent = "Resume review queue";
         }
         if (hmiBatchPauseButton) {
-            hmiBatchPauseButton.disabled = !hmiUnifiedRunning
-                || hmiUnifiedPauseRequested;
+            hmiBatchPauseButton.disabled = (!hmiUnifiedRunning
+                || hmiUnifiedPauseRequested)
+                && (!hmiReviewQueueActive || hmiReviewQueuePaused);
         }
     }
 
@@ -1923,6 +1956,10 @@ export function initTiaUi(
                 + "batch size and shared total before translating.";
             return;
         }
+        if (hmiReviewEachBatch?.checked) {
+            await startReviewedHmiQueue({useProject, useXml, quota});
+            return;
+        }
         const order = [useProject && "Project texts (XLSX)",
             useXml && "Text lists (XML)"].filter(Boolean).join(" → ");
         if (!confirm(
@@ -2003,6 +2040,14 @@ export function initTiaUi(
     }
 
     function pauseUnifiedHmiTranslation() {
+        if (hmiReviewQueueActive) {
+            hmiReviewQueuePaused = true;
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Review queue pause requested. Finish the current approved batch; "
+                + "the next batch will not prepare until resumed.";
+            updateHmiTranslateButtonState();
+            return;
+        }
         if (!hmiUnifiedRunning || hmiUnifiedPauseRequested) return;
         hmiUnifiedPauseRequested = true;
         if (hmiBatchRunning) void pauseHmiBatchImport();
@@ -2010,6 +2055,124 @@ export function initTiaUi(
         if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
             "Pause requested. Current TIA batch will finish verification first.";
         updateHmiTranslateButtonState();
+    }
+
+    function finishReviewedHmiQueue(message, isError = false) {
+        hmiReviewQueueActive = false;
+        hmiReviewQueuePaused = false;
+        hmiReviewQueuePending = false;
+        hmiReviewQueueCurrentScope = null;
+        if (hmiUnifiedStatus) {
+            hmiUnifiedStatus.textContent = message;
+            hmiUnifiedStatus.classList.toggle("error", isError);
+        }
+        updateHmiTranslateButtonState();
+    }
+
+    async function startReviewedHmiQueue({useProject, useXml, quota}) {
+        // No writes here: each step uses prepare-translations or text-lists/prepare.
+        if (hmiReviewQueueActive || !quota) return;
+        if (!confirm(
+            "PREPARE REVIEWED HMI TRANSLATION QUEUE?\n\n"
+            + "No import occurs until you inspect and approve EACH batch in Step 2.\n"
+            + "After every verified import the next batch will be prepared.\n"
+            + "Use a BACKUP/COPY of the TIA project."
+        )) return;
+        hmiReviewQueueActive = true;
+        hmiReviewQueuePending = false;
+        hmiReviewQueuePaused = false;
+        hmiReviewQueueQuota = quota;
+        hmiReviewQueueStartApproved = hmiCombinedApprovedCount;
+        hmiReviewQueueTypes = {project: useProject, text_lists: useXml};
+        if (hmiEditDetails) hmiEditDetails.open = true;
+        renderHmiBatchProgress(0, quota);
+        updateHmiTranslateButtonState();
+        await prepareNextReviewedHmiBatch();
+    }
+
+    async function prepareNextReviewedHmiBatch() {
+        if (!hmiReviewQueueActive || hmiReviewQueuePending) return;
+        if (hmiReviewQueuePaused) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Queue paused. Press Resume review queue to prepare the next batch.";
+            updateHmiTranslateButtonState();
+            return;
+        }
+        const verified = hmiCombinedApprovedCount - hmiReviewQueueStartApproved;
+        renderHmiBatchProgress(verified, hmiReviewQueueQuota);
+        if (verified >= hmiReviewQueueQuota) {
+            finishReviewedHmiQueue("Reviewed queue complete — "
+                + verified + " translations verified in TIA.");
+            return;
+        }
+        const remaining = hmiReviewQueueQuota - verified;
+        const project = hmiReviewQueueTypes.project
+            && hmiScopeEnabled("project") && (latestHmiScan?.missingUnique || 0) > 0;
+        const xml = hmiReviewQueueTypes.text_lists
+            && hmiScopeEnabled("text_lists") && eligibleXmlEntries() > 0;
+        if (!project && !xml) {
+            finishReviewedHmiQueue("Reviewed queue finished — "
+                + verified + " verified in TIA. No more eligible targets.");
+            return;
+        }
+        hmiReviewQueueCurrentScope = project ? "project" : "text_lists";
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+            "Preparing " + (project ? "Project texts" : "the next Text list")
+            + " batch — maximum " + Math.min(Number(hmiBatchSizeInput?.value), remaining)
+            + " translations. TIA is unchanged until you approve.";
+        let prepared = false;
+        try {
+            // The existing manual endpoints enforce validation and snapshot rules.
+            prepared = project
+                ? await translateSelectedHmi()
+                : await prepareHmiTextList();
+        } catch (error) {
+            finishReviewedHmiQueue("Prepare failed: " + error.message, true);
+            return;
+        }
+        if (!prepared) {
+            finishReviewedHmiQueue(
+                "No safe proposals were prepared. No import performed. "
+                + "Inspect skipped texts or rescan before continuing.", true
+            );
+            return;
+        }
+        hmiReviewQueuePending = true;
+        if (hmiEditDetails) hmiEditDetails.open = true;
+        if (hmiEditCaption) hmiEditCaption.textContent =
+            "Review " + (project ? "Project texts" : "Text list")
+            + " batch — edit before approval";
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+            "Awaiting approval. Edit the proposals in Step 2, then click "
+            + "Approve & import reviewed batch. No automatic import will occur.";
+        updateHmiTranslateButtonState();
+        hmiEditDetails?.scrollIntoView({behavior:"smooth", block:"nearest"});
+    }
+
+    async function approveReviewedHmiQueueBatch() {
+        if (!hmiReviewQueueActive || !hmiReviewQueuePending) return;
+        const before = hmiCombinedApprovedCount;
+        const completed = await importSelectedHmiBatch();
+        // A failed import or cancelled confirmation MUST NOT advance the queue.
+        if (!completed || hmiCombinedApprovedCount <= before) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Import not verified or approval cancelled. Queue stopped. "
+                + "Inspect the proposed values / TIA project before proceeding.";
+            // Manual editors remain visible for corrections where the backend
+            // retained the review token; no automatic retry is attempted.
+            hmiReviewQueueActive = false;
+            hmiReviewQueuePending = false;
+            updateHmiTranslateButtonState();
+            return;
+        }
+        hmiReviewQueuePending = false;
+        renderHmiBatchProgress(
+            hmiCombinedApprovedCount - hmiReviewQueueStartApproved,
+            hmiReviewQueueQuota
+        );
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+            "Verified in TIA. Preparing next batch in queue...";
+        await prepareNextReviewedHmiBatch();
     }
 
     async function startHmiBatchImport({confirmed = false, forceAll = false} = {}) {
@@ -8636,7 +8799,10 @@ export function initTiaUi(
         "click", () => { void prepareSelectedHmiBatch(); }
     );
     hmiImportReviewedButton?.addEventListener(
-        "click", () => { void importSelectedHmiBatch(); }
+        "click", () => {
+            if (hmiReviewQueueActive) void approveReviewedHmiQueueBatch();
+            else void importSelectedHmiBatch();
+        }
     );
     if (hmiPreviewFilter) {
         hmiPreviewFilter.addEventListener("change", renderHmiPreviewRows);
@@ -8654,11 +8820,12 @@ export function initTiaUi(
         updateHmiTranslateButtonState();
     });
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
+    hmiReviewEachBatch?.addEventListener("change", updateHmiTranslateButtonState);
 
     const changeHmiScope = (changed) => {
         if (hmiPreviewInProgress || hmiTextListBusy || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress
-            || hmiXmlAutoRunning || hmiUnifiedRunning) {
+            || hmiXmlAutoRunning || hmiUnifiedRunning || hmiReviewQueueActive) {
             changed.checked = !changed.checked;
             return;
         }
@@ -8700,7 +8867,14 @@ export function initTiaUi(
         "click", () => { void translateAllSelectedHmi(); }
     );
     hmiBatchResumeButton?.addEventListener(
-        "click", () => { void resumeHmiBatchImport(); }
+        "click", () => {
+            if (hmiReviewQueuePaused) {
+                hmiReviewQueuePaused = false;
+                void prepareNextReviewedHmiBatch();
+            } else {
+                void resumeHmiBatchImport();
+            }
+        }
     );
     hmiBatchPauseButton?.addEventListener(
         "click", () => { void pauseUnifiedHmiTranslation(); }
