@@ -39,6 +39,12 @@ class PlcStructureImportRequest(BaseModel):
     selected_dbs: list[str] | None = None
 
 
+class SelectedProjectPreviewRequest(BaseModel):
+    project: ProjectSpecification
+    selected_udts: list[str] | None = None
+    selected_dbs: list[str] | None = None
+
+
 class PlcStructureApplyRequest(PlcStructureImportRequest):
     expected_token: str = Field(pattern=r"^[a-f0-9]{64}$")
     backup_confirmed: bool = False
@@ -342,6 +348,19 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
                    for status in ("create", "identical", "conflict", "blocked")},
         "can_apply": bool(create),
         "will_create": create,
+    }
+
+
+@router.post("/plc-structure-import/preview")
+def preview_selected_plc_sources(request: SelectedProjectPreviewRequest) -> dict:
+    # No process/TIA connection is required to generate the selected SCL.
+    selected = _selected_project(request)
+    all_known = [u.name for u in request.project.udts]
+    definitions = _definitions(selected, known_udts=all_known)
+    return {
+        "source": "\\n\\n".join(item["source"] for item in definitions),
+        "items": [{"kind": item["kind"], "name": item["name"]}
+                  for item in definitions],
     }
 
 
