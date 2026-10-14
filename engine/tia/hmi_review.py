@@ -453,8 +453,9 @@ def prepare_hmi_translations(request: TranslateHmiTextsRequest):
             if needs_target_fill(r["source"], r["current_target"])]
     chosen = []
     seen = set()
+    excluded = set(request.exclude_source_texts)
     for row in rows:
-        if row["source"] in seen:
+        if row["source"] in seen or row["source"] in excluded:
             continue
         seen.add(row["source"])
         chosen.append(row)
