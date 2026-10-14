@@ -2321,7 +2321,16 @@ export function initTiaUi(
         if (!hmiReviewQueueActive || !hmiReviewQueuePending) return;
         const before = hmiCombinedApprovedCount;
         const completed = await importSelectedHmiBatch();
-        // A failed import or cancelled confirmation MUST NOT advance the queue.
+        if (completed === "edit_invalid" || completed === "cancelled") {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                completed === "edit_invalid"
+                    ? "Validation rejected an edit before TIA import. Correct it in "
+                        + "Step 2 or select Skip reviewed batch; queue is waiting."
+                    : "Approval cancelled. Review remains editable and no import ran.";
+            updateHmiTranslateButtonState();
+            return;
+        }
+        // Unknown write outcome MUST NOT advance the queue.
         if (!completed || hmiCombinedApprovedCount <= before) {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 "Import not verified or approval cancelled. Queue stopped. "
@@ -2743,18 +2752,19 @@ export function initTiaUi(
                 entry_index: Number(element.dataset.entryIndex),
                 proposal: element.value,
             }));
-        if (!selected.length || !confirm(
+        if (!selected.length) return "edit_invalid";
+        if (!confirm(
             "Import reviewed translations into TIA?\n\n"
             + "ONLY Text list: " + listName + "\n"
             + "Entries: " + selected.length + "\n\n"
             + "This overrides the selected list XML, preserves the other "
             + "lists, and verifies every entry by re-export.\n"
             + "Use a BACKUP/COPY of the TIA project for the first import."
-        )) return;
+        )) return "cancelled";
         const token = hmiTextListReviewToken;
         const batchIdentity = textListBatchIdentity();
-        // One-shot approval: no silent retry after uncertain TIA import.
-        discardHmiTextListReview();
+        // Keep editable proposals visible during server-side QA; only the
+        // server consumes the review token once all pre-write checks pass.
         hmiTextListBusy = true;
         updateHmiTranslateButtonState();
         if (hmiTextListStatus)
@@ -2770,6 +2780,7 @@ export function initTiaUi(
             }
             hmiTextListImportedCount += result.verified_entries;
             hmiCombinedApprovedCount += result.verified_entries;
+            discardHmiTextListReview();
             // Refresh the selected list after a confirmed import to prepare
             // the next manual batch from currently empty targets only.
             const refreshed = await scanHmiTextLists();
@@ -2782,6 +2793,13 @@ export function initTiaUi(
                         : "Scan Text lists again before preparing another batch.");
             return Boolean(refreshed);
         } catch (error) {
+            if (error.message?.includes("TEXT_LIST_REVIEW_EDIT_INVALID:")) {
+                if (hmiTextListStatus) hmiTextListStatus.textContent =
+                    "Manual XML edit rejected BEFORE import: " + error.message
+                    + ". Correct the editable proposal and approve again.";
+                return "edit_invalid";
+            }
+            discardHmiTextListReview();
             if (hmiTextListStatus)
                 hmiTextListStatus.textContent =
                     "Import rejected or verification uncertain: " + error.message
@@ -3983,14 +4001,14 @@ export function initTiaUi(
                 "Every reviewed Project text needs a non-empty target. "
                 + "Enter a translation manually or choose Use source.", "error"
             );
-            return;
+            return "edit_invalid";
         }
         if (!confirm(
             "Import " + review.rowCount
             + " REVIEWED text row(s) into the selected TIA project? "
             + "The project will be saved and each imported value verified."
         )) {
-            return;
+            return "cancelled";
         }
 
         hmiReviewInProgress = true;
@@ -4063,6 +4081,7 @@ export function initTiaUi(
                     + " Correct the text and click Import reviewed batch again.",
                     "error"
                 );
+                return "edit_invalid";
             } else {
                 setHmiTranslationStatus(
                     error.message + " The write status may be uncertain: "
