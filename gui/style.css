@@ -2318,3 +2318,75 @@ table > thead > tr > th {
 #tia-hmi-project-texts-details .hmi-text-lists-detail-body {
     min-width: 0;
 }
+
+/* Unified HMI translation workspace — matches the compact dark application UI. */
+.hmi-queue-title {
+    font: 650 16px/1.4 inherit;
+    font-size: 16px;
+    color: #f0f5f9;
+    margin: 15px 0 7px;
+}
+.hmi-queue-subtitle {color: #88c7f5; font-weight: 500; margin-left: 8px;}
+.hmi-translation-queue-table th,
+.hmi-translation-queue-table td {
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.35;
+    vertical-align: middle;
+    padding: 9px 12px;
+}
+.hmi-translation-queue-table th:first-child,
+.hmi-translation-queue-table td:first-child {width: 48px;}
+.hmi-translation-queue-table th:nth-child(2),
+.hmi-translation-queue-table td:nth-child(2) {width: 170px;}
+.hmi-translation-queue-table th:nth-child(4),
+.hmi-translation-queue-table td:nth-child(4) {width: 150px; text-align: right;}
+.hmi-translation-queue-table th:last-child,
+.hmi-translation-queue-table td:last-child {width: 160px; text-align: left;}
+.hmi-file-icon {
+    display: inline-flex;
+    width: 29px; height: 23px;
+    border-radius: 4px; justify-content: center; align-items: center;
+    color: #fff; font-size: 10px; font-weight: 750;
+    margin-right: 7px; vertical-align: middle;
+}
+.hmi-file-xlsx {background: #16784f;}
+.hmi-file-xml {background: #2878b8;}
+.hmi-queue-status::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    display: inline-block; background: #80919d; margin-right: 7px;
+}
+.hmi-queue-reviewing {color: #ffd27a;}
+.hmi-queue-reviewing::before {background: #e4ac40;}
+.hmi-queue-running {color: #8dd4ff;}
+.hmi-queue-running::before {background: #4db9ee;}
+.hmi-queue-done {color: #8fdfab;}
+.hmi-queue-done::before {background: #36bc78;}
+.hmi-mode-switch {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; margin: 12px 0;
+    border: 1px solid #456579; border-radius: 7px;
+    background: #132532; color: #eef5fa;
+}
+.hmi-mode-switch input {width: 18px; height: 18px; margin-top: 3px; accent-color: #278ed0;}
+.hmi-mode-switch span {display: flex; flex-direction: column; gap: 4px;}
+.hmi-mode-switch small {font-size: 12px; font-weight: 400; color: #a8cce5;}
+.hmi-edit-details {
+    margin: 16px 0; border: 1px solid #355469;
+    border-radius: 7px; background: #13242f;
+}
+.hmi-edit-details > summary {
+    cursor: pointer; color: #f4f8fb; padding: 12px;
+    font-size: 15px; font-weight: 650;
+}
+.hmi-section-icon {color: #69bafa; margin-right: 7px;}
+.hmi-edit-body {padding: 12px; border-top: 1px solid #355469;}
+.hmi-edit-body textarea {
+    background: #101c25; color: #ebf4fb;
+    border: 1px solid #4c6c81; border-radius: 5px;
+    min-height: 56px; width: 100%; box-sizing: border-box;
+    padding: 8px; resize: vertical; font: inherit;
+}
+.hmi-workflow-step .hmi-action-status:empty {display: none;}
+#tia-hmi-unified-status {text-align: left; padding: 12px;}
+.hmi-automatic-scope.hidden {display: none !important;}
