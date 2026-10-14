@@ -1691,7 +1691,7 @@ export function initTiaUi(
             + " remaining under this limit. "
             + (remaining ? "About " + Math.ceil(remaining / batch)
                 + " preparation(s), plus XML list boundaries." : "No more batches.")
-            + " XML always requires manual import approval.";
+            + " XML may be manually reviewed or processed through the separate confirmed auto-XML workflow.";
     }
 
     function showHmiBatchJob(job) {
@@ -1847,7 +1847,7 @@ export function initTiaUi(
             + ". Final batch will be smaller when needed."
             + "\nAutomatic continuation: "
             + (hmiBatchAutoRepeat?.checked ? "ON" : "OFF (one batch only)")
-            + "\nText lists (XML) are EXCLUDED and still need manual review. "
+            + "\nText lists (XML) are EXCLUDED; use the separate XML workflow. "
             + "\n\nOnly missing or 'Text' XLSX targets are filled. "
             + "Each batch is imported and VERIFIED in TIA before the next. "
             + "Back up the project and do not edit it during import."
@@ -3309,6 +3309,13 @@ export function initTiaUi(
             setHmiTranslationStatus(
                 "Not all prepared Project texts are visible/editable. "
                 + "Prepare the review again before importing.", "error"
+            );
+            return;
+        }
+        if (proposals.some(item => !item.proposal.trim())) {
+            setHmiTranslationStatus(
+                "Every reviewed Project text needs a non-empty target. "
+                + "Enter a translation manually or choose Use source.", "error"
             );
             return;
         }
