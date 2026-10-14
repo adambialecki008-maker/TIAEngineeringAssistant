@@ -125,6 +125,7 @@ export function initTiaUi(
     const hmiRunDescription = document.getElementById("tia-hmi-run-description");
     const hmiEditDetails = document.getElementById("tia-hmi-edit-details");
     const hmiEditCaption = document.getElementById("tia-hmi-edit-caption");
+    const hmiQueueScopeNote = document.getElementById("tia-hmi-queue-scope-note");
     const hmiTextListCatalog = document.getElementById("tia-hmi-text-lists-catalog");
     const hmiTextListSelect = document.getElementById("tia-hmi-text-list-select");
     const hmiTextListStatus = document.getElementById("tia-hmi-text-list-status");
@@ -1527,6 +1528,18 @@ export function initTiaUi(
             hmiRunDescription.textContent = "Queue: " + order
                 + ". Checked types only. TIA imports are validated and verified.";
         }
+        if (hmiQueueScopeNote) {
+            const projectNote = "Project texts (XLSX): one HMI Project texts "
+                + "work item, translated and verified in batches.";
+            const xmlNote = "Text lists (XML): an entire XML Text list is "
+                + "submitted to TIA for each import, one list at a time. "
+                + "Unedited entries must be preserved and verified.";
+            hmiQueueScopeNote.textContent = projectSelected && listsSelected
+                ? projectNote + " " + xmlNote
+                : projectSelected ? projectNote
+                : listsSelected ? xmlNote
+                : "Select at least one text type to populate the queue.";
+        }
         // One shared action pair; internal XML list is selected automatically.
         if (hmiTextListSelect) {
             hmiTextListSelect.value = nextEligibleTextList()?.name || "";
@@ -1893,14 +1906,22 @@ export function initTiaUi(
             && hmiScanKey(hmiTranslationSelection()) === verifiedHmiScanKey
                 ? latestHmiScan?.missingUnique || 0 : 0;
         const xml = eligibleXmlEntries();
-        hmiBatchPlan.textContent = "Selected scopes: " + project
-            + " remaining XLSX texts + " + xml + " eligible XML entries. "
-            + "Batch size " + batch + "; configured total "
-            + (requested ?? selectedTotal) + "; " + remaining
-            + " remaining under this limit. "
-            + (remaining ? "About " + Math.ceil(remaining / batch)
-                + " preparation(s), plus XML list boundaries." : "No more batches.")
-            + " Shared queue: XLSX first, then XML when both scopes are checked.";
+        const plannedScopes = [];
+        if (hmiScopeEnabled("project"))
+            plannedScopes.push(project + " Project texts translations (XLSX)");
+        if (hmiScopeEnabled("text_lists"))
+            plannedScopes.push(xml + " Text list entries (XML)");
+        hmiBatchPlan.textContent = "Selected: "
+            + (plannedScopes.length ? plannedScopes.join(" + ") : "no text types")
+            + ". Batch size " + batch + "; total "
+            + (requested ?? selectedTotal) + "; remaining " + remaining
+            + ". " + (remaining ? "About " + Math.ceil(remaining / batch)
+                + " translation preparation(s)." : "No remaining translations.")
+            + (hmiScopeEnabled("text_lists")
+                ? " Each XML import sends one full Text list at a time."
+                : "")
+            + (hmiScopeEnabled("project") && hmiScopeEnabled("text_lists")
+                ? " Order: Project texts then Text lists." : "");
     }
 
     function showHmiBatchJob(job) {
