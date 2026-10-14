@@ -1,6 +1,6 @@
 # Resume: existing UDT reuse and HMI Text List import
 
-Status: both functional fixes completed and targeted checks passed; final full-suite/build verification pending.
+Status: code fixes completed, committed and pushed; all automated checks passed. Real TIA write/import verification remains user-operated on a backup.
 Branch: codex/fix-udt-reuse-text-list-import
 Repository: https://github.com/adambialecki008-maker/TIAEngineeringAssistant
 Base commit: c025b1c
@@ -30,7 +30,7 @@ Open this repository and this branch, read this file, and continue the requested
 ## Follow-up: live array dependency references
 - Final control found live Array of String[n]/WString[n] and multidimensional arrays could be treated as complete UDT names by the transitive resolver. Dependency parsing now extracts only the element type; complete bounds remain in structural comparison.
 - Three additional mocked regressions passed: tests/test_plc_structure_import.py => 39 passed in 1.91s.
-- First final full suite before this follow-up: 383 passed in 13.45s; .NET build 0 warnings/errors and JS checks passed. Full-suite rerun is needed because this subsequent code change added coverage.
+- First final full suite before this follow-up: 383 passed in 13.45s; .NET build 0 warnings/errors and JS checks passed. Final full-suite rerun after this follow-up: 386 passed in 11.98s (0 failed, 0 skipped).
 
 ## Completed functional fix 2: native V21 Text List XML and progress
 - Real read-only exports revealed changing DocumentInfo/Created timestamps, hexadecimal engineering IDs, and ordinary body/p/br line breaks. The old snapshot treated export timestamps as content changes and rejected line-break lists as rich formatting.
@@ -45,10 +45,22 @@ Open this repository and this branch, read this file, and continue the requested
 - Selected PLC S7-1500/1515F-2PN / PPFKA2 contains UDT_Motor with IsConsistent=False. Siemens V21 explicitly refuses its export: "Inconsistent blocks and PLC data types (UDT) cannot be exported." DB_Motors2 was not found in the read-only inventory.
 - Do NOT claim this particular live UDT is compatible or that DB_Motors2 has been created. The application reports unknown/blocked until the user repairs/compiles this existing UDT in TIA and its structure can be exported. No automatic modification of the existing type was performed.
 
-## Next steps
-1. Run full pytest ONCE now, JS checks and final .NET build. If failures occur, fix their actual cause using targeted reruns, then repeat full suite only after changes.
-2. Record final exact counts/results here and commit/push the final checkpoint. Keep adapter generated bin/obj artifacts unstaged.
-3. Real write verification remains a user-operated test on a backup: compile/repair existing UDT_Motor, Check target for DB_Motors2 only, verify compatible/reuse and DB-only creation plan, acknowledge backup and approve import, check DB compilation and unchanged UDT. For HMI: fresh scan, prepare 1-2 XML entries including a line break, review/approve import, verify target language in TIA and re-export. Do not run these writes automatically.
+## Final verification and commits
+- Final full suite: .venv/Scripts/python.exe -m pytest -q => 386 passed in 11.98s, 0 failed, 0 skipped.
+- Final .NET build of the changed adapter: dotnet build openness_adapter/TiaOpennessAdapter.csproj --no-restore => succeeded, 0 warnings, 0 errors (3.13s). Later follow-up changed only Python dependency parsing/tests.
+- node --check gui/js/tia.js and gui/js/source_import.js passed. git diff --check passed.
+- UI progress regression executes the real JS helper using Node with mocked network/timers; unit/API Openness and Ollama tests are mocked. No full browser end-to-end import was executed.
+- Functional commits: a01700f (compatible UDT reuse/DB compile), c8d9c01 (native XML/progress), 94f06e5 (live array dependencies). All are pushed to codex/fix-udt-reuse-text-list-import. Main was not merged automatically.
+- Existing generated adapter bin/obj changes remain local and were excluded from commits.
+
+## Remaining work / manual verification
+No unfinished implementation is known from the reported bugs. Real TIA write verification is still required; browser ChatGPT must not assume it has access to the desktop TIA process.
+1. On a TIA backup, repair/compile existing UDT_Motor until Siemens can export it. Check target for DB_Motors2 only; verify compatible/reuse and a DB-only creation plan. Acknowledge backup and explicitly approve import. Check DB compilation and unchanged UDT. Unknown structure must remain blocked; never force reuse.
+2. For HMI, restart the backend and refresh the page, select the same HMI/source/target, scan, prepare 1-2 XML entries including a line break, review/approve import, and verify the target language in TIA and re-export. Use the actual target language view rather than only the source language. Test automatic batches only after this manual test succeeds.
+3. If a real test fails, record exact diagnostics, use focused mocked regressions, fix the cause incrementally, commit/push each completed fix to this branch and update this document. Never retry an uncertain TIA write blindly.
+
+## Browser continuation prompt
+Continue work in repository adambialecki008-maker/TIAEngineeringAssistant on branch codex/fix-udt-reuse-text-list-import. Read docs/resume-udt-text-list-fixes.md first. Both code fixes and automated checks are complete; remaining real TIA checks and the actual inconsistent UDT limitation are recorded there. Use the user's new live diagnostics to guide any follow-up. Preserve no-overwrite/XML safety checks, avoid unrelated refactoring, and publish each tested functional fix plus an updated checkpoint to this branch.
 
 ## Siemens references consulted
 - [V21 interface XML declarations and WithDefaults](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/export/import/importing/exporting-data-of-a-plc-device/blocks/xml-structure-of-the-block-interface-section)
