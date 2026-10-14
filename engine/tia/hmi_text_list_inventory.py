@@ -143,7 +143,7 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
                         "supported": item["supported"],
                         "reason": item.get("reason"),
                     }
-                    for item in entries[:50]
+                    for item in entries[:500]
                 ]
             except (HTTPException, ValueError) as exc:
                 preview_warning = (
@@ -174,7 +174,7 @@ def inspect_hmi_text_lists(request: TranslateHmiTextsRequest):
             ),
             "eligible_missing_known": missing_known,
             "lists": results[:100],
-            "sample_limit": 100,
+            "sample_limit": 500,
             "translation_scope": "read_only_inventory",
             "note": (
                 "Dedicated Classic TextLists XML export; separate from "
