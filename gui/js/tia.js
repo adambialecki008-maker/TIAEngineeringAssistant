@@ -1518,10 +1518,10 @@ export function initTiaUi(
             hmiReviewEachBatch.disabled = busy || hmiReviewQueueActive;
             const isReview = hmiReviewEachBatch.checked;
             if (hmiModeDescription) hmiModeDescription.textContent = isReview
-                ? "ON: translate one batch → edit in Step 2 → approve → verified import → next batch."
+                ? "ON: translate one batch → edit in Step 2 → approve in Step 3 → verified import → next batch."
                 : "OFF: translate and import automatically, with verification after every batch.";
             if (hmiStep3Description) hmiStep3Description.textContent = isReview
-                ? "Each batch awaits explicit approval in the Step 2 editor before import."
+                ? "Edit prepared translations in Step 2; approve and import each batch here in Step 3."
                 : "Import eligible translations automatically for the checked types.";
         }
         if (hmiRunDescription) {
@@ -2252,7 +2252,7 @@ export function initTiaUi(
             hmiReviewQueuePaused = true;
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 hmiReviewQueuePending
-                    ? "Current batch still awaits approval in Step 2. "
+                    ? "Current batch awaits approval using the button in Step 3. "
                         + "After you approve or skip it, the queue will pause."
                     : "Pause requested. The next batch will not prepare "
                         + "until resumed.";
@@ -2370,7 +2370,7 @@ export function initTiaUi(
         if (hmiReviewQueueActive || !quota) return;
         if (!confirm(
             "PREPARE REVIEWED HMI TRANSLATION QUEUE?\n\n"
-            + "No import occurs until you inspect and approve EACH batch in Step 2.\n"
+            + "Review/edit each batch in Step 2; approve its import in Step 3.\n"
             + "After every verified import the next batch will be prepared.\n"
             + "Use a BACKUP/COPY of the TIA project."
         )) return;
@@ -2474,7 +2474,7 @@ export function initTiaUi(
             + " batch — edit before approval";
         if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
             "Awaiting approval. Edit the proposals in Step 2, then click "
-            + "Approve & import reviewed batch. No automatic import will occur.";
+            + "Approve & import reviewed batch in Step 3. No automatic import will occur.";
         updateHmiTranslateButtonState();
         hmiEditDetails?.scrollIntoView({behavior:"smooth", block:"nearest"});
     }
@@ -2509,7 +2509,7 @@ export function initTiaUi(
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 completed === "edit_invalid"
                     ? "Validation rejected an edit before TIA import. Correct it in "
-                        + "Step 2 or select Skip reviewed batch; queue is waiting."
+                        + "Step 2, then Approve & import in Step 3; queue is waiting."
                     : "Approval cancelled. Review remains editable and no import ran.";
             updateHmiTranslateButtonState();
             return;
@@ -2935,7 +2935,7 @@ export function initTiaUi(
                     + " skipped by QA."
                     + (reasons ? " Examples: " + reasons : "")
                     + " Edit them here in Step 2, then select "
-                    + "Approve & import below. No TIA write occurred yet.";
+                    + "Approve & import reviewed batch in Step 3. No TIA write occurred yet.";
             }
             if (result.review_id) {
                 hmiTextListReview?.classList.remove("hidden");
