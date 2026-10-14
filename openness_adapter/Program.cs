@@ -115,6 +115,9 @@ namespace TiaOpennessAdapter
                     case "create-plc":
                         return CreatePlc(args);
 
+                    case "clone-hmi":
+                        return CloneHmi(args);
+
 
                     case "rename-plc":
                         return RenamePlc(args);
