@@ -2871,8 +2871,9 @@ export function initTiaUi(
         if (!hasTextListSelection() || hmiTextListBusy) return;
         const maxRows = textListBatchCount();
         if (!maxRows) return;
-        if (hmiTextListSelect)
-            hmiTextListSelect.value = nextEligibleTextList()?.name || "";
+        // The queued caller already selected the intended Text list. Do not
+        // reselect a different list here: it changes the review identity and
+        // makes the prepared XML review impossible to import.
         const selection = hmiTranslationSelection();
         const identity = textListReviewKey();
         discardHmiTextListReview();
