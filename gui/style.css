@@ -2392,3 +2392,58 @@ table > thead > tr > th {
 .hmi-workflow-step .hmi-action-status:empty {display: none;}
 #tia-hmi-unified-status {text-align: left; padding: 12px;}
 .hmi-automatic-scope.hidden {display: none !important;}
+
+
+/* Global form-control standard for all application checkboxes.
+   Do not apply accent-specific variants in individual modules. */
+input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #7a9db3;
+    border-radius: 4px;
+    background: #111d27;
+    vertical-align: middle;
+    cursor: pointer;
+}
+input[type="checkbox"]::before {
+    content: "";
+    display: block;
+    width: 10px;
+    height: 6px;
+    border-left: 2px solid #ffffff;
+    border-bottom: 2px solid #ffffff;
+    transform: translateY(-2px) rotate(-45deg) scale(0);
+    transition: transform 120ms ease;
+}
+input[type="checkbox"]:checked {
+    border-color: #68bcf0;
+    background: #28688c;
+}
+input[type="checkbox"]:checked::before {
+    transform: translateY(-2px) rotate(-45deg) scale(1);
+}
+input[type="checkbox"]:focus-visible {
+    outline: 2px solid #89cbf4;
+    outline-offset: 2px;
+}
+input[type="checkbox"]:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+/* Disabled primary actions must remain legible in dark mode. */
+button.primary-button:disabled {
+    color: #d3e7f4;
+    background: #215875;
+    border-color: #367b9d;
+    opacity: .72;
+    cursor: not-allowed;
+}
