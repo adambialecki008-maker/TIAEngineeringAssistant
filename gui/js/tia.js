@@ -2373,6 +2373,8 @@ export function initTiaUi(
     async function approveReviewedHmiQueueBatch() {
         if (!hmiReviewQueueActive || !hmiReviewQueuePending) return;
         const before = hmiCombinedApprovedCount;
+        const reviewListName = hmiReviewQueueCurrentScope === "text_lists"
+            ? hmiTextListSelect?.value || "Text list" : "Project texts";
         const completed = await importSelectedHmiBatch();
         if (completed === "edit_invalid" || completed === "cancelled") {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
@@ -2383,19 +2385,41 @@ export function initTiaUi(
             updateHmiTranslateButtonState();
             return;
         }
-        // Unknown write outcome MUST NOT advance the queue.
+        if (completed?.state === "verified_refresh_failed") {
+            appendHmiRunIssue("XML", reviewListName, "", "",
+                completed.detail, "Verified in TIA — re-scan required");
+            finishReviewedHmiQueue(
+                "Import VERIFIED in TIA. Follow-up XML catalog scan failed; "
+                + "no further import started. Scan again before continuing.");
+            return;
+        }
+        if (completed?.state === "prewrite_rejected") {
+            // No import was attempted. Other lists can be processed safely,
+            // but refresh the inventory before preparing anything else.
+            appendHmiRunIssue("XML", reviewListName, "", "",
+                completed.detail, "Skipped — no import attempted");
+            hmiReviewQueueBlockedLists.add(reviewListName);
+            hmiReviewQueuePending = false;
+            const refreshed = await scanHmiTextLists();
+            if (!refreshed) {
+                finishReviewedHmiQueue(
+                    "XML skipped safely, but the next catalog scan failed. "
+                    + "No further imports attempted.");
+                return;
+            }
+            await prepareNextReviewedHmiBatch();
+            return;
+        }
+        // Unknown TIA write outcome MUST NEVER be treated as an ordinary skip.
         if (!completed || hmiCombinedApprovedCount <= before) {
-            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
-                "Import not verified or approval cancelled. Queue stopped. "
-                + "Inspect TIA: never retry an uncertain write automatically.";
-            // Unknown write status may not be treated as a skipped translation.
+            const reason = completed?.detail
+                || "No TIA import verification returned from the backend.";
             appendHmiRunIssue(hmiReviewQueueCurrentScope === "project"
                     ? "XLSX" : "XML",
-                hmiTextListSelect?.value || "Current reviewed batch",
-                "", "", "Approval cancelled, rejected or import not verified",
-                "Interrupted — inspect TIA");
+                reviewListName, "", "", reason, "Interrupted — inspect TIA");
             finishReviewedHmiQueue(
-                "Stopped: import status not verified. Inspect TIA before restarting.", true
+                "Stopped: XML/TIA import status uncertain — " + reason
+                + " Inspect TIA before retrying.", true
             );
             return;
         }
