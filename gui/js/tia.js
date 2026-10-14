@@ -3418,6 +3418,14 @@ export function initTiaUi(
             );
             if (!hmiScopeEnabled("text_lists")
                 || hmiScanKey(hmiTranslationSelection(), "text_lists") !== scanKey) return false;
+            // TIA may move a replaced list to the end of its collection.
+            // Keep the scanned queue order so all batches of that list finish
+            // before either automatic or reviewed mode selects another list.
+            const previousOrder = new Map((hmiTextListsData?.lists || [])
+                .map((item, index) => [item.name, index]));
+            data.lists?.sort((a, b) =>
+                (previousOrder.get(a.name) ?? previousOrder.size)
+                - (previousOrder.get(b.name) ?? previousOrder.size));
             hmiTextListsData = data;
             if (hmiTextListSelect)
                 hmiTextListSelect.value = nextEligibleTextList()?.name || "";

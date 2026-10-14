@@ -1,5 +1,4 @@
 """Run language refresh with a mock DOM; no TIA or Ollama calls."""
-import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -55,3 +54,23 @@ FUNCTIONS
     importer = source.split("async function importReviewedHmiTexts()", 1)[1].split(
         "async function refreshProjectLanguages(", 1)[0]
     assert "await refreshProjectLanguages(true);" in importer
+
+
+def test_xml_rescan_keeps_unfinished_list_first():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node required for UI regression")
+    source = (Path(__file__).resolve().parents[1] / "gui/js/tia.js").read_text("utf-8")
+    code = source.split("            const previousOrder =", 1)[1].split(
+        "            hmiTextListsData = data;", 1)[0]
+    script = '''
+const assert = require('node:assert/strict');
+let hmiTextListsData = {lists: [{name: 'A'}, {name: 'B'}]};
+const data = {lists: [{name: 'B', eligible_missing_entries: 10},
+    {name: 'A', eligible_missing_entries: 5}]};
+''' + "const previousOrder =" + code + '''
+assert.deepEqual(data.lists.map(item => item.name), ['A', 'B']);
+assert.equal(data.lists[0].eligible_missing_entries, 5);
+'''
+    result = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
