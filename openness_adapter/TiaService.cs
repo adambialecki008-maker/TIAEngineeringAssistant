@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.IO;
 using System.Globalization;
 using System.Linq;
@@ -3319,6 +3320,14 @@ namespace TiaOpennessAdapter
 
 
                     Console.WriteLine(
+                        "HMI_NETWORK|" +
+                        SanitizeOutput(device.Name) + "|" +
+                        SanitizeOutput(item.Name) + "|" +
+                        SanitizeOutput(ReadDeviceIpAddress(device)) + "|" +
+                        SanitizeOutput(ReadHmiConnectionNames(software))
+                    );
+
+                    Console.WriteLine(
                         "HMI|" +
                         SanitizeOutput(
                             device.Name
@@ -3352,6 +3361,61 @@ namespace TiaOpennessAdapter
             }
         }
 
+
+        // Read-only discovery. Device IP comes from the configured network
+        // interface; unsupported hardware returns blank, never a guessed IP.
+        private static string ReadDeviceIpAddress(Device device)
+        {
+            foreach (DeviceItemPath path in EnumerateDeviceItems(device))
+            {
+                try
+                {
+                    NetworkInterface network =
+                        path.Item.GetService<NetworkInterface>();
+                    if (network == null) continue;
+                    foreach (var node in network.Nodes)
+                    {
+                        object value = node.GetAttribute("Address");
+                        string address = Convert.ToString(value) ?? "";
+                        if (System.Net.IPAddress.TryParse(address, out var parsed)
+                            && parsed.AddressFamily ==
+                                System.Net.Sockets.AddressFamily.InterNetwork)
+                            return address;
+                    }
+                }
+                catch
+                {
+                    // Other interfaces and hardware types may not expose IP.
+                }
+            }
+            return "";
+        }
+
+        // Connection name discovery is intentionally non-mutating. V21 Classic
+        // and Unified expose different engineering object models.
+        private static string ReadHmiConnectionNames(object software)
+        {
+            try
+            {
+                object connections = software.GetType()
+                    .GetProperty("Connections")?.GetValue(software, null);
+                if (!(connections is IEnumerable collection)) return "";
+                List<string> names = new List<string>();
+                foreach (object connection in collection)
+                {
+                    object value = connection.GetType()
+                        .GetProperty("Name")?.GetValue(connection, null);
+                    string name = Convert.ToString(value) ?? "";
+                    if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
+                }
+                return string.Join(", ", names.Distinct(
+                    StringComparer.OrdinalIgnoreCase));
+            }
+            catch
+            {
+                return "";
+            }
+        }
 
         private static bool TypeIsOrDerivesFrom(
             Type type,
