@@ -408,6 +408,7 @@ def test_xlsx_backend_verification_is_not_confused_with_followup_ui_scan():
     assert importer.index('result?.status !== "verified"') < importer.index(
         'hmiCombinedApprovedCount += review.rowCount;')
     assert 'return {state: "uncertain", detail: reason};' in importer
+    assert 'return {state: "prewrite_rejected", detail: reason};' in importer
     assert 'state: "verified_refresh_failed"' in importer
     assert 'Post-import UI refresh failed:' in importer
     assert 'return true;' in importer
