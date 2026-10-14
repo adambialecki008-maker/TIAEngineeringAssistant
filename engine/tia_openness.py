@@ -13,6 +13,9 @@ from engine.tia.hardware import (
 from engine.tia.hmi_translation import (
     router as hmi_translation_router,
 )
+from engine.tia.hmi_devices import (
+    router as hmi_devices_router,
+)
 from engine.tia.hmi_text_list_inventory import (
     router as hmi_text_list_inventory_router,
 )
@@ -67,6 +70,7 @@ for subrouter in (
     project_router,
     languages_router,
     hmi_translation_router,
+    hmi_devices_router,
     hmi_text_list_inventory_router,
     hmi_text_list_translation_router,
     hmi_review_router,
