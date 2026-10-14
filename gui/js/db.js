@@ -5,13 +5,12 @@ import {
 
 import {
     createButton,
-    createTextCell,
     getOpenNames,
 } from "./ui.js";
 
 import {
-    createMemberEditor,
-    formatMemberType,
+    createMemberTree,
+    getExpandedMemberPaths,
 } from "./member-editor.js";
 
 import {
@@ -181,112 +180,6 @@ function deleteDb(
 }
 
 
-function renameMember(
-    dbIndex,
-    memberIndex,
-    refresh
-) {
-    const db =
-        projectConfig.dbs[
-            dbIndex
-        ];
-
-    const member =
-        db.members[
-            memberIndex
-        ];
-
-
-    const result =
-        prompt(
-            "New member name:",
-            member.name
-        );
-
-
-    if (result === null) {
-        return;
-    }
-
-
-    const newName =
-        result.trim();
-
-
-    if (!newName) {
-        return;
-    }
-
-
-    const duplicate =
-        db.members.some(
-            (
-                other,
-                index
-            ) =>
-                index !== memberIndex
-                &&
-                other.name
-                    .toLowerCase()
-                ===
-                newName.toLowerCase()
-        );
-
-
-    if (duplicate) {
-        alert(
-            "Member name must be unique."
-        );
-
-        return;
-    }
-
-
-    member.name =
-        newName;
-
-
-    saveProjectConfig();
-    refresh();
-}
-
-
-function deleteMember(
-    dbIndex,
-    memberIndex,
-    refresh
-) {
-    const db =
-        projectConfig.dbs[
-            dbIndex
-        ];
-
-    const member =
-        db.members[
-            memberIndex
-        ];
-
-
-    if (
-        !confirm(
-            `Delete member "${member.name}"?`
-        )
-    ) {
-        return;
-    }
-
-
-    db.members.splice(
-        memberIndex,
-        1
-    );
-
-
-    saveProjectConfig();
-    refresh();
-}
-
-
 async function validateDb(
     dbIndex
 ) {
@@ -327,6 +220,9 @@ export function renderDbs(
         getOpenNames(
             container
         );
+
+    const expandedPaths =
+        getExpandedMemberPaths(container);
 
 
     container.innerHTML =
@@ -417,140 +313,19 @@ export function renderDbs(
             );
 
 
-            const table =
-                document.createElement(
-                    "table"
-                );
-
-
-            table.innerHTML = `
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Data type</th>
-                        <th>Comment</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-            `;
-
-
-            const tbody =
-                document.createElement(
-                    "tbody"
-                );
-
-
-            db.members.forEach(
-                (
-                    member,
-                    memberIndex
-                ) => {
-
-                    const row =
-                        document.createElement(
-                            "tr"
-                        );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            member.name
-                        )
-                    );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            formatMemberType(
-                                member
-                            )
-                        )
-                    );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            member.comment
-                        )
-                    );
-
-
-                    const actionCell =
-                        document.createElement(
-                            "td"
-                        );
-
-
-                    actionCell.appendChild(
-                        createButton(
-                            "Rename",
-                            () =>
-                                renameMember(
-                                    dbIndex,
-                                    memberIndex,
-                                    refresh
-                                )
-                        )
-                    );
-
-
-                    actionCell.appendChild(
-                        createButton(
-                            "Delete",
-                            () =>
-                                deleteMember(
-                                    dbIndex,
-                                    memberIndex,
-                                    refresh
-                                )
-                        )
-                    );
-
-
-                    row.appendChild(
-                        actionCell
-                    );
-
-
-                    tbody.appendChild(
-                        row
-                    );
-                }
-            );
-
-
-            table.appendChild(
-                tbody
-            );
-
             content.appendChild(
-                table
-            );
-
-
-            const editor =
-                createMemberEditor({
-                    prefix:
-                        `db-member-${dbIndex}`,
-
-                    existingMembers:
-                        db.members,
-
-                    onAdd:
-                        (member) => {
-                            db.members.push(
-                                member
-                            );
-
-                            saveProjectConfig();
-                            refresh();
-                        },
-                });
-
-
-            content.appendChild(
-                editor
+                createMemberTree({
+                    prefix: "db-member-" + dbIndex,
+                    members: db.members,
+                    ownerUdtName: null,
+                    openPaths: expandedPaths,
+                    onChange: (next) => {
+                        db.members = next;
+                        saveProjectConfig();
+                        refresh();
+                        return true;
+                    },
+                })
             );
 
 

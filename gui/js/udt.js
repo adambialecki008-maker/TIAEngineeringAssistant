@@ -5,13 +5,12 @@ import {
 
 import {
     createButton,
-    createTextCell,
     getOpenNames,
 } from "./ui.js";
 
 import {
-    createMemberEditor,
-    formatMemberType,
+    createMemberTree,
+    getExpandedMemberPaths,
 } from "./member-editor.js";
 
 import {
@@ -357,112 +356,6 @@ function isUdtReferenced(
 }
 
 
-function renameField(
-    udtIndex,
-    fieldIndex,
-    refresh
-) {
-    const udt =
-        projectConfig.udts[
-            udtIndex
-        ];
-
-    const field =
-        udt.fields[
-            fieldIndex
-        ];
-
-
-    const result =
-        prompt(
-            "New field name:",
-            field.name
-        );
-
-
-    if (result === null) {
-        return;
-    }
-
-
-    const newName =
-        result.trim();
-
-
-    if (!newName) {
-        return;
-    }
-
-
-    const duplicate =
-        udt.fields.some(
-            (
-                other,
-                index
-            ) =>
-                index !== fieldIndex
-                &&
-                other.name
-                    .toLowerCase()
-                ===
-                newName.toLowerCase()
-        );
-
-
-    if (duplicate) {
-        alert(
-            "Field name must be unique."
-        );
-
-        return;
-    }
-
-
-    field.name =
-        newName;
-
-
-    saveProjectConfig();
-    refresh();
-}
-
-
-function deleteField(
-    udtIndex,
-    fieldIndex,
-    refresh
-) {
-    const udt =
-        projectConfig.udts[
-            udtIndex
-        ];
-
-    const field =
-        udt.fields[
-            fieldIndex
-        ];
-
-
-    if (
-        !confirm(
-            `Delete field "${field.name}"?`
-        )
-    ) {
-        return;
-    }
-
-
-    udt.fields.splice(
-        fieldIndex,
-        1
-    );
-
-
-    saveProjectConfig();
-    refresh();
-}
-
-
 async function validateUdt(
     udtIndex
 ) {
@@ -503,6 +396,9 @@ export function renderUdts(
         getOpenNames(
             container
         );
+
+    const expandedPaths =
+        getExpandedMemberPaths(container);
 
 
     container.innerHTML =
@@ -593,143 +489,19 @@ export function renderUdts(
             );
 
 
-            const table =
-                document.createElement(
-                    "table"
-                );
-
-
-            table.innerHTML = `
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Data type</th>
-                        <th>Comment</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-            `;
-
-
-            const tbody =
-                document.createElement(
-                    "tbody"
-                );
-
-
-            udt.fields.forEach(
-                (
-                    field,
-                    fieldIndex
-                ) => {
-
-                    const row =
-                        document.createElement(
-                            "tr"
-                        );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            field.name
-                        )
-                    );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            formatMemberType(
-                                field
-                            )
-                        )
-                    );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            field.comment
-                        )
-                    );
-
-
-                    const actionCell =
-                        document.createElement(
-                            "td"
-                        );
-
-
-                    actionCell.appendChild(
-                        createButton(
-                            "Rename",
-                            () =>
-                                renameField(
-                                    udtIndex,
-                                    fieldIndex,
-                                    refresh
-                                )
-                        )
-                    );
-
-
-                    actionCell.appendChild(
-                        createButton(
-                            "Delete",
-                            () =>
-                                deleteField(
-                                    udtIndex,
-                                    fieldIndex,
-                                    refresh
-                                )
-                        )
-                    );
-
-
-                    row.appendChild(
-                        actionCell
-                    );
-
-
-                    tbody.appendChild(
-                        row
-                    );
-                }
-            );
-
-
-            table.appendChild(
-                tbody
-            );
-
             content.appendChild(
-                table
-            );
-
-
-            const editor =
-                createMemberEditor({
-                    prefix:
-                        `udt-field-${udtIndex}`,
-
-                    existingMembers:
-                        udt.fields,
-
-                    excludeUdtName:
-                        udt.name,
-
-                    onAdd:
-                        (field) => {
-                            udt.fields.push(
-                                field
-                            );
-
-                            saveProjectConfig();
-                            refresh();
-                        },
-                });
-
-
-            content.appendChild(
-                editor
+                createMemberTree({
+                    prefix: "udt-field-" + udtIndex,
+                    members: udt.fields,
+                    ownerUdtName: udt.name,
+                    openPaths: expandedPaths,
+                    onChange: (next) => {
+                        udt.fields = next;
+                        saveProjectConfig();
+                        refresh();
+                        return true;
+                    },
+                })
             );
 
 

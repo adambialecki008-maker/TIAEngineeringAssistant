@@ -2105,3 +2105,80 @@ td {
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
+
+/* Shared UDT / DB member editor. */
+.member-tree {
+    overflow-x: auto;
+}
+
+.member-tree-table {
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.member-tree-table th:first-child,
+.member-tree-table td:first-child {
+    min-width: 180px;
+}
+
+.member-tree-children > td {
+    padding: 8px 8px 8px 22px;
+    background: #111820;
+}
+
+.member-tree-children[hidden] {
+    display: none;
+}
+
+.member-tree-toggle {
+    min-width: 30px;
+    margin-right: 8px;
+    padding: 2px 6px;
+}
+
+.member-tree-actions {
+    min-width: 275px;
+    white-space: nowrap;
+}
+
+.member-tree-actions button {
+    margin: 2px 4px 2px 0;
+}
+
+.member-editor-form {
+    margin: 10px 0 16px;
+    padding: 10px;
+    border: 1px solid #303a45;
+    border-radius: 6px;
+    background: #1a2027;
+}
+
+.member-tree-edit-row > td {
+    background: #18232b;
+}
+
+.member-editor-error {
+    margin: 8px 0;
+    color: #f0a7a7;
+}
+
+.member-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 150px;
+    color: #cbd5dd;
+}
+
+.member-field input,
+.member-field select {
+    min-width: 150px;
+}
+
+.member-add-area[hidden] {
+    display: none;
+}
+
+.member-add-toggle {
+    margin: 4px 0 8px;
+}

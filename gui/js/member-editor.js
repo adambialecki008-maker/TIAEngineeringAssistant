@@ -1,683 +1,487 @@
+import { projectConfig } from "./state.js";
 import {
     createButton,
-    createInput,
     createDataTypeSelect,
+    createInput,
     createTextCell,
 } from "./ui.js";
+import { getPlcDataTypes } from "./plc-types.js";
 
+const ARRAY_MIN_BOUND = -32768;
+const ARRAY_MAX_BOUND = 32767;
 
-const ARRAY_MIN_BOUND =
-    -32768;
+function normalized(value) {
+    return String(value ?? "").trim().toLowerCase();
+}
 
-const ARRAY_MAX_BOUND =
-    32767;
+function availableTypes() {
+    return new Set(
+        getPlcDataTypes(projectConfig.plc_family).map(normalized)
+    );
+}
 
+function udtDefinitions(ownerUdtName, replacement) {
+    return new Map(projectConfig.udts.map((udt) => [
+        normalized(udt.name),
+        normalized(udt.name) === normalized(ownerUdtName)
+            ? replacement : udt.fields,
+    ]));
+}
 
-export function formatMemberType(
-    member
-) {
-    if (
-        member.data_type === "Array"
-    ) {
-        return (
-            `Array[` +
-            `${member.array_lower_bound}..` +
-            `${member.array_upper_bound}] ` +
-            `of ${member.array_element_type}`
-        );
+function validateGroup(members, path, types, udts) {
+    if (!Array.isArray(members) || members.length === 0) {
+        return path + " must contain at least one member.";
     }
-
-
-    if (
-        member.data_type === "Struct"
-    ) {
-        const count =
-            member.struct_members
-                ?.length
-            ?? 0;
-
-        return (
-            `Struct (${count} members)`
-        );
+    const names = new Set();
+    const validType = (type) => types.has(type)
+        || (udts.has(type) && Array.isArray(udts.get(type))
+            && udts.get(type).length > 0);
+    for (const member of members) {
+        const name = String(member?.name ?? "").trim();
+        if (!name) return path + ": member name is required.";
+        const key = normalized(name);
+        if (names.has(key)) return path + ": duplicate member " + name + ".";
+        names.add(key);
+        const location = path + "." + name;
+        const type = String(member.data_type ?? "").trim();
+        if (!type) return location + ": data type is required.";
+        if (normalized(type) === "array") {
+            if (member.struct_members != null) {
+                return location + ": Struct members are not valid for Array.";
+            }
+            const element = normalized(member.array_element_type);
+            if (!element || !validType(element)) {
+                return location + ": select a valid Array element type.";
+            }
+            const lower = member.array_lower_bound;
+            const upper = member.array_upper_bound;
+            if (!Number.isInteger(lower) || !Number.isInteger(upper)
+                || lower < ARRAY_MIN_BOUND || upper > ARRAY_MAX_BOUND
+                || lower > upper) {
+                return location + ": Array bounds must be integers from "
+                    + ARRAY_MIN_BOUND + " to " + ARRAY_MAX_BOUND
+                    + " with lower bound <= upper bound.";
+            }
+        } else if (normalized(type) === "struct") {
+            if (member.array_element_type != null
+                || member.array_lower_bound != null
+                || member.array_upper_bound != null) {
+                return location + ": Array settings are not valid for Struct.";
+            }
+            const error = validateGroup(
+                member.struct_members, location, types, udts
+            );
+            if (error) return error;
+        } else {
+            if (member.struct_members != null
+                || member.array_element_type != null
+                || member.array_lower_bound != null
+                || member.array_upper_bound != null) {
+                return location + ": complex settings are not valid for " + type + ".";
+            }
+            if (!validType(normalized(type))) {
+                return location + ": unknown data type " + type + ".";
+            }
+        }
     }
+    return null;
+}
 
+function memberReferences(members, references) {
+    for (const member of members ?? []) {
+        const type = normalized(member.data_type);
+        if (type === "struct") {
+            memberReferences(member.struct_members, references);
+        } else if (type === "array") {
+            references.add(normalized(member.array_element_type));
+        } else {
+            references.add(type);
+        }
+    }
+}
 
+export function validateMemberList(members, ownerUdtName = null) {
+    const types = availableTypes();
+    const udts = udtDefinitions(ownerUdtName, members);
+    const targetName = ownerUdtName || "DB";
+    const error = validateGroup(members, targetName, types, udts);
+    if (error) return error;
+
+    const visiting = new Set();
+    const visited = new Set();
+    function hasCycle(name) {
+        if (visiting.has(name)) return true;
+        if (visited.has(name)) return false;
+        visiting.add(name);
+        const references = new Set();
+        memberReferences(udts.get(name), references);
+        for (const reference of references) {
+            if (udts.has(reference) && hasCycle(reference)) return true;
+        }
+        visiting.delete(name);
+        visited.add(name);
+        return false;
+    }
+    for (const name of udts.keys()) {
+        if (hasCycle(name)) {
+            return "UDT references must not contain a cycle (" + name + ").";
+        }
+    }
+    return null;
+}
+
+export function formatMemberType(member) {
+    if (member.data_type === "Array") {
+        const lower = member.array_lower_bound;
+        const upper = member.array_upper_bound;
+        const count = Number.isInteger(lower) && Number.isInteger(upper)
+            && upper >= lower ? upper - lower + 1 : null;
+        return "Array[" + lower + ".." + upper + "] of "
+            + member.array_element_type
+            + (count === null ? "" : " (" + count
+                + (count === 1 ? " element)" : " elements)"));
+    }
+    if (member.data_type === "Struct") {
+        return "Struct (" + (member.struct_members?.length ?? 0)
+            + " members)";
+    }
     return member.data_type;
 }
 
+function labeledControl(text, control) {
+    const label = document.createElement("label");
+    label.className = "member-field";
+    const caption = document.createElement("span");
+    caption.textContent = text;
+    label.append(caption, control);
+    return label;
+}
+
+function selectStoredType(select, value) {
+    if (!value) return;
+    if (![...select.options].some((option) => option.value === value)) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value + " (stored)";
+        select.appendChild(option);
+    }
+    select.value = value;
+}
 
 export function createMemberEditor({
     prefix,
     existingMembers,
     excludeUdtName = null,
-    onAdd,
-    allowStruct = true,
+    member = null,
+    editIndex = -1,
+    onAdd = null,
+    onSave = null,
+    onCancel = null,
 }) {
-    const root =
-        document.createElement(
-            "div"
-        );
-
-
-    let structMembers = [];
-
-
-    const mainRow =
-        document.createElement(
-            "div"
-        );
-
-    mainRow.className =
-        "editor-row";
-
-
-    const nameInput =
-        createInput(
-            `${prefix}-name`,
-            "Name"
-        );
-
-
-    const typeSelect =
-        createDataTypeSelect(
-            `${prefix}-type`,
-            excludeUdtName,
-            true,
-            allowStruct
-        );
-
-
-    const commentInput =
-        createInput(
-            `${prefix}-comment`,
-            "Comment"
-        );
-
-
-    const addButton =
-        createButton(
-            "Add",
-            addCurrentMember
-        );
-
-
-    mainRow.appendChild(
-        nameInput
+    const root = document.createElement("div");
+    root.className = "member-editor-form";
+    const row = document.createElement("div");
+    row.className = "editor-row";
+    const nameInput = createInput(prefix + "-name", "Name");
+    const typeSelect = createDataTypeSelect(
+        prefix + "-type", excludeUdtName, true, true
     );
-
-    mainRow.appendChild(
-        typeSelect
+    const commentInput = createInput(prefix + "-comment", "Comment");
+    nameInput.value = member?.name ?? "";
+    commentInput.value = member?.comment ?? "";
+    selectStoredType(typeSelect, member?.data_type);
+    row.append(
+        labeledControl("Name", nameInput),
+        labeledControl("Data type", typeSelect),
+        labeledControl("Comment", commentInput)
     );
+    root.appendChild(row);
 
-    mainRow.appendChild(
-        commentInput
-    );
+    const complexArea = document.createElement("div");
+    root.appendChild(complexArea);
+    const message = document.createElement("p");
+    message.className = "member-editor-error";
+    message.setAttribute("role", "alert");
+    root.appendChild(message);
 
-    mainRow.appendChild(
-        addButton
-    );
+    let structMembers = structuredClone(member?.struct_members ?? []);
+    let arrayElement = member?.array_element_type ?? "";
+    let arrayLower = String(member?.array_lower_bound ?? 0);
+    let arrayUpper = String(member?.array_upper_bound ?? 9);
+    let elementSelect = null;
+    let lowerInput = null;
+    let upperInput = null;
 
-
-    root.appendChild(
-        mainRow
-    );
-
-
-    const complexArea =
-        document.createElement(
-            "div"
-        );
-
-
-    root.appendChild(
-        complexArea
-    );
-
-
-    typeSelect.addEventListener(
-        "change",
-        renderComplexEditor
-    );
-
+    function rememberArray() {
+        if (elementSelect) arrayElement = elementSelect.value;
+        if (lowerInput) arrayLower = lowerInput.value;
+        if (upperInput) arrayUpper = upperInput.value;
+    }
 
     function renderComplexEditor() {
-        complexArea.innerHTML =
-            "";
-
-
-        if (
-            typeSelect.value ===
-            "Array"
-        ) {
-            renderArrayEditor();
+        rememberArray();
+        complexArea.replaceChildren();
+        elementSelect = lowerInput = upperInput = null;
+        if (typeSelect.value === "Array") {
+            const arrayRow = document.createElement("div");
+            arrayRow.className = "editor-row";
+            elementSelect = createDataTypeSelect(
+                prefix + "-array-type", excludeUdtName, false, false
+            );
+            selectStoredType(elementSelect, arrayElement);
+            lowerInput = createInput(prefix + "-array-lower", "Lower bound", "number");
+            upperInput = createInput(prefix + "-array-upper", "Upper bound", "number");
+            lowerInput.value = arrayLower;
+            upperInput.value = arrayUpper;
+            for (const input of [lowerInput, upperInput]) {
+                input.min = String(ARRAY_MIN_BOUND);
+                input.max = String(ARRAY_MAX_BOUND);
+            }
+            arrayRow.append(
+                labeledControl("Element type", elementSelect),
+                labeledControl("Lower bound", lowerInput),
+                labeledControl("Upper bound", upperInput)
+            );
+            complexArea.appendChild(arrayRow);
         }
-
-
-        if (
-            typeSelect.value ===
-            "Struct"
-        ) {
-            renderStructEditor();
-        }
-    }
-
-
-    function renderArrayEditor() {
-        const row =
-            document.createElement(
-                "div"
-            );
-
-        row.className =
-            "editor-row";
-
-
-        const elementLabel =
-            document.createElement(
-                "label"
-            );
-
-        elementLabel.textContent =
-            "Element type:";
-
-
-        const elementType =
-            createDataTypeSelect(
-                `${prefix}-array-type`,
-                excludeUdtName,
-                false,
-                false
-            );
-
-
-        const lowerLabel =
-            document.createElement(
-                "label"
-            );
-
-        lowerLabel.textContent =
-            "Lower bound:";
-
-
-        const lowerInput =
-            createInput(
-                `${prefix}-array-lower`,
-                "0",
-                "number"
-            );
-
-        lowerInput.value =
-            "0";
-
-        lowerInput.min =
-            String(
-                ARRAY_MIN_BOUND
-            );
-
-        lowerInput.max =
-            String(
-                ARRAY_MAX_BOUND
-            );
-
-
-        const upperLabel =
-            document.createElement(
-                "label"
-            );
-
-        upperLabel.textContent =
-            "Upper bound:";
-
-
-        const upperInput =
-            createInput(
-                `${prefix}-array-upper`,
-                "9",
-                "number"
-            );
-
-        upperInput.value =
-            "9";
-
-        upperInput.min =
-            String(
-                ARRAY_MIN_BOUND
-            );
-
-        upperInput.max =
-            String(
-                ARRAY_MAX_BOUND
-            );
-
-
-        row.appendChild(
-            elementLabel
-        );
-
-        row.appendChild(
-            elementType
-        );
-
-        row.appendChild(
-            lowerLabel
-        );
-
-        row.appendChild(
-            lowerInput
-        );
-
-        row.appendChild(
-            upperLabel
-        );
-
-        row.appendChild(
-            upperInput
-        );
-
-
-        complexArea.appendChild(
-            row
-        );
-    }
-
-
-    function renderStructEditor() {
-        const wrapper =
-            document.createElement(
-                "div"
-            );
-
-        wrapper.className =
-            "struct-editor";
-
-
-        const title =
-            document.createElement(
-                "h4"
-            );
-
-        title.textContent =
-            "Struct members";
-
-
-        wrapper.appendChild(
-            title
-        );
-
-
-        const table =
-            document.createElement(
-                "table"
-            );
-
-
-        table.innerHTML = `
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Data type</th>
-                    <th>Comment</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-        `;
-
-
-        const tbody =
-            document.createElement(
-                "tbody"
-            );
-
-
-        table.appendChild(
-            tbody
-        );
-
-
-        wrapper.appendChild(
-            table
-        );
-
-
-        function renderStructRows() {
-            tbody.innerHTML =
-                "";
-
-
-            structMembers.forEach(
-                (
-                    member,
-                    index
-                ) => {
-
-                    const row =
-                        document.createElement(
-                            "tr"
-                        );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            member.name
-                        )
-                    );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            formatMemberType(
-                                member
-                            )
-                        )
-                    );
-
-
-                    row.appendChild(
-                        createTextCell(
-                            member.comment
-                        )
-                    );
-
-
-                    const actionCell =
-                        document.createElement(
-                            "td"
-                        );
-
-
-                    actionCell.appendChild(
-                        createButton(
-                            "Delete",
-                            () => {
-                                structMembers.splice(
-                                    index,
-                                    1
-                                );
-
-                                renderStructRows();
-                            }
-                        )
-                    );
-
-
-                    row.appendChild(
-                        actionCell
-                    );
-
-
-                    tbody.appendChild(
-                        row
-                    );
-                }
-            );
-        }
-
-
-        const nestedEditor =
-            createMemberEditor({
-                prefix:
-                    `${prefix}-struct-member`,
-
-                existingMembers:
-                    structMembers,
-
-                excludeUdtName:
-                    excludeUdtName,
-
-                allowStruct:
-                    false,
-
-                onAdd:
-                    (member) => {
-                        structMembers.push(
-                            member
-                        );
-
-                        renderStructRows();
+        if (typeSelect.value === "Struct") {
+            const title = document.createElement("h4");
+            title.textContent = "Struct members";
+            const draftHost = document.createElement("div");
+            function renderDraft() {
+                draftHost.replaceChildren(createMemberTree({
+                    prefix: prefix + "-struct",
+                    members: structMembers,
+                    ownerUdtName: excludeUdtName,
+                    validateOnChange: false,
+                    onChange: (next) => {
+                        structMembers = next;
+                        renderDraft();
+                        return true;
                     },
-            });
-
-
-        wrapper.appendChild(
-            nestedEditor
-        );
-
-
-        complexArea.appendChild(
-            wrapper
-        );
-
-
-        renderStructRows();
+                }));
+            }
+            complexArea.append(title, draftHost);
+            renderDraft();
+        }
     }
+    typeSelect.addEventListener("change", renderComplexEditor);
+    renderComplexEditor();
 
-
-    function addCurrentMember() {
-        const name =
-            nameInput.value.trim();
-
-        const dataType =
-            typeSelect.value;
-
-        const comment =
-            commentInput.value.trim();
-
-
-        if (!name) {
-            alert(
-                "Name is required."
-            );
-
+    const actions = document.createElement("div");
+    actions.className = "action-row";
+    actions.appendChild(createButton(member ? "Save" : "Add", () => {
+        message.textContent = "";
+        const name = nameInput.value.trim();
+        const dataType = typeSelect.value;
+        if (existingMembers.some((item, index) =>
+            index !== editIndex && normalized(item.name) === normalized(name))) {
+            message.textContent = "Member name must be unique in this structure.";
             return;
         }
-
-
-        if (!dataType) {
-            alert(
-                "Data type is required."
-            );
-
-            return;
-        }
-
-
-        const duplicate =
-            existingMembers.some(
-                (member) =>
-                    member.name
-                        .toLowerCase()
-                    ===
-                    name.toLowerCase()
-            );
-
-
-        if (duplicate) {
-            alert(
-                `Member "${name}" already exists.`
-            );
-
-            return;
-        }
-
-
-        const member = {
-            name: name,
+        const candidate = {
+            name,
             data_type: dataType,
-            comment:
-                comment || null,
-
-            array_element_type:
-                null,
-
-            array_lower_bound:
-                null,
-
-            array_upper_bound:
-                null,
-
-            struct_members:
-                null,
+            comment: commentInput.value.trim() || null,
+            array_element_type: null,
+            array_lower_bound: null,
+            array_upper_bound: null,
+            struct_members: null,
         };
-
-
-        if (
-            dataType === "Array"
-        ) {
-            const elementType =
-                document
-                    .getElementById(
-                        `${prefix}-array-type`
-                    )
-                    .value;
-
-
-            const lowerText =
-                document
-                    .getElementById(
-                        `${prefix}-array-lower`
-                    )
-                    .value;
-
-
-            const upperText =
-                document
-                    .getElementById(
-                        `${prefix}-array-upper`
-                    )
-                    .value;
-
-
-            if (!elementType) {
-                alert(
-                    "Array element type is required."
-                );
-
+        if (dataType === "Array") {
+            const lower = lowerInput?.value.trim() ?? "";
+            const upper = upperInput?.value.trim() ?? "";
+            if (!lower || !upper) {
+                message.textContent = "Array bounds are required.";
                 return;
             }
-
-
-            const lowerBound =
-                Number(lowerText);
-
-            const upperBound =
-                Number(upperText);
-
-
-            if (
-                !Number.isInteger(
-                    lowerBound
-                )
-                ||
-                !Number.isInteger(
-                    upperBound
-                )
-            ) {
-                alert(
-                    "Array bounds must be integers."
-                );
-
-                return;
-            }
-
-
-            if (
-                lowerBound
-                < ARRAY_MIN_BOUND
-                ||
-                lowerBound
-                > ARRAY_MAX_BOUND
-            ) {
-                alert(
-                    `Lower bound must be between ` +
-                    `${ARRAY_MIN_BOUND} and ` +
-                    `${ARRAY_MAX_BOUND}.`
-                );
-
-                return;
-            }
-
-
-            if (
-                upperBound
-                < ARRAY_MIN_BOUND
-                ||
-                upperBound
-                > ARRAY_MAX_BOUND
-            ) {
-                alert(
-                    `Upper bound must be between ` +
-                    `${ARRAY_MIN_BOUND} and ` +
-                    `${ARRAY_MAX_BOUND}.`
-                );
-
-                return;
-            }
-
-
-            if (
-                upperBound
-                < lowerBound
-            ) {
-                alert(
-                    "Upper bound must be greater than " +
-                    "or equal to lower bound."
-                );
-
-                return;
-            }
-
-
-            member.array_element_type =
-                elementType;
-
-            member.array_lower_bound =
-                lowerBound;
-
-            member.array_upper_bound =
-                upperBound;
+            candidate.array_element_type = elementSelect?.value || null;
+            candidate.array_lower_bound = Number(lower);
+            candidate.array_upper_bound = Number(upper);
         }
-
-
-        if (
-            dataType === "Struct"
-        ) {
-            if (
-                structMembers.length === 0
-            ) {
-                alert(
-                    "Struct must contain at least one member."
-                );
-
-                return;
-            }
-
-
-            member.struct_members =
-                structuredClone(
-                    structMembers
-                );
+        if (dataType === "Struct") {
+            candidate.struct_members = structuredClone(structMembers);
         }
+        const error = validateGroup(
+            [candidate], "Member", availableTypes(),
+            udtDefinitions(excludeUdtName, [candidate])
+        );
+        if (error) {
+            message.textContent = error;
+            return;
+        }
+        const accepted = member ? onSave(candidate) : onAdd(candidate);
+        if (accepted === false) return;
+        if (!member) {
+            nameInput.value = "";
+            commentInput.value = "";
+            typeSelect.value = "";
+            structMembers = [];
+            arrayElement = "";
+            arrayLower = "0";
+            arrayUpper = "9";
+            renderComplexEditor();
+        }
+    }));
+    if (member) {
+        actions.appendChild(createButton("Cancel", () => onCancel?.()));
+    }
+    root.appendChild(actions);
+    return root;
+}
 
+function listAtPath(root, path) {
+    let list = root;
+    for (const index of path) list = list[index].struct_members;
+    return list;
+}
 
-        onAdd(member);
+export function getExpandedMemberPaths(container) {
+    const toggles = container.querySelectorAll("button[data-member-path]");
+    if (toggles.length === 0) return null;
+    return new Set([...toggles]
+        .filter((button) => button.getAttribute("aria-expanded") === "true")
+        .map((button) => button.dataset.memberPath));
+}
 
+export function createMemberTree({
+    prefix,
+    members,
+    ownerUdtName = null,
+    onChange,
+    openPaths = null,
+    validateOnChange = true,
+}) {
+    const root = document.createElement("div");
+    root.className = "member-tree";
 
-        nameInput.value =
-            "";
-
-        commentInput.value =
-            "";
-
-        typeSelect.value =
-            "";
-
-        structMembers =
-            [];
-
-        complexArea.innerHTML =
-            "";
+    function apply(next) {
+        if (validateOnChange) {
+            const error = validateMemberList(next, ownerUdtName);
+            if (error) {
+                alert(error);
+                return false;
+            }
+        }
+        return onChange(next) !== false;
     }
 
+    function mutate(path, action) {
+        const next = structuredClone(members);
+        action(listAtPath(next, path));
+        return apply(next);
+    }
 
+    function renderList(host, list, path, parentName = "") {
+        const table = document.createElement("table");
+        table.className = "member-tree-table";
+        const head = document.createElement("thead");
+        head.innerHTML = "<tr><th>Name</th><th>Data type</th>"
+            + "<th>Comment</th><th>Actions</th></tr>";
+        table.appendChild(head);
+        const body = document.createElement("tbody");
+        table.appendChild(body);
+
+        list.forEach((member, index) => {
+            const memberPath = [...path, index];
+            const memberKey = prefix + ":" + memberPath.join(".");
+            const row = document.createElement("tr");
+            row.dataset.memberPath = memberKey;
+            const nameCell = createTextCell(member.name);
+            let childrenRow = null;
+            if (member.data_type === "Struct") {
+                nameCell.textContent = "";
+                const key = memberKey;
+                const expanded = openPaths === null || openPaths.has(key);
+                const toggle = createButton(expanded ? "−" : "+", () => {
+                    const isOpen = toggle.getAttribute("aria-expanded") === "true";
+                    toggle.setAttribute("aria-expanded", String(!isOpen));
+                    toggle.textContent = isOpen ? "+" : "−";
+                    childrenRow.hidden = isOpen;
+                });
+                toggle.className = "member-tree-toggle";
+                toggle.dataset.memberPath = key;
+                toggle.setAttribute("aria-expanded", String(expanded));
+                toggle.setAttribute("aria-label", "Expand or collapse " + member.name);
+                nameCell.append(toggle, document.createTextNode(member.name));
+                childrenRow = document.createElement("tr");
+                childrenRow.className = "member-tree-children";
+                childrenRow.dataset.memberChildren = key;
+                childrenRow.hidden = !expanded;
+                const childrenCell = document.createElement("td");
+                childrenCell.colSpan = 4;
+                renderList(childrenCell, member.struct_members ?? [], memberPath, member.name);
+                childrenRow.appendChild(childrenCell);
+            }
+            row.append(
+                nameCell,
+                createTextCell(formatMemberType(member)),
+                createTextCell(member.comment)
+            );
+            const actions = document.createElement("td");
+            actions.className = "member-tree-actions";
+            const editRow = document.createElement("tr");
+            editRow.className = "member-tree-edit-row";
+            const editCell = document.createElement("td");
+            editCell.colSpan = 4;
+            editRow.appendChild(editCell);
+            actions.appendChild(createButton("Edit", () => {
+                editCell.replaceChildren(createMemberEditor({
+                    prefix: prefix + "-edit-" + memberPath.join("-"),
+                    existingMembers: list,
+                    excludeUdtName: ownerUdtName,
+                    member,
+                    editIndex: index,
+                    onSave: (candidate) => mutate(path, (target) => {
+                        target[index] = candidate;
+                    }),
+                    onCancel: () => editRow.remove(),
+                }));
+                row.after(editRow);
+            }));
+            actions.appendChild(createButton("Delete", () => {
+                if (!confirm('Delete member "' + member.name + '"?')) return;
+                mutate(path, (target) => target.splice(index, 1));
+            }));
+            const up = createButton("Move up", () => mutate(path, (target) => {
+                [target[index - 1], target[index]] =
+                    [target[index], target[index - 1]];
+            }));
+            up.disabled = index === 0;
+            actions.appendChild(up);
+            const down = createButton("Move down", () => mutate(path, (target) => {
+                [target[index + 1], target[index]] =
+                    [target[index], target[index + 1]];
+            }));
+            down.disabled = index === list.length - 1;
+            actions.appendChild(down);
+            row.appendChild(actions);
+            body.appendChild(row);
+            if (childrenRow) body.appendChild(childrenRow);
+        });
+        host.appendChild(table);
+        const addArea = document.createElement("div");
+        addArea.className = "member-add-area";
+        addArea.hidden = true;
+        addArea.appendChild(createMemberEditor({
+            prefix: prefix + "-add-" + (path.join("-") || "root"),
+            existingMembers: list,
+            excludeUdtName: ownerUdtName,
+            onAdd: (candidate) => mutate(path, (target) => {
+                target.push(candidate);
+            }),
+        }));
+        const addLabel = parentName ? "Add to " + parentName : "Add field";
+        const addToggle = createButton(addLabel, () => {
+            addArea.hidden = !addArea.hidden;
+            addToggle.setAttribute("aria-expanded", String(!addArea.hidden));
+            addToggle.textContent = addArea.hidden ? addLabel : "Hide add form";
+        });
+        addToggle.className = "member-add-toggle";
+        addToggle.setAttribute("aria-expanded", "false");
+        host.append(addToggle, addArea);
+    }
+
+    renderList(root, members, []);
     return root;
 }
