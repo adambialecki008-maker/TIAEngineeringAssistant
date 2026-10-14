@@ -116,6 +116,8 @@ export function initTiaUi(
     const hmiDedicatedProjectTexts = document.getElementById("tia-hmi-dedicated-project-texts");
     const hmiAutomationControls = document.querySelector(".hmi-automation-controls");
     const hmiUnifiedStatus = document.getElementById("tia-hmi-unified-status");
+    const hmiRunReportButton = document.getElementById("tia-hmi-run-report");
+    const hmiRunReportSummary = document.getElementById("tia-hmi-report-summary");
     const hmiReviewEachBatch = document.getElementById("tia-hmi-review-each-batch");
     const hmiModeDescription = document.getElementById("tia-hmi-mode-description");
     const hmiStep3Description = document.getElementById("tia-hmi-step3-description");
@@ -549,6 +551,12 @@ export function initTiaUi(
     let hmiReviewQueueStartApproved = 0;
     let hmiReviewQueueTypes = {project: false, text_lists: false};
     let hmiReviewQueueCurrentScope = null;
+    let hmiReviewQueueProjectExhausted = false;
+    const hmiReviewQueueBlockedLists = new Set();
+    let hmiRunReport = [];
+    let hmiRunStartedAt = null;
+    let hmiRunReportSelection = null;
+    let hmiRunReportStartCount = 0;
     let latestHmiScan = null;
     let hmiBatchRunning = false;
     let hmiBatchStarting = false;
@@ -2092,6 +2100,86 @@ export function initTiaUi(
         if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
             "Pause requested. Current TIA batch will finish verification first.";
         updateHmiTranslateButtonState();
+    }
+
+    function startHmiRunReport() {
+        hmiRunReport = [];
+        hmiRunReportStartCount = hmiCombinedApprovedCount;
+        hmiRunStartedAt = new Date().toISOString();
+        hmiRunReportSelection = hmiTranslationSelection();
+        if (hmiRunReportButton) {
+            hmiRunReportButton.disabled = true;
+            hmiRunReportButton.classList.add("hidden");
+        }
+        if (hmiRunReportSummary) hmiRunReportSummary.textContent = "";
+    }
+
+    function appendHmiRunIssue(scope, name, source, proposal, reason, status = "Skipped") {
+        const entry = {scope, name, source: source || "", proposal: proposal || "",
+            reason: String(reason || "Not eligible"), status};
+        if (!hmiRunReport.some(row => row.scope === entry.scope
+            && row.name === entry.name && row.source === entry.source
+            && row.proposal === entry.proposal && row.reason === entry.reason
+            && row.status === entry.status)) hmiRunReport.push(entry);
+    }
+
+    function showHmiRunReport() {
+        if (hmiRunReportButton) {
+            hmiRunReportButton.disabled = false;
+            hmiRunReportButton.classList.remove("hidden");
+        }
+        if (hmiRunReportSummary) hmiRunReportSummary.textContent =
+            hmiRunReport.length + " skipped/error detail(s). One combined report.";
+    }
+
+    function downloadHmiRunReport() {
+        if (!hmiRunStartedAt) return;
+        const selection = hmiRunReportSelection || {};
+        const verified = hmiCombinedApprovedCount - hmiRunReportStartCount;
+        const rows = [["Type", "List / batch", "Source text", "Proposed text",
+            "Reason", "Result", "HMI", "Started at (UTC)"]];
+        rows.push(["SUMMARY", "Full selected XLSX + XML run", "", "",
+            "Verified in TIA: " + verified + "; skipped/errors: "
+            + hmiRunReport.length, "Report",
+            selection.hmi_name || "", hmiRunStartedAt]);
+        for (const issue of hmiRunReport) {
+            rows.push([issue.scope, issue.name, issue.source, issue.proposal,
+                issue.reason, issue.status, selection.hmi_name || "",
+                hmiRunStartedAt]);
+        }
+        const safeCell = value => {
+            let v = String(value ?? "");
+            if (/^[=+@\-\t\r]/.test(v)) v = "'" + v;
+            return '"' + v.replace(/"/g, '""') + '"';
+        };
+        const csv = "\ufeff" + rows.map(row => row.map(safeCell).join(";"))
+            .join("\r\n");
+        const url = URL.createObjectURL(new Blob(
+            [csv], {type: "text/csv;charset=utf-8"}
+        ));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "TIA_HMI_run_" + hmiRunStartedAt.replace(/[:.]/g, "-")
+            + ".csv";
+        anchor.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    async function collectHmiXlsxRunSkips() {
+        if (!hmiBatchJobId) return;
+        try {
+            const data = await getJson(
+                "/api/v1/tia/hmis/batch-translations/"
+                + encodeURIComponent(hmiBatchJobId) + "/skipped"
+            );
+            for (const item of data.items || []) {
+                if (!item.resolved) appendHmiRunIssue("XLSX", "Project texts",
+                    item.source, item.rejected_proposal, item.reason);
+            }
+        } catch (error) {
+            appendHmiRunIssue("XLSX", "Quality report", "", "",
+                "Skipped details unavailable: " + error.message, "Report error");
+        }
     }
 
     function finishReviewedHmiQueue(message, isError = false) {
