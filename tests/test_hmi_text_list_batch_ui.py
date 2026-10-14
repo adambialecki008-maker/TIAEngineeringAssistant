@@ -59,11 +59,28 @@ def test_combined_count_and_shared_total_across_formats():
     assert 'hmiCombinedApprovedCount += result.verified_entries;' in JS
 
 
-def test_auto_import_is_xlsx_only_and_xml_requires_manual_confirmation():
-    assert 'Step 4 — Automatic Project texts (XLSX) import' in HTML
-    assert 'START AUTOMATIC XLSX-ONLY TIA IMPORT?' in JS
-    assert 'Text lists (XML) are EXCLUDED' in JS
-    start = JS.split('async function startHmiBatchImport()', 1)[1]
-    start = start.split('async function resumeHmiBatchImport()', 1)[0]
-    assert 'xlsxLimit' in start
-    assert '"/api/v1/tia/hmis/text-lists/import"' not in start
+def test_automatic_xlsx_and_xml_imports_are_separate_workflows():
+    # Step 4 was introduced for independently confirmed XML automation.
+    # Step 5 keeps the original XLSX batch importer XLSX-only.
+    assert 'Step 4 — Automatic Text lists (XML) import' in HTML
+    assert 'Step 5 — Automatic Project texts (XLSX) import' in HTML
+    assert 'id="tia-hmi-xml-auto-start"' in HTML
+    assert 'id="tia-hmi-xml-auto-pause"' in HTML
+    assert 'id="tia-hmi-batch-start"' in HTML
+
+    xlsx_start = JS.split('async function startHmiBatchImport()', 1)[1]
+    xlsx_start = xlsx_start.split('async function resumeHmiBatchImport()', 1)[0]
+    assert 'START AUTOMATIC XLSX-ONLY TIA IMPORT?' in xlsx_start
+    assert 'Text lists (XML) are EXCLUDED' in xlsx_start
+    assert 'xlsxLimit' in xlsx_start
+    assert '"/api/v1/tia/hmis/text-lists/import"' not in xlsx_start
+
+    xml_start = JS.split('async function startAutomaticXmlBatches()', 1)[1]
+    xml_start = xml_start.split('function pauseAutomaticXmlBatches()', 1)[0]
+    assert 'START UNATTENDED XML TEXT LIST IMPORT?' in xml_start
+    assert '"/api/v1/tia/hmis/text-lists/prepare"' in xml_start
+    assert '"/api/v1/tia/hmis/text-lists/import"' in xml_start
+    assert 'result.status !== "verified"' in xml_start
+    assert 'const refreshed = await scanHmiTextLists()' in xml_start
+    assert '"/api/v1/tia/hmis/batch-translations/start"' not in xml_start
+    assert 'hmiXmlAutoPauseRequested' in xml_start
