@@ -85,6 +85,7 @@ def get_project_context(
     plcs = []
     hmis = []
     hmi_networks = {}
+    hmi_models = {}
     metrics_by_target = {}
     resources_by_target = {}
     resource_attributes_by_target = {}
@@ -106,6 +107,11 @@ def get_project_context(
             ):
                 project_name = parts[1].strip()
 
+
+        elif line.startswith("HMI_MODEL|"):
+            parts = line.split("|", 3)
+            if len(parts) == 4:
+                hmi_models[(parts[1].casefold(), parts[2].casefold())] = parts[3]
 
         elif line.startswith("HMI_NETWORK|"):
             parts = line.split("|", 4)
@@ -288,9 +294,9 @@ def get_project_context(
 
 
     for hmi in hmis:
-        hmi.ip_address = hmi_networks.get(
-            (hmi.device_name.casefold(), hmi.hmi_name.casefold()), ""
-        )
+        key = (hmi.device_name.casefold(), hmi.hmi_name.casefold())
+        hmi.ip_address = hmi_networks.get(key, "")
+        hmi.model_name = hmi_models.get(key, "")
 
     for plc in plcs:
         key = (
