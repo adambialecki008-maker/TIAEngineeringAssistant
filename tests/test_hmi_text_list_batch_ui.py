@@ -331,3 +331,61 @@ def test_application_wide_design_tokens_unify_controls_and_disclosure_chevrons()
     assert 'class="tia-inventory-details"' in html
     assert 'id="tia-hmi-text-lists-details"' in html
     assert 'id="tia-hmi-edit-details"' in html
+
+
+def test_stop_translation_is_available_and_restores_scope_controls_safely():
+    assert HTML.count('id="tia-hmi-batch-stop"') == 1
+    third = HTML.split('Step 3 — Translate, review &amp; import', 1)[1]
+    third = third.split('data-tab-panel="devices"', 1)[0]
+    assert 'id="tia-hmi-batch-stop"' in third
+    assert 'id="tia-hmi-import-reviewed-button"' in third
+    assert 'id="tia-hmi-skip-reviewed"' in third
+    second = HTML.split('Step 2 — Batch settings (selected text types)', 1)[1]
+    second = second.split('Step 3 — Translate, review &amp; import', 1)[0]
+    assert 'id="tia-hmi-import-reviewed-button"' not in second
+    assert 'id="tia-hmi-skip-reviewed"' not in second
+    assert 'function stopUnifiedHmiTranslation()' in JS
+    assert 'function finishStoppedReviewedHmiQueue()' in JS
+    assert 'hmiBatchStopButton?.addEventListener(' in JS
+    assert 'hmiBatchStopButton.classList.toggle("hidden", !activeRun)' in JS
+    assert 'hmiScopeProject.disabled = busy || hmiReviewQueueActive;' in JS
+    assert 'hmiScopeLists.disabled = busy || hmiReviewQueueActive;' in JS
+    finish = JS.split('function finishReviewedHmiQueue(', 1)[1].split(
+        'async function startReviewedHmiQueue(', 1
+    )[0]
+    for clause in (
+        'hmiReviewQueueActive = false',
+        'hmiReviewQueueStopRequested = false',
+        'hmiReviewQueuePending = false',
+        'updateHmiTranslateButtonState();',
+    ):
+        assert clause in finish
+
+
+def test_stop_during_inflight_prepare_or_import_never_aborts_tia_write():
+    prepare = JS.split('async function prepareNextReviewedHmiBatch()', 1)[1].split(
+        'async function approveReviewedHmiQueueBatch()', 1
+    )[0]
+    assert 'hmiReviewQueueOperation = "preparing"' in prepare
+    assert 'await prepareHmiTextList()' in prepare
+    assert 'hmiReviewQueueOperation = null;' in prepare
+    assert 'if (hmiReviewQueueStopRequested)' in prepare
+    assert prepare.index('if (hmiReviewQueueStopRequested) {\n            finishStoppedReviewedHmiQueue();') > prepare.index(
+        'hmiReviewQueueOperation = null;')
+    approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
+        'async function skipReviewedHmiQueueBatch()', 1
+    )[0]
+    assert 'hmiReviewQueueOperation = "importing / verifying"' in approval
+    assert 'completed = await importSelectedHmiBatch();' in approval
+    assert 'hmiReviewQueueStopRequested' in approval
+    assert 'completed?.state === "prewrite_rejected"' in approval
+    assert 'completed?.state === "verified_refresh_failed"' in approval
+    stop = JS.split('function stopUnifiedHmiTranslation()', 1)[1].split(
+        'function pauseUnifiedHmiTranslation()', 1
+    )[0]
+    assert 'if (hmiReviewQueueOperation)' in stop
+    assert 'finishStoppedReviewedHmiQueue()' in stop
+    assert 'hmiUnifiedPauseRequested = true;' in stop
+    assert 'if (hmiBatchRunning) void pauseHmiBatchImport();' in stop
+    assert 'if (hmiXmlAutoRunning) pauseAutomaticXmlBatches();' in stop
+    assert 'run_adapter(' not in stop
