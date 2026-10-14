@@ -2187,6 +2187,56 @@ export function initTiaUi(
         }
     }
 
+    function finishStoppedReviewedHmiQueue() {
+        // Discard any unimported proposals; the read-only preparation may have
+        // just returned, but it never authorizes an implicit TIA write.
+        discardHmiTextListReview();
+        discardHmiReview();
+        finishReviewedHmiQueue(
+            "Translation stopped by user. Unimported proposals discarded; "
+            + "previously verified TIA writes remain unchanged. "
+            + "You may change the checkboxes and scan again."
+        );
+    }
+
+    function stopUnifiedHmiTranslation() {
+        const reviewed = hmiReviewQueueActive;
+        const automatic = hmiUnifiedRunning;
+        if ((!reviewed && !automatic) || hmiReviewQueueStopRequested
+            || hmiUnifiedStopRequested) return;
+        if (!confirm(
+            "STOP HMI TRANSLATION?\\n\\n"
+            + "Prepared but unimported translations will be discarded. "
+            + "Any operation already writing to TIA must finish and be verified "
+            + "before the queue unlocks. Nothing will be retried automatically.\\n"
+            + "After stopping, you can change the Project texts/Text lists checkboxes."
+        )) return;
+        if (reviewed) {
+            hmiReviewQueueStopRequested = true;
+            hmiReviewQueuePaused = true;
+            if (hmiReviewQueueOperation) {
+                if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                    "Stop requested. Finishing current "
+                    + hmiReviewQueueOperation + " operation safely; "
+                    + "no next batch will start.";
+                updateHmiTranslateButtonState();
+                return;
+            }
+            finishStoppedReviewedHmiQueue();
+            return;
+        }
+        // Automatic XLSX/XML have their own verified import boundaries.
+        // They cannot be safely force-terminated during a TIA write.
+        hmiUnifiedStopRequested = true;
+        hmiUnifiedPauseRequested = true;
+        if (hmiBatchRunning) void pauseHmiBatchImport();
+        if (hmiXmlAutoRunning) pauseAutomaticXmlBatches();
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+            "Stop requested. Current TIA operation will finish verification; "
+            + "the following batches will not start.";
+        updateHmiTranslateButtonState();
+    }
+
     function pauseUnifiedHmiTranslation() {
         if (hmiReviewQueueActive) {
             hmiReviewQueuePaused = true;
@@ -9316,6 +9366,9 @@ export function initTiaUi(
     );
     hmiBatchPauseButton?.addEventListener(
         "click", () => { void pauseUnifiedHmiTranslation(); }
+    );
+    hmiBatchStopButton?.addEventListener(
+        "click", () => { stopUnifiedHmiTranslation(); }
     );
 
     if (hmiOllamaModelSelect) {
