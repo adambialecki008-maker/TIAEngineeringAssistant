@@ -1602,7 +1602,9 @@ export function initTiaUi(
                 && hmiTextListPreparedKey === textListReviewKey();
             hmiImportReviewedButton.disabled = busy
                 || !(projectReviewReady || xmlReviewReady)
-                || (hmiReviewQueueActive && !hmiReviewQueuePending);
+                || (hmiReviewQueueActive && (!hmiReviewQueuePending
+                    || Boolean(hmiReviewQueueOperation)
+                    || hmiReviewQueueStopRequested));
             hmiImportReviewedButton.classList.toggle("hidden",
                 !hmiReviewQueuePending);
             hmiImportReviewedButton.textContent = "Approve & import reviewed batch";
@@ -1676,7 +1678,9 @@ export function initTiaUi(
         if (hmiSkipReviewedButton) {
             hmiSkipReviewedButton.classList.toggle("hidden",
                 !hmiReviewQueuePending);
-            hmiSkipReviewedButton.disabled = busy || !hmiReviewQueuePending;
+            hmiSkipReviewedButton.disabled = busy || !hmiReviewQueuePending
+                || Boolean(hmiReviewQueueOperation)
+                || hmiReviewQueueStopRequested;
         }
         if (hmiBatchSizeInput) hmiBatchSizeInput.disabled = busy
             || hmiReviewQueueActive;
@@ -2387,6 +2391,10 @@ export function initTiaUi(
 
     async function prepareNextReviewedHmiBatch() {
         if (!hmiReviewQueueActive || hmiReviewQueuePending) return;
+        if (hmiReviewQueueStopRequested) {
+            finishStoppedReviewedHmiQueue();
+            return;
+        }
         if (hmiReviewQueuePaused) {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 "Queue paused between batches. Click Resume review queue "
@@ -2419,15 +2427,28 @@ export function initTiaUi(
             + " batch — maximum " + Math.min(Number(hmiBatchSizeInput?.value), remaining)
             + " translations. TIA is unchanged until you approve.";
         let prepared = false;
+        hmiReviewQueueOperation = "preparing";
+        updateHmiTranslateButtonState();
         try {
-            // The existing manual endpoints enforce validation and snapshot rules.
+            // Read-only preparation; never call an import endpoint here.
             prepared = project
                 ? await translateSelectedHmi()
                 : await prepareHmiTextList();
         } catch (error) {
-            finishReviewedHmiQueue("Prepare failed: " + error.message, true);
+            if (hmiReviewQueueStopRequested) {
+                finishStoppedReviewedHmiQueue();
+            } else {
+                finishReviewedHmiQueue("Prepare failed: " + error.message, true);
+            }
+            return;
+        } finally {
+            hmiReviewQueueOperation = null;
+        }
+        if (hmiReviewQueueStopRequested) {
+            finishStoppedReviewedHmiQueue();
             return;
         }
+        if (!hmiReviewQueueActive) return;
         if (!prepared) {
             // No import occurred: QA-rejected batch may safely advance.
             if (project) hmiReviewQueueProjectExhausted = true;
@@ -2453,11 +2474,30 @@ export function initTiaUi(
     }
 
     async function approveReviewedHmiQueueBatch() {
-        if (!hmiReviewQueueActive || !hmiReviewQueuePending) return;
+        if (!hmiReviewQueueActive || !hmiReviewQueuePending
+            || hmiReviewQueueOperation || hmiReviewQueueStopRequested) return;
         const before = hmiCombinedApprovedCount;
         const reviewListName = hmiReviewQueueCurrentScope === "text_lists"
             ? hmiTextListSelect?.value || "Text list" : "Project texts";
-        const completed = await importSelectedHmiBatch();
+        hmiReviewQueueOperation = "importing / verifying";
+        updateHmiTranslateButtonState();
+        let completed;
+        try {
+            completed = await importSelectedHmiBatch();
+        } catch (error) {
+            completed = {state: "uncertain", detail: String(error.message || error)};
+        } finally {
+            hmiReviewQueueOperation = null;
+        }
+        // Stop must never hide uncertain TIA write status. A verified write is
+        // allowed to finish, but the next batch must not start.
+        if (hmiReviewQueueStopRequested
+            && (completed === true || completed === "edit_invalid"
+                || completed === "cancelled"
+                || completed?.state === "verified_refresh_failed")) {
+            finishStoppedReviewedHmiQueue();
+            return;
+        }
         if (completed === "edit_invalid" || completed === "cancelled") {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 completed === "edit_invalid"
@@ -2516,7 +2556,8 @@ export function initTiaUi(
     }
 
     async function skipReviewedHmiQueueBatch() {
-        if (!hmiReviewQueueActive || !hmiReviewQueuePending) return;
+        if (!hmiReviewQueueActive || !hmiReviewQueuePending
+            || hmiReviewQueueOperation || hmiReviewQueueStopRequested) return;
         if (!confirm("Skip THIS prepared batch WITHOUT importing it into TIA? "
             + "All skipped entries will appear in the combined run report. "
             + "Continue with the next eligible queue item?")) return;
