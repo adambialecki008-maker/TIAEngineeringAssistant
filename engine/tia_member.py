@@ -5,7 +5,6 @@ from pydantic import (
     Field,
     model_validator,
 )
-from decimal import Decimal, InvalidOperation
 import math
 import re
 
@@ -82,7 +81,7 @@ class TiaMember(BaseModel):
             if not low <= number <= high:
                 raise ValueError(f"{self.data_type} Start value out of range.")
         elif kind in {"real", "lreal"}:
-            if not re.fullmatch(r"[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value):
+            if not re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value):
                 raise ValueError("Real Start value must be a finite decimal.")
             try:
                 number = float(value)
