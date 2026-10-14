@@ -199,6 +199,78 @@ def test_tia_change_since_prepare_rejects_without_import(mock_tia):
     assert not mock_tia["imported"]
 
 
+def test_semantic_fingerprint_ignores_export_ids_and_indentation():
+    """Repeated TIA exports may reassign object IDs or change XML layout."""
+    original = XML.encode("utf-8")
+    root = ET.fromstring(original)
+    for node in root.iter():
+        if node.attrib.get("ID", "").isdigit():
+            node.set("ID", str(int(node.attrib["ID"]) + 900))
+    # ElementTree serializes different indentation and drops XML declaration.
+    another_export = ET.tostring(root, encoding="utf-8")
+    assert another_export != original
+    assert lists._text_list_fingerprint(
+        original, "Auto Status"
+    ) == lists._text_list_fingerprint(another_export, "Auto Status")
+
+
+def test_reviewed_import_allows_equivalent_reserialized_tia_export(mock_tia):
+    """No false 'changed since preparation' for an identical semantic list."""
+    prepared = CLIENT.post(
+        "/api/v1/tia/hmis/text-lists/prepare", json=BASE,
+    ).json()
+    root = ET.fromstring(mock_tia["xml"])
+    for node in root.iter():
+        if node.attrib.get("ID", "").isdigit():
+            node.set("ID", str(int(node.attrib["ID"]) + 1000))
+    mock_tia["xml"] = ET.tostring(root, encoding="utf-8")
+    result = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"],
+        "proposals": [
+            {"entry_index": row["entry_index"], "proposal": row["proposal"]}
+            for row in prepared["rows"]
+        ],
+    })
+    assert result.status_code == 200, result.text
+    assert result.json()["status"] == "verified"
+    assert result.json()["verified_entries"] == 3
+    assert len(mock_tia["imported"]) == 1
+
+
+@pytest.mark.parametrize("change", ["selection_value", "untouched_target", "structure"])
+def test_semantic_fingerprint_rejects_real_text_list_changes(
+    mock_tia, change,
+):
+    prepared = CLIENT.post(
+        "/api/v1/tia/hmis/text-lists/prepare", json=BASE,
+    ).json()
+    root = ET.fromstring(mock_tia["xml"])
+    entry = next(
+        node for node in root.iter() if node.tag.endswith("TextListEntry")
+    )
+    if change == "selection_value":
+        entry.find("AttributeList/SelectionValue").text = "999"
+    elif change == "untouched_target":
+        text = next(
+            node for node in root.iter()
+            if node.tag == "Text" and node.text == "Zatrzymanie awaryjne"
+        )
+        text.text = "Zmodyfikowano przez operatora"
+    else:
+        entry.set("CustomSafetyAttribute", "changed")
+    mock_tia["xml"] = ET.tostring(root, encoding="utf-8")
+    response = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"],
+        "proposals": [
+            {"entry_index": row["entry_index"], "proposal": row["proposal"]}
+            for row in prepared["rows"]
+        ],
+    })
+    assert response.status_code == 409
+    assert "changed since preparation" in response.json()["detail"]
+    assert not mock_tia["imported"]
+
+
 def test_unsafe_manual_approval_is_blocked_before_any_import(mock_tia):
     prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE).json()
     proposals = [
