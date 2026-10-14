@@ -147,15 +147,28 @@ def test_manual_project_review_is_optional_for_existing_batch_api():
     assert request.proposals is None
 
 
-def test_auto_xml_ui_is_separate_from_xlsx_auto_and_has_pause():
+def test_auto_xml_pipeline_is_routed_by_translate_all_with_safe_pause():
     html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
     js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    # One shared entry point replaces the old separate XML/XLSX start buttons.
+    assert 'id="tia-hmi-batch-start"' in html
+    assert '>Translate all</button>' in html
+    assert 'id="tia-hmi-batch-pause"' in html
     assert 'id="tia-hmi-xml-auto-section"' in html
     assert 'data-hmi-scope="text_lists"' in html
-    assert 'id="tia-hmi-xml-auto-start"' in html
-    assert 'id="tia-hmi-xml-auto-pause"' in html
-    assert "startAutomaticXmlBatches()" in js
-    assert "pauseAutomaticXmlBatches()" in js
+    assert 'id="tia-hmi-xml-auto-start"' not in html
+    assert 'id="tia-hmi-xml-auto-pause"' not in html
+    assert "async function translateAllSelectedHmi()" in js
+    assert "async function startAutomaticXmlBatches({confirmed = false} = {})" in js
+    assert "function pauseAutomaticXmlBatches()" in js
+    orchestrator = js.split("async function translateAllSelectedHmi()", 1)[1].split(
+        "function pauseUnifiedHmiTranslation()", 1
+    )[0]
+    assert orchestrator.index("await startHmiBatchImport(") < orchestrator.index(
+        "await startAutomaticXmlBatches({confirmed: true})"
+    )
+    assert 'job.status !== "completed"' in orchestrator
+    assert "const useXml = hmiScopeEnabled(\"text_lists\");" in orchestrator
     assert '"/api/v1/tia/hmis/text-lists/prepare"' in js
     assert '"/api/v1/tia/hmis/text-lists/import"' in js
     assert 'result.status !== "verified"' in js
