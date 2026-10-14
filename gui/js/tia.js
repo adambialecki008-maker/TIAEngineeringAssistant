@@ -2106,7 +2106,7 @@ export function initTiaUi(
         const order = [useProject && "Project texts (XLSX)",
             useXml && "Text lists (XML)"].filter(Boolean).join(" → ");
         if (!confirm(
-            "TRANSLATE ALL SELECTED HMI TEXTS?\n\n"
+            "TRANSLATE SELECTED HMI TEXTS?\n\n"
             + "Order: " + order + "\n"
             + "Ollama: " + selection.ollama_model + "\n"
             + "Batch size: " + size + "; remaining shared limit: " + quota
