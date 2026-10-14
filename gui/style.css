@@ -2610,3 +2610,48 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 @media (prefers-reduced-motion: reduce) {
     details > summary::before { transition: none; }
 }
+
+/* Generate: select only the UDT/DB structures to import. */
+.structure-select-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 12px 0;
+}
+.structure-selection-group {
+    border: 1px solid var(--ui-border, #365268);
+    border-radius: var(--ui-radius, 6px);
+    padding: 12px;
+    margin: 0;
+    min-width: 0;
+    background: var(--ui-surface, #182630);
+}
+.structure-selection-group legend {
+    font-weight: 600;
+    color: var(--ui-text, #ecf4fa);
+    padding: 0 6px;
+}
+.structure-selection-list {
+    display: grid;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+.structure-selection-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-height: 28px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: var(--ui-surface-raised, #202e39);
+    font-family: var(--ui-font, Arial, sans-serif);
+    font-size: 14px;
+    cursor: pointer;
+}
+.structure-selection-item:hover {
+    background: var(--ui-surface-hover, #273b4a);
+}
+@media (max-width: 660px) {
+    .structure-select-grid { grid-template-columns: 1fr; }
+}
