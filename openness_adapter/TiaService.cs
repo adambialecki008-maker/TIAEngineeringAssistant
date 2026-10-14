@@ -18,7 +18,7 @@ using Siemens.Engineering.SW.Types;
 
 namespace TiaOpennessAdapter
 {
-    internal static class TiaService
+    internal static partial class TiaService
     {
         public static int ListProcesses()
         {
