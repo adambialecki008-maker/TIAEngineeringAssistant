@@ -1483,8 +1483,8 @@ export function initTiaUi(
                 } else if (!validBatchSize) {
                     hint = "Batch size must be between 1 and 50.";
                 } else if (!validTotal) {
-                    hint = "Total to translate must be blank or between 1 and "
-                        + Math.min(100000, missingUnique) + ".";
+                    hint = "Total to translate must not exceed eligible items "
+                        + "in the selected XLSX + XML scopes.";
                 } else {
                     hint = "Ready: " + latestHmiScan.missingUnique
                         + " unique missing-target texts. Start batch import is enabled.";
@@ -1791,7 +1791,8 @@ export function initTiaUi(
             || (total !== null &&
                 (!Number.isInteger(total) || total < 1 || total > 100000))
             || (latestHmiScan && total !== null
-                && total > latestHmiScan.missingUnique)) {
+                && total > latestHmiScan.missingUnique
+                && !hmiScopeEnabled("text_lists"))) {
             setHmiBatchStatus(
                 "Batch size must be 1–50; total must be empty or "
                 + "between 1 and the missing-target unique-text count from the scan.",
@@ -1799,16 +1800,19 @@ export function initTiaUi(
             );
             return;
         }
+        const xlsxLimit = total === null ? null
+            : Math.min(total, latestHmiScan?.missingUnique || 0);
         if (!confirm(
-            "START AUTOMATIC TIA IMPORT?\n\n"
+            "START AUTOMATIC XLSX-ONLY TIA IMPORT?\n\n"
             + "Translation via selected Ollama model: "
             + selection.ollama_model
             + "\nBatch size: " + size + " unique texts. Total: "
-            + (total ?? latestHmiScan?.missingUnique ?? "all eligible")
+            + (xlsxLimit ?? latestHmiScan?.missingUnique ?? "all eligible")
             + ". Final batch will be smaller when needed."
             + "\nAutomatic continuation: "
             + (hmiBatchAutoRepeat?.checked ? "ON" : "OFF (one batch only)")
-            + "\n\nOnly missing or 'Text' targets are filled. "
+            + "\nText lists (XML) are EXCLUDED and still need manual review. "
+            + "\n\nOnly missing or 'Text' XLSX targets are filled. "
             + "Each batch is imported and VERIFIED in TIA before the next. "
             + "Back up the project and do not edit it during import."
         )) {
@@ -1817,11 +1821,11 @@ export function initTiaUi(
         hmiBatchStarting = true;
         updateHmiTranslateButtonState();
         setHmiBatchStatus("Initializing batch job from TIA project texts...");
-        renderHmiBatchProgress(0, total ?? latestHmiScan?.missingUnique ?? 0);
+        renderHmiBatchProgress(0, xlsxLimit ?? latestHmiScan?.missingUnique ?? 0);
         try {
             const job = await postJson(
                 "/api/v1/tia/hmis/batch-translations/start",
-                {...selection, batch_size: size, total_to_translate: total}
+                {...selection, batch_size: size, total_to_translate: xlsxLimit}
             );
             hmiBatchJobId = job.job_id;
             saveHmiBatchJobId(job.job_id);
