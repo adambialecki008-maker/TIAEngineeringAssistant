@@ -1640,9 +1640,11 @@ export function initTiaUi(
                 } else if (!quotaRemaining || combinedMissingCount() < 1) {
                     hint = "No eligible missing targets remain under the shared limit.";
                 } else {
+                    const stages = projectSelected && listsSelected
+                        ? "Project texts → Text lists"
+                        : projectSelected ? "Project texts" : "Text lists";
                     hint = "Ready: " + combinedMissingCount()
-                        + " missing texts across selected scopes. "
-                        + "Translate all uses XLSX first, then XML if selected.";
+                        + " missing texts. Queue: " + stages + ".";
                 }
                 hmiBatchReadiness.textContent = hint;
             }
@@ -2802,11 +2804,12 @@ export function initTiaUi(
                     .slice(0, 3).map(x => x.source + ": " + x.reason).join("; ");
                 hmiTextListStatus.textContent =
                     "Prepared " + result.approved_count
-                    + " safe entries for manual approval; "
+                    + " editable XML translations; "
                     + (result.skipped?.length || 0)
-                    + " rejected by QA."
+                    + " skipped by QA."
                     + (reasons ? " Examples: " + reasons : "")
-                    + " Only this list can be imported.";
+                    + " Edit them here in Step 2, then select "
+                    + "Approve & import below. No TIA write occurred yet.";
             }
             if (result.review_id) {
                 hmiTextListReview?.classList.remove("hidden");
