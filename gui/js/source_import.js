@@ -26,13 +26,24 @@ export function initSourceImportUi() {
     let prepared = null;
     let lastReport = null;
     let plannedSnapshot = "";
+    let previewGeneration = 0;
 
+    // Read LIVE checkbox state. Never rely solely on cached Sets when
+    // constructing a generate/import request: the DOM is the user selection.
     function selection() {
+        function checked(container, kind, available, stored) {
+            if (!container) return available
+                .filter(item => stored.has(item.name)).map(item => item.name);
+            const checkedNames = new Set([...container.querySelectorAll(
+                'input[type="checkbox"][data-structure-kind="' + kind + '"]'
+            )].filter(input => input.checked)
+                .map(input => input.dataset.structureName));
+            return available.filter(item => checkedNames.has(item.name))
+                .map(item => item.name);
+        }
         return {
-            selected_udts: projectConfig.udts
-                .filter(item => selectedUdts.has(item.name)).map(item => item.name),
-            selected_dbs: projectConfig.dbs
-                .filter(item => selectedDbs.has(item.name)).map(item => item.name),
+            selected_udts: checked(udtList, "UDT", projectConfig.udts, selectedUdts),
+            selected_dbs: checked(dbList, "DB", projectConfig.dbs, selectedDbs),
         };
     }
 
@@ -64,6 +75,7 @@ export function initSourceImportUi() {
                 if (input.checked) selected.add(item.name);
                 else selected.delete(item.name);
                 clearPlan();
+                previewGeneration++;
                 if (sourcePreview) sourcePreview.textContent = "";
                 showSelectionSummary();
                 counter.textContent = selected.size + "/" + items.length;
@@ -100,6 +112,7 @@ export function initSourceImportUi() {
     }
 
     async function generateSelectionPreview() {
+        const generation = ++previewGeneration;
         const choice = selection();
         if (!choice.selected_udts.length && !choice.selected_dbs.length) {
             if (sourcePreview) sourcePreview.textContent =
@@ -116,8 +129,20 @@ export function initSourceImportUi() {
                 "/api/v1/tia/plc-structure-import/preview",
                 {project: projectConfig, ...choice}
             );
+            if (generation !== previewGeneration) return;
+            // Verify that the preview follows the checked scope. Auto-added
+            // UDT dependencies are explicitly tagged by the backend.
+            const checked = new Set([...choice.selected_udts, ...choice.selected_dbs]);
+            const unexpected = (response.items || []).filter(
+                item => !checked.has(item.name) && !item.auto_dependency
+            );
+            if (unexpected.length) throw new Error(
+                "Server generated unselected objects: "
+                + unexpected.map(item => item.name).join(", ")
+            );
             if (sourcePreview) sourcePreview.textContent = response.source;
         } catch (error) {
+            if (generation !== previewGeneration) return;
             if (sourcePreview) sourcePreview.textContent =
                 "Source preview failed: " + error.message;
         }
@@ -174,6 +199,8 @@ export function initSourceImportUi() {
             + " · Identical/skipped: " + (result.counts?.identical || 0)
             + " · Conflicts: " + (result.counts?.conflict || 0)
             + " · Blocked dependencies: " + (result.counts?.blocked || 0)
+            + " · Required UDTs added: "
+            + ((result.auto_dependencies || []).join(", ") || "none")
             + ". " + (result.can_apply
                 ? "Only eligible missing objects will be created after confirmation."
                 : "Nothing eligible for creation.");
@@ -215,6 +242,14 @@ export function initSourceImportUi() {
             const result = await postJson(
                 "/api/v1/tia/plc-structure-import/plan", payload
             );
+            // A scope change while an async preflight was running must never
+            // create an approval for the old selection.
+            if (JSON.stringify(requestPayload()) !== JSON.stringify(payload)) {
+                clearPlan();
+                status.textContent = "Selection changed during preflight. "
+                    + "Run Check target again.";
+                return;
+            }
             prepared = result;
             plannedSnapshot = JSON.stringify(payload);
             renderReport(result);
@@ -270,6 +305,8 @@ export function initSourceImportUi() {
             + "\nPLC: " + prepared.device_name + " / " + prepared.plc_name
             + "\nCreate (" + exact.length + "): " + exact.join(", ")
             + "\nIdentical/skipped: " + prepared.counts.identical
+            + "\nAutomatically required UDTs to create: "
+            + ((prepared.auto_dependencies || []).join(", ") || "none")
             + "\nConflicts (skipped): " + prepared.counts.conflict
             + "\nBlocked dependencies (skipped): "
             + (prepared.counts.blocked || 0)
