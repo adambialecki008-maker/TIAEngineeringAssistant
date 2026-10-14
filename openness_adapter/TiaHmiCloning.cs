@@ -105,8 +105,10 @@ namespace TiaOpennessAdapter
                 }
                 var sourceConnections = GetHmiConnectionPartners(sourceSoftware);
                 if (!sourceConnections.TryGetValue(connectionName, out string partner)
-                    || !string.Equals(partner, plcName,
-                        StringComparison.OrdinalIgnoreCase))
+                    || !(string.Equals(partner, plcName,
+                            StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(partner, plcDeviceName,
+                            StringComparison.OrdinalIgnoreCase)))
                 {
                     Console.Error.WriteLine(
                         "Source HMI connection must already target the selected "
@@ -181,8 +183,10 @@ namespace TiaOpennessAdapter
                             GetHmiConnectionPartners(clonedSoftware);
                         if (!clonedConnections.TryGetValue(connectionName,
                             out string clonedPartner)
-                            || !string.Equals(clonedPartner, plcName,
-                                StringComparison.OrdinalIgnoreCase))
+                            || !(string.Equals(clonedPartner, plcName,
+                                    StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(clonedPartner, plcDeviceName,
+                                    StringComparison.OrdinalIgnoreCase)))
                             throw new InvalidOperationException(
                                 "Master copy did not preserve the existing PLC "
                                 + "connection. HMI clone rolled back.");
@@ -195,6 +199,10 @@ namespace TiaOpennessAdapter
                                 "HMI tag connection mapping could not be verified. "
                                 + "HMI clone rolled back.");
 
+                        // Remove the temporary library entry BEFORE saving the
+                        // project so the clone leaves no hidden master copy.
+                        temporaryMaster.Delete();
+                        temporaryMaster = null;
                         SaveProject(project);
                         Console.WriteLine(
                             "HMI_CLONED|" + SanitizeOutput(source.Name)
