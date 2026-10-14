@@ -238,6 +238,46 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
     return result
 
 
+# Siemens can regenerate numeric engineering XML IDs and serialize the same
+# HMI list differently on consecutive exports. Neither changes the editable
+# TextList state; a raw sha256(export_bytes) therefore causes false conflicts.
+# Never ignore names, entry order, selection values, languages, text, structure,
+# reference attributes or non-ID metadata: Override replaces the WHOLE list.
+_TRANSIENT_EXPORT_ID_TAGS = frozenset({
+    "TextList", "TextListEntry", "MultilingualText", "MultilingualTextItem",
+})
+
+
+def _text_list_fingerprint(xml_bytes: bytes, expected_name: str) -> str:
+    """Semantic, lossless-for-editable-content snapshot of one validated list.
+
+    Normalize ONLY serialization noise: attribute order, formatting whitespace
+    between child elements, and exporter-assigned numeric engineering object IDs.
+    Leave leaf text (including whitespace), children/order, and every other
+    attribute exact, so real changes still block the full-list Override.
+    """
+    root, _ = _parse(xml_bytes, expected_name)
+
+    def snapshot(node):
+        attributes = tuple(sorted(
+            (key, value) for key, value in node.attrib.items()
+            if not (key == "ID"
+                    and _local(node.tag) in _TRANSIENT_EXPORT_ID_TAGS
+                    and value.isdecimal())
+        ))
+        children = tuple(snapshot(child) for child in node)
+        text = node.text or ""
+        # Indentation between child elements is not part of any plain target.
+        if children and not text.strip():
+            text = ""
+        tail = node.tail or ""
+        if not tail.strip():
+            tail = ""
+        return (node.tag, attributes, text, tail, children)
+
+    return sha256(repr(snapshot(root)).encode("utf-8")).hexdigest()
+
+
 def _languages_snapshot(rows):
     return tuple(tuple(sorted(
         (culture, item[2]) for culture, item in row["languages"].items()
@@ -387,7 +427,7 @@ def prepare_text_list(request: PrepareTextListRequest):
             _REVIEWS[token] = {
                 "created": time.monotonic(),
                 "request": request.model_dump(),
-                "fingerprint": sha256(xml).hexdigest(),
+                "fingerprint": _text_list_fingerprint(xml, request.text_list_name),
                 "accepted": accepted,
             }
     return {
@@ -435,7 +475,7 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
             raise HTTPException(409, "Prepared target was already populated.")
 
     xml = _export_one(selection)
-    if sha256(xml).hexdigest() != prepared["fingerprint"]:
+    if _text_list_fingerprint(xml, selection.text_list_name) != prepared["fingerprint"]:
         raise HTTPException(
             409, "TextList changed since preparation. Nothing imported. "
             "Prepare again from a fresh scan."
