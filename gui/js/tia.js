@@ -1940,7 +1940,7 @@ export function initTiaUi(
             plannedScopes.push(xml + " Text list entries (XML)");
         hmiBatchPlan.textContent = "Selected: "
             + (plannedScopes.length ? plannedScopes.join(" + ") : "no text types")
-            + ". Batch size " + batch + "; total "
+            + ". Batch size " + batch + " (max. entries per review); total "
             + (requested ?? selectedTotal) + "; remaining " + remaining
             + ". " + (remaining ? "About " + Math.ceil(remaining / batch)
                 + " translation preparation(s)." : "No remaining translations.")
@@ -2449,6 +2449,10 @@ export function initTiaUi(
             "Preparing " + (project ? "Project texts" : "the next Text list")
             + " batch — maximum " + Math.min(Number(hmiBatchSizeInput?.value), remaining)
             + " translations. TIA is unchanged until you approve.";
+        // A QA-only rejection does not exhaust all Project texts. The
+        // preparation endpoint can exclude rejected sources and continue
+        // with later eligible texts without attempting a TIA write.
+        const excludedProjectBefore = hmiReviewQueueExcludedProject.size;
         let prepared = false;
         hmiReviewQueueOperation = "preparing";
         updateHmiTranslateButtonState();
@@ -2473,7 +2477,20 @@ export function initTiaUi(
         }
         if (!hmiReviewQueueActive) return;
         if (!prepared) {
-            // No import occurred: QA-rejected batch may safely advance.
+            // All proposals in this Project texts batch may have failed QA.
+            // Previously the whole XLSX scope was marked exhausted here,
+            // even though later source texts had never been prepared.
+            if (project && hmiReviewQueueExcludedProject.size > excludedProjectBefore) {
+                if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                    "No safe XLSX proposals in this batch. "
+                    + (hmiReviewQueueExcludedProject.size - excludedProjectBefore)
+                    + " rejected by QA; checking later eligible Project texts. "
+                    + "Nothing was written to TIA.";
+                await prepareNextReviewedHmiBatch();
+                return;
+            }
+            // No import occurred and no new sources were excluded: the
+            // review cannot make further progress in this scope.
             if (project) hmiReviewQueueProjectExhausted = true;
             else if (pendingListName) {
                 // No valid entries remaining for this specific list.

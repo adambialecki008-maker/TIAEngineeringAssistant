@@ -478,3 +478,64 @@ def test_translate_label_and_modal_are_consistent():
     assert '>Translate all</button>' not in html
     assert 'TRANSLATE SELECTED HMI TEXTS?' in js
     assert 'TRANSLATE ALL SELECTED HMI TEXTS?' not in js
+
+
+def test_review_queue_does_not_exhaust_xlsx_after_fully_rejected_qa_batch():
+    """Five QA rejects must not prevent reaching the next five candidates."""
+    import shutil
+    import subprocess
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js is required for this UI state regression")
+    queue = JS.split("async function prepareNextReviewedHmiBatch()", 1)[1].split(
+        "async function approveReviewedHmiQueueBatch()", 1
+    )[0]
+    script = r"""
+const assert = require("node:assert/strict");
+let hmiReviewQueueActive = true, hmiReviewQueuePending = false;
+let hmiReviewQueueStopRequested = false, hmiReviewQueuePaused = false;
+let hmiReviewQueueOperation = null, hmiReviewQueueAutoContinue = false;
+let hmiCombinedApprovedCount = 0, hmiReviewQueueStartApproved = 0;
+let hmiReviewQueueQuota = 10, hmiReviewQueueProjectExhausted = false;
+let hmiReviewQueueCurrentScope = null;
+const hmiReviewQueueTypes = {project: true, text_lists: false};
+const latestHmiScan = {missingUnique: 10};
+const hmiReviewQueueExcludedProject = new Set();
+const hmiReviewQueueBlockedLists = new Set();
+const hmiBatchSizeInput = {value: "5"};
+const hmiUnifiedStatus = {textContent: ""};
+const hmiEditDetails = {open: false, scrollIntoView() {}};
+const hmiEditCaption = {textContent: ""};
+function hmiScopeEnabled(scope) {return scope === "project";}
+function renderHmiBatchProgress() {}
+function updateHmiTranslateButtonState() {}
+function nextEligibleTextList() {return null;}
+function finishStoppedReviewedHmiQueue() {throw Error("Unexpected stop");}
+function finishReviewedHmiQueue() {throw Error("Premature XLSX exhaustion");}
+let prepareCalls = 0;
+async function translateSelectedHmi() {
+    prepareCalls++;
+    if (prepareCalls === 1) {
+        for (let i = 0; i < 5; i++)
+            hmiReviewQueueExcludedProject.add("rejected-" + i);
+        return false;  // First five candidates all rejected by QA.
+    }
+    return true;  // A later eligible group is safe.
+}
+async function prepareHmiTextList() {throw Error("Unexpected XML preparation");}
+async function prepareNextReviewedHmiBatch()""" + queue + """
+(async () => {
+    await prepareNextReviewedHmiBatch();
+    assert.equal(prepareCalls, 2);
+    assert.equal(hmiReviewQueuePending, true);
+    assert.equal(hmiReviewQueueProjectExhausted, false);
+    assert.equal(hmiReviewQueueExcludedProject.size, 5);
+    assert.match(hmiUnifiedStatus.textContent, /Awaiting approval/);
+})().catch(error => {console.error(error); process.exitCode = 1;});
+"""
+    result = subprocess.run(
+        [node, "-e", script], capture_output=True, text=True, timeout=20
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
