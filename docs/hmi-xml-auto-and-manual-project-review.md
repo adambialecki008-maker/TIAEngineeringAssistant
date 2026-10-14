@@ -75,6 +75,18 @@ Step 3 includes:
 The diagnostics JSON describes **frontend state**, not independent evidence
 that Siemens imported a translation.
 
+## One-command HMI regression
+
+From the Desktop project folder, run:
+
+```powershell
+.\scripts\verify-hmi.ps1           # Focused HMI GUI regressions and Node syntax
+.\scripts\verify-hmi.ps1 -Full     # Entire Python test suite
+```
+
+The script performs no TIA imports and avoids modifying compiled `bin/obj`
+artifacts. Manual real TIA verification remains separate.
+
 ## Local verification
 
 Work on a separate backed-up TIA Portal V21 project. Tests must **not**
