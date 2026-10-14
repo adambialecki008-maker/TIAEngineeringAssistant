@@ -22,6 +22,8 @@ import {
     generatePreview,
 } from "./preview.js";
 
+import { initSourceImportUi } from "./source_import.js";
+
 import {
     initTiaUi,
 } from "./tia.js";
@@ -77,6 +79,7 @@ const sourcePreview =
 
 
 loadProjectConfig();
+initSourceImportUi();
 
 
 if (plcFamilySelect) {
