@@ -1392,13 +1392,13 @@
                                 The count combines unique missing Project texts (XLSX) with
                                 eligible entries in Text lists (XML). These are different units:
                                 XML entries are not deduplicated across lists. Maximum 50 per
-                                batch. XML imports always require manual review.</p>
+                                batch. XML has both manual review and separately confirmed automatic import modes.</p>
                         <div class="form-grid hmi-translation-grid">
                             <div class="field-group">
                                 <label for="tia-hmi-batch-size">Batch size (texts per batch)</label>
                                 <input id="tia-hmi-batch-size" type="number"
                                        min="1" max="50" step="1" value="5">
-                                <p class="hint">1–50 translations per batch across the checked scopes. Each XML list is reviewed and imported separately.</p>
+                                <p class="hint">1–50 translations per batch across the checked scopes. Each XML list is prepared and imported independently; use manual review or separately confirmed XML automation.</p>
                             </div>
                             <div class="field-group">
                                 <label for="tia-hmi-total-to-translate">Total to translate (selected scopes)</label>
@@ -1426,7 +1426,7 @@
                         <h5 class="hmi-step-heading">Step 3 — Prepare and review selected texts</h5>
                         <p class="hint">
                             Prepare one batch from the checked scopes, review the results, and then
-                            approve the import. XML uses a separate one-list import and must be confirmed manually.
+                            approve the import. XML manual mode reviews one list at a time; automatic XML mode is configured separately below.
                         </p>
                     <div class="action-row hmi-translation-actions">
 
