@@ -2298,18 +2298,20 @@
             </div>
 
             <div class="card">
-                <h3>Import UDT + DB to TIA (pilot)</h3>
+                <h3>Import UDT / DB to TIA — batch</h3>
                 <p class="panel-description">
-                    Create exactly one UDT and one global DB in the selected
-                    offline PLC. Existing objects are never overwritten.
-                    Use a copy/backup of the TIA project; a failed import may
-                    leave partial unsaved changes in the open project.
+                    Compare every configured UDT and global DB with the selected
+                    offline PLC. Identical structures are skipped, missing objects
+                    can be created together, and any conflicting or unverifiable
+                    existing object blocks the import. No overwriting.
+                    Import only in a test/backup copy: failure may leave partial
+                    unsaved changes in the open TIA project.
                 </p>
                 <div class="action-row">
                     <button id="source-import-plan-button" type="button">
                         Check target and prepare import
                     </button>
-                    <button id="source-import-apply-button" type="button" disabled>
+                    <button id="source-import-apply-button" class="primary-button" type="button" disabled>
                         Import to TIA Portal
                     </button>
                 </div>
@@ -2318,8 +2320,23 @@
                     I confirm the open TIA project is a test/backup copy
                 </label>
                 <p id="source-import-status" class="target-summary" aria-live="polite">
-                    Preview and preflight required before import.
+                    Read-only comparison required before import.
                 </p>
+                <div id="source-import-report" class="hidden" aria-live="polite">
+                    <h4>Preflight report</h4>
+                    <p id="source-import-report-counts" class="hint"></p>
+                    <div class="table-wrapper">
+                        <table class="management-table">
+                            <thead><tr>
+                                <th>Type</th><th>Object</th><th>Decision</th>
+                                <th>Details</th>
+                            </tr></thead>
+                            <tbody id="source-import-report-rows"></tbody>
+                        </table>
+                    </div>
+                    <button id="source-import-report-download" type="button"
+                            class="secondary-button">↓ Download report (CSV)</button>
+                </div>
             </div>
 
         </section>
