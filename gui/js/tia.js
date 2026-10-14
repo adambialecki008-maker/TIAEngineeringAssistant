@@ -2516,6 +2516,7 @@ export function initTiaUi(
             hmiProjectScanMessage = hmiScanSummary?.textContent || null;
             renderHmiScanSummary();
             hmiPreviewInProgress = false;
+            renderHmiBatchPlan();
             updateHmiTranslateButtonState();
         }
     }
