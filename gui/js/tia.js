@@ -111,6 +111,9 @@ export function initTiaUi(
         "tia-hmi-dedicated-text-lists"
     );
     const hmiTextListDetails = document.getElementById("tia-hmi-text-lists-details");
+    const hmiProjectTextDetails = document.getElementById("tia-hmi-project-texts-details");
+    const hmiDedicatedProjectTexts = document.getElementById("tia-hmi-dedicated-project-texts");
+    const hmiAutomationControls = document.querySelector(".hmi-automation-controls");
     const hmiTextListCatalog = document.getElementById("tia-hmi-text-lists-catalog");
     const hmiTextListSelect = document.getElementById("tia-hmi-text-list-select");
     const hmiTextListStatus = document.getElementById("tia-hmi-text-list-status");
@@ -1151,6 +1154,18 @@ export function initTiaUi(
         return null;
     }
 
+    // Identical blue/white disclosure labels for both formats.
+    function setHmiScanDetailLabel(element, title, status) {
+        if (!element) return;
+        const name = document.createElement("span");
+        name.className = "hmi-scan-details-name";
+        name.textContent = title;
+        const detail = document.createElement("span");
+        detail.className = "hmi-scan-details-status";
+        detail.textContent = " — " + status;
+        element.replaceChildren(name, detail);
+    }
+
     function renderHmiScanSummary() {
         if (!hmiScanSummary) return;
         const parts = [];
@@ -1173,6 +1188,8 @@ export function initTiaUi(
         hmiPreviewResults?.classList.add("hidden");
         hmiReviewResults?.classList.add("hidden");
         if (hmiTextListDetails) hmiTextListDetails.open = false;
+        if (hmiProjectTextDetails) hmiProjectTextDetails.open = false;
+        hmiAutomationControls?.classList.toggle("hidden", !scope);
         if (hmiScanButton) {
             hmiScanButton.textContent = scope === "both"
                 ? "Scan selected texts (XLSX + XML)"
@@ -1182,7 +1199,7 @@ export function initTiaUi(
         }
         if (hmiScanInstruction) {
             hmiScanInstruction.textContent = scope === "both"
-                ? "Scan reads both formats separately. Review and import each type in its own section."
+                ? "Scan reads both formats separately; details and import controls share Steps 1–3."
                 : scope ? "Scan is read-only and uses only the selected type."
                 : "Select at least one text type to enable Scan.";
         }
@@ -1316,10 +1333,13 @@ export function initTiaUi(
             hmiTextListSelect.value = "";
         }
         hmiTextListCatalog?.replaceChildren();
-        if (hmiDedicatedTextLists) {
-            hmiDedicatedTextLists.textContent =
-                "Classic Text lists — not scanned";
-        }
+        setHmiScanDetailLabel(
+            hmiDedicatedTextLists, "Text lists", "not scanned · Details"
+        );
+        setHmiScanDetailLabel(
+            hmiDedicatedProjectTexts, "Project texts", "not scanned · Details"
+        );
+        if (hmiProjectTextDetails) hmiProjectTextDetails.open = false;
         if (hmiTextListStatus) hmiTextListStatus.textContent = "";
         hmiTextListPreview?.classList.add("hidden");
         if (hmiTextListPreview) hmiTextListPreview.open = false;
@@ -2483,9 +2503,12 @@ export function initTiaUi(
             const entries = data.entry_count_known
                 ? data.entry_count : "unknown";
             if (hmiDedicatedTextLists) {
-                hmiDedicatedTextLists.textContent =
-                    "Text lists — " + data.text_list_count
-                    + " lists · " + entries + " entries · Details";
+                setHmiScanDetailLabel(
+                    hmiDedicatedTextLists,
+                    "Text lists",
+                    data.text_list_count + " lists · " + entries
+                        + " entries · Details"
+                );
             }
             if (hmiScanInstruction) {
                 hmiScanInstruction.textContent =
@@ -2517,8 +2540,10 @@ export function initTiaUi(
                     "Text lists scan failed: " + error.message;
             }
             if (hmiDedicatedTextLists) {
-                hmiDedicatedTextLists.textContent =
-                    "Text lists — scan failed (not zero)";
+                setHmiScanDetailLabel(
+                    hmiDedicatedTextLists, "Text lists",
+                    "scan failed · Details"
+                );
             }
             setHmiTranslationStatus(error.message, "error");
             return false;
@@ -2570,6 +2595,12 @@ export function initTiaUi(
                 return false;
             }
             lastHmiPreviewRows = result.sample_rows || [];
+            setHmiScanDetailLabel(
+                hmiDedicatedProjectTexts, "Project texts",
+                (result.matched_text_rows ?? 0) + " XLSX rows · "
+                    + (result.matched_missing_target_unique_texts ?? 0)
+                    + " missing targets · Details"
+            );
             latestHmiScan = {
                 rows: result.matched_text_rows ?? 0,
                 unique: result.matched_unique_texts ?? 0,
@@ -2686,6 +2717,10 @@ export function initTiaUi(
                 );
                 return true;
             } else {
+                setHmiScanDetailLabel(
+                    hmiDedicatedProjectTexts, "Project texts",
+                    "no matching texts · Details"
+                );
                 if (hmiScanSummary) {
                     hmiScanSummary.textContent =
                         "Scan returned 0 texts for the current ViewPath root. "
@@ -2699,6 +2734,10 @@ export function initTiaUi(
                 return false;
             }
         } catch (error) {
+            setHmiScanDetailLabel(
+                hmiDedicatedProjectTexts, "Project texts",
+                "scan failed · Details"
+            );
             if (hmiScanSummary) {
                 hmiScanSummary.textContent =
                     "Scan failed: " + error.message;
