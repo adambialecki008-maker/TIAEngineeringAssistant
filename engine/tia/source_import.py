@@ -252,7 +252,7 @@ def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecificatio
 
 def _reference_type(value: str) -> str:
     name = (value or "").strip().strip('"').casefold()
-    if re.fullmatch(r"(w?string)\\[\\d+\\]", name):
+    if re.fullmatch(r"(w?string)\[\d+\]", name):
         return name.split("[", 1)[0]
     return name
 
@@ -374,8 +374,8 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
             if live_ref is None:
                 blockers.append(reference + " (UDT missing in TIA and selection)")
                 continue
-            # Configured, but unchecked UDT: verify its live definition before
-            # allowing a dependent DB to use it. No automatic dependency import.
+            # Configured but not selected UDT already present in TIA: verify
+            # its current definition before importing any dependent DB.
             configured = all_configured.get(key)
             if configured is not None:
                 if key not in verified_external:
