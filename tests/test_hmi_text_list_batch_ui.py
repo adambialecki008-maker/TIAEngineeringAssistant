@@ -248,17 +248,34 @@ def test_reviewed_mode_waits_for_confirmation_between_batches():
     assert 'hmiReviewQueuePending = true;' in pipeline
     approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1]
     approval = approval.split('async function startHmiBatchImport(', 1)[0]
-    assert approval.index('await importSelectedHmiBatch()') < approval.index(
+    assert approval.index('await importSelectedHmiBatch({automatic})') < approval.index(
         'await prepareNextReviewedHmiBatch()')
     assert 'hmiCombinedApprovedCount <= before' in approval
 
 
-def test_review_mode_can_be_changed_without_interrupting_current_run():
+def test_review_mode_can_switch_an_active_review_queue_to_automatic():
     state = JS.split('function updateHmiTranslateButtonState()', 1)[1]
     state = state.split('if (hmiRunDescription)', 1)[0]
     assert 'hmiReviewEachBatch.disabled = false;' in state
-    assert 'const appliesToNextRun = busy || hmiReviewQueueActive;' in state
-    assert 'Changes apply to the next run.' in state
+    listener = JS.split('hmiReviewEachBatch?.addEventListener("change", () => {', 1)[1].split(
+        'const changeHmiScope', 1
+    )[0]
+    assert 'hmiReviewQueueAutoContinue = true;' in listener
+    assert 'void approveReviewedHmiQueueBatch({automatic: true});' in listener
+    assert 'current safe operation will finish' in listener
+    queue = JS.split('async function prepareNextReviewedHmiBatch()', 1)[1].split(
+        'async function approveReviewedHmiQueueBatch()', 1
+    )[0]
+    assert 'await approveReviewedHmiQueueBatch({automatic: true});' in queue
+    approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
+        'async function skipReviewedHmiQueueBatch()', 1
+    )[0]
+    assert 'await continueReviewedQueueAutomatically();' in approval
+    continuation = JS.split('async function continueReviewedQueueAutomatically()', 1)[1].split(
+        'async function skipReviewedHmiQueueBatch()', 1
+    )[0]
+    assert 'await translateAllSelectedHmi({confirmed: true, preserveRunReport: true});' in continuation
+    assert 'if (!automatic && !confirm(' in JS
 
 
 def test_one_csv_report_covers_skipped_xlsx_xml_and_blocks_formulas():
@@ -387,7 +404,7 @@ def test_stop_during_inflight_prepare_or_import_never_aborts_tia_write():
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
     assert 'hmiReviewQueueOperation = "importing / verifying"' in approval
-    assert 'completed = await importSelectedHmiBatch();' in approval
+    assert 'completed = await importSelectedHmiBatch({automatic});' in approval
     assert 'hmiReviewQueueStopRequested' in approval
     assert 'completed?.state === "prewrite_rejected"' in approval
     assert 'completed?.state === "verified_refresh_failed"' in approval
@@ -400,6 +417,27 @@ def test_stop_during_inflight_prepare_or_import_never_aborts_tia_write():
     assert 'if (hmiBatchRunning) void pauseHmiBatchImport();' in stop
     assert 'if (hmiXmlAutoRunning) pauseAutomaticXmlBatches();' in stop
     assert 'run_adapter(' not in stop
+
+
+def test_new_hmi_runs_clear_only_a_stale_review_queue_error_style():
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    automatic = js.split("async function translateAllSelectedHmi()", 1)[1].split(
+        "function finishStoppedReviewedHmiQueue()", 1
+    )[0]
+    reviewed = js.split("async function startReviewedHmiQueue(", 1)[1].split(
+        "async function prepareNextReviewedHmiBatch()", 1
+    )[0]
+    assert 'hmiUnifiedStatus?.classList.remove("error");' in automatic
+    assert 'hmiUnifiedStatus?.classList.remove("error");' in reviewed
+
+
+def test_queue_marks_items_awaiting_approval_only_while_review_queue_is_active():
+    queue = JS.split('function renderHmiTranslationQueue()', 1)[1].split(
+        'function renderHmiBatchPlan()', 1
+    )[0]
+    assert 'const reviewing = hmiReviewQueueActive && hmiReviewQueuePending' in queue
+    assert ': ready ? "Ready to translate" : "Scan required"' in queue
+    assert ': "hmi-queue-ready");' in queue
 
 
 def test_xlsx_backend_verification_is_not_confused_with_followup_ui_scan():

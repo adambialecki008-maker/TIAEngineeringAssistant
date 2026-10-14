@@ -266,15 +266,15 @@ def test_reviewed_xml_approval_uses_step3_and_does_not_silently_fallback():
     )[0]
     assert 'if (hmiReviewQueueActive)' in router
     assert 'hmiReviewQueueCurrentScope === "text_lists"' in router
-    assert 'return await importReviewedHmiTextList();' in router
+    assert 'return await importReviewedHmiTextList({automatic});' in router
     assert 'hmiReviewQueueCurrentScope === "project"' in router
-    assert 'return await importReviewedHmiTexts();' in router
+    assert 'return await importReviewedHmiTexts({automatic});' in router
     assert 'No selected format in current review queue' in router
     approval = js.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
     assert 'Approve clicked for ' in approval
-    assert 'completed = await importSelectedHmiBatch()' in approval
+    assert 'completed = await importSelectedHmiBatch({automatic})' in approval
     xml_import = js.split('async function importReviewedHmiTextList()', 1)[1].split(
         'async function startAutomaticXmlBatches(', 1
     )[0]

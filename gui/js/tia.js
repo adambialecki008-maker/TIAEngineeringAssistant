@@ -550,6 +550,7 @@ export function initTiaUi(
     let hmiReviewQueueActive = false;
     let hmiReviewQueuePending = false;
     let hmiReviewQueuePaused = false;
+    let hmiReviewQueueAutoContinue = false;
     let hmiReviewQueueStopRequested = false;
     let hmiReviewQueueOperation = null;
     let hmiUnifiedStopRequested = false;
@@ -1515,15 +1516,16 @@ export function initTiaUi(
         if (hmiScopeProject) hmiScopeProject.disabled = busy || hmiReviewQueueActive;
         if (hmiScopeLists) hmiScopeLists.disabled = busy || hmiReviewQueueActive;
         if (hmiReviewEachBatch) {
-            // The current queue keeps the mode selected when it began. This
-            // control configures the next run without interrupting TIA work.
             hmiReviewEachBatch.disabled = false;
             const isReview = hmiReviewEachBatch.checked;
-            const appliesToNextRun = busy || hmiReviewQueueActive;
+            const appliesToNextRun = busy && !hmiReviewQueueActive;
             if (hmiModeDescription) hmiModeDescription.textContent = isReview
                 ? "ON: translate one batch → edit in Step 2 → approve in Step 3 → verified import → next batch."
                     + (appliesToNextRun ? " Changes apply to the next run." : "")
-                : "OFF: translate and import automatically, with verification after every batch.";
+                : "OFF: translate and import automatically, with verification after every batch."
+                    + (hmiReviewQueueActive
+                        ? " Current reviewed queue switches at its next safe boundary."
+                        : "");
             if (hmiStep3Description) hmiStep3Description.textContent = isReview
                 ? "Edit prepared translations in Step 2; approve and import each batch here in Step 3."
                 : "Import eligible translations automatically for the checked types.";
@@ -1858,7 +1860,7 @@ export function initTiaUi(
             addHmiTextCell(tr, String(count));
             const stateCell = document.createElement("td");
             const state = document.createElement("span");
-            const reviewing = hmiReviewQueuePending
+            const reviewing = hmiReviewQueueActive && hmiReviewQueuePending
                 && hmiReviewQueueCurrentScope === type;
             const running = hmiReviewQueueActive
                 && hmiReviewQueueCurrentScope === type;
@@ -1866,10 +1868,10 @@ export function initTiaUi(
             state.className = "hmi-queue-status "
                 + (reviewing ? "hmi-queue-reviewing"
                     : running ? "hmi-queue-running"
-                    : empty ? "hmi-queue-done" : "hmi-queue-pending");
+                    : empty ? "hmi-queue-done" : "hmi-queue-ready");
             state.textContent = reviewing ? "Awaiting approval"
                 : running ? "Preparing" : empty ? "Done"
-                : ready ? "Pending" : "Scan required";
+                : ready ? "Ready to translate" : "Scan required";
             stateCell.appendChild(state);
             tr.appendChild(stateCell);
             hmiTranslationQueue.appendChild(tr);
@@ -2070,6 +2072,9 @@ export function initTiaUi(
     // A single user confirmation starts the selected safe TIA import pipelines.
     // When both checkboxes are on, finish XLSX before importing the first XML list.
     async function translateAllSelectedHmi() {
+        const options = arguments[0] || {};
+        const confirmed = options.confirmed === true;
+        const preserveRunReport = options.preserveRunReport === true;
         const selection = hmiTranslationSelection();
         const useProject = hmiScopeEnabled("project");
         const useXml = hmiScopeEnabled("text_lists");
@@ -2103,13 +2108,13 @@ export function initTiaUi(
                 + "batch size and shared total before translating.";
             return;
         }
-        if (hmiReviewEachBatch?.checked) {
+        if (hmiReviewEachBatch?.checked && !confirmed) {
             await startReviewedHmiQueue({useProject, useXml, quota});
             return;
         }
         const order = [useProject && "Project texts (XLSX)",
             useXml && "Text lists (XML)"].filter(Boolean).join(" → ");
-        if (!confirm(
+        if (!confirmed && !confirm(
             "TRANSLATE SELECTED HMI TEXTS?\n\n"
             + "Order: " + order + "\n"
             + "Ollama: " + selection.ollama_model + "\n"
@@ -2121,7 +2126,10 @@ export function initTiaUi(
             + "Use a BACKUP/COPY of the TIA project."
         )) return;
 
-        startHmiRunReport();
+        // A new run starts with normal progress styling.  A prior stopped
+        // reviewed queue may have left this shared status box red.
+        hmiUnifiedStatus?.classList.remove("error");
+        if (!preserveRunReport) startHmiRunReport();
         hmiUnifiedRunning = true;
         hmiUnifiedStopRequested = false;
         hmiUnifiedPauseRequested = false;
@@ -2359,6 +2367,7 @@ export function initTiaUi(
         hmiReviewQueueStopRequested = false;
         hmiReviewQueueOperation = null;
         hmiReviewQueuePending = false;
+        hmiReviewQueueAutoContinue = false;
         hmiReviewQueueCurrentScope = null;
         hmiReviewQueuePendingSkippedList = null;
         showHmiRunReport();
@@ -2381,8 +2390,12 @@ export function initTiaUi(
         hmiReviewQueueActive = true;
         hmiReviewQueueStopRequested = false;
         hmiReviewQueueOperation = null;
+        // This is a new queue, so an error style from a previous stopped
+        // queue must not make normal Ollama progress look like a failure.
+        hmiUnifiedStatus?.classList.remove("error");
         setHmiTranslationStatus("", "normal");
         hmiReviewQueuePending = false;
+        hmiReviewQueueAutoContinue = false;
         hmiReviewQueuePaused = false;
         hmiReviewQueueQuota = quota;
         hmiReviewQueueStartApproved = hmiCombinedApprovedCount;
@@ -2472,6 +2485,14 @@ export function initTiaUi(
             return;
         }
         hmiReviewQueuePending = true;
+        if (hmiReviewQueueAutoContinue) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Review disabled. Importing the prepared batch automatically, "
+                + "then continuing the remaining queue automatically.";
+            updateHmiTranslateButtonState();
+            await approveReviewedHmiQueueBatch({automatic: true});
+            return;
+        }
         if (hmiEditDetails) hmiEditDetails.open = true;
         if (hmiEditCaption) hmiEditCaption.textContent =
             "Review " + (project ? "Project texts" : "Text list")
@@ -2484,6 +2505,7 @@ export function initTiaUi(
     }
 
     async function approveReviewedHmiQueueBatch() {
+        const automatic = arguments[0]?.automatic === true;
         if (!hmiReviewQueueActive || !hmiReviewQueuePending
             || hmiReviewQueueOperation || hmiReviewQueueStopRequested) return;
         const before = hmiCombinedApprovedCount;
@@ -2497,7 +2519,7 @@ export function initTiaUi(
         updateHmiTranslateButtonState();
         let completed;
         try {
-            completed = await importSelectedHmiBatch();
+            completed = await importSelectedHmiBatch({automatic});
         } catch (error) {
             completed = {state: "uncertain", detail: String(error.message || error)};
         } finally {
@@ -2583,7 +2605,36 @@ export function initTiaUi(
         );
         if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
             "Verified in TIA. Preparing next batch in queue...";
+        if (hmiReviewQueueAutoContinue) {
+            await continueReviewedQueueAutomatically();
+            return;
+        }
         await prepareNextReviewedHmiBatch();
+    }
+
+    async function continueReviewedQueueAutomatically() {
+        if (!hmiReviewQueueActive || !hmiReviewQueueAutoContinue) return;
+        const verified = hmiCombinedApprovedCount - hmiReviewQueueStartApproved;
+        const quota = hmiReviewQueueQuota;
+        hmiReviewQueueActive = false;
+        hmiReviewQueuePaused = false;
+        hmiReviewQueueStopRequested = false;
+        hmiReviewQueueOperation = null;
+        hmiReviewQueuePending = false;
+        hmiReviewQueueCurrentScope = null;
+        hmiReviewQueueAutoContinue = false;
+        if (verified >= quota) {
+            showHmiRunReport();
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Translation complete — " + verified + " verified in TIA.";
+            updateHmiTranslateButtonState();
+            return;
+        }
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+            "Review disabled. Continuing the remaining queue with automatic "
+            + "TIA verification after every batch...";
+        updateHmiTranslateButtonState();
+        await translateAllSelectedHmi({confirmed: true, preserveRunReport: true});
     }
 
     async function skipReviewedHmiQueueBatch() {
@@ -3029,6 +3080,7 @@ export function initTiaUi(
     }
 
     async function importReviewedHmiTextList() {
+        const automatic = arguments[0]?.automatic === true;
         if (hmiTextListBusy) {
             return {state: "prewrite_rejected",
                 detail: "TextList operation is already in progress. "
@@ -3052,7 +3104,7 @@ export function initTiaUi(
                 proposal: element.value,
             }));
         if (!selected.length) return "edit_invalid";
-        if (!confirm(
+        if (!automatic && !confirm(
             "Import reviewed translations into TIA?\n\n"
             + "ONLY Text list: " + listName + "\n"
             + "Entries: " + selected.length + "\n\n"
@@ -4149,15 +4201,16 @@ export function initTiaUi(
     }
 
     async function importSelectedHmiBatch() {
+        const automatic = arguments[0]?.automatic === true;
         // An active reviewed queue determines the format explicitly.
         // Never silently fall through to XLSX or return false for a stale XML
         // review: the XML import handler returns a meaningful prewrite reason.
         if (hmiReviewQueueActive) {
             if (hmiReviewQueueCurrentScope === "text_lists") {
-                return await importReviewedHmiTextList();
+                return await importReviewedHmiTextList({automatic});
             }
             if (hmiReviewQueueCurrentScope === "project") {
-                return await importReviewedHmiTexts();
+                return await importReviewedHmiTexts({automatic});
             }
             return {state: "prewrite_rejected",
                 detail: "No selected format in current review queue; "
@@ -4316,8 +4369,9 @@ export function initTiaUi(
             hmiSourceLanguageSelect, selection.source_culture,
             selection.source_culture
         );
-        // Rebuild the target list for the restored source culture.
-        populateHmiTranslationLanguages();
+        // Rebuild the target list for the restored source culture without
+        // discarding writes that TIA already verified before this UI refresh.
+        populateHmiTranslationLanguages(true);
         restoreOption(
             hmiTargetLanguageSelect, selection.target_culture,
             selection.target_culture
@@ -4337,6 +4391,7 @@ export function initTiaUi(
 
 
     async function importReviewedHmiTexts() {
+        const automatic = arguments[0]?.automatic === true;
         const review = preparedHmiReview;
         const selectionBeforeImport = hmiTranslationSelection();
         const key = hmiTranslationKey(selectionBeforeImport);
@@ -4368,7 +4423,7 @@ export function initTiaUi(
             );
             return "edit_invalid";
         }
-        if (!confirm(
+        if (!automatic && !confirm(
             "Import " + review.rowCount
             + " REVIEWED text row(s) into the selected TIA project? "
             + "The project will be saved and each imported value verified."
@@ -9494,7 +9549,25 @@ export function initTiaUi(
         updateHmiTranslateButtonState();
     });
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
-    hmiReviewEachBatch?.addEventListener("change", updateHmiTranslateButtonState);
+    hmiReviewEachBatch?.addEventListener("change", () => {
+        updateHmiTranslateButtonState();
+        if (!hmiReviewQueueActive) return;
+        if (hmiReviewEachBatch.checked) {
+            hmiReviewQueueAutoContinue = false;
+            return;
+        }
+        // Turning review off is explicit authorization to continue this run
+        // automatically. Never interrupt an active TIA operation; instead
+        // switch at its next verified boundary.
+        hmiReviewQueueAutoContinue = true;
+        if (hmiReviewQueuePending && !hmiReviewQueueOperation) {
+            void approveReviewedHmiQueueBatch({automatic: true});
+        } else if (hmiUnifiedStatus) {
+            hmiUnifiedStatus.textContent =
+                "Review disabled. The current safe operation will finish, "
+                + "then the queue continues automatically.";
+        }
+    });
 
     const changeHmiScope = (changed) => {
         if (hmiPreviewInProgress || hmiTextListBusy || hmiReviewInProgress

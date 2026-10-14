@@ -54,6 +54,11 @@ FUNCTIONS
     importer = source.split("async function importReviewedHmiTexts()", 1)[1].split(
         "async function refreshProjectLanguages(", 1)[0]
     assert "await refreshProjectLanguages(true);" in importer
+    restore = source.split("function restoreHmiTranslationAfterImport(", 1)[1].split(
+        "async function importReviewedHmiTexts()", 1
+    )[0]
+    assert "populateHmiTranslationLanguages(true);" in restore
+    assert "populateHmiTranslationLanguages();" not in restore
 
 
 def test_xml_rescan_keeps_unfinished_list_first():
