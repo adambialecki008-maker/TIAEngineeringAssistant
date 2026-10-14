@@ -2236,3 +2236,17 @@ table > thead > tr > th {
     padding: 8px 0 0 16px; font: 12px Consolas, monospace;
     overflow-wrap: anywhere; line-height: 1.5;
 }
+
+/* Shared editable review fields: Project texts and XML Text lists. */
+.hmi-review-table .hmi-project-review-editor {
+    width: 100%; min-height: 60px; max-height: 180px;
+    box-sizing: border-box; resize: vertical;
+    color: #e6f0f6; background: #111a21;
+    border: 1px solid #405b6b; border-radius: 5px;
+    padding: 7px 9px; font: inherit; white-space: pre-wrap;
+}
+.hmi-review-table td .secondary-button {
+    display: block; margin: 5px 0 0; min-height: 28px;
+    padding: 4px 8px; font-size: 12px;
+}
+#tia-hmi-xml-auto-progress { margin-top: 8px; }
