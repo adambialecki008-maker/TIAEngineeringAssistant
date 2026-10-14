@@ -188,3 +188,39 @@ def test_project_text_review_editor_submits_validated_proposals():
     )
     assert "Submitted Project texts must match every validated review row" in backend
     assert "validate_hmi_translation_quality(" in backend
+
+
+def test_reviewed_xml_distinguishes_verified_import_from_followup_scan_failure():
+    """TIA's verified import must not be reported as an uncertain TIA write."""
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    xml_import = js.split("async function importReviewedHmiTextList()", 1)[1]
+    xml_import = xml_import.split("function pauseAutomaticXmlBatches()", 1)[0]
+    assert 'result.status !== "verified"' in xml_import
+    assert 'state: "verified_refresh_failed"' in xml_import
+    assert 'state: safePreflight ? "prewrite_rejected" : "uncertain"' in xml_import
+    assert 'TextList changed since preparation. Nothing imported.' in xml_import
+    queue = js.split("async function approveReviewedHmiQueueBatch()", 1)[1]
+    queue = queue.split("async function skipReviewedHmiQueueBatch()", 1)[0]
+    assert 'completed?.state === "verified_refresh_failed"' in queue
+    assert 'completed?.state === "prewrite_rejected"' in queue
+    assert 'hmiReviewQueueBlockedLists.add(reviewListName)' in queue
+    assert 'const refreshed = await scanHmiTextLists()' in queue
+    assert 'completed?.detail' in queue
+    assert 'appendHmiRunIssue("XML", reviewListName' in queue
+
+
+def test_xml_backend_preserves_prewrite_safety_and_reexport_verification():
+    source = (ROOT / "engine/tia/hmi_text_list_translation.py").read_text(
+        encoding="utf-8"
+    )
+    reviewed = source.split("def _perform_reviewed_import(", 1)[1]
+    assert 'if _text_list_fingerprint(xml, selection.text_list_name)' in reviewed
+    assert 'TextList changed since preparation. Nothing imported.' in reviewed
+    assert 'if _REVIEWS.pop(request.review_id, None) is not prepared:' in reviewed
+    assert 'lines = run_adapter(' in reviewed
+    assert 'current_xml = _export_one(selection)' in reviewed
+    assert '"status": "verified"' in reviewed
+    assert reviewed.index('if _text_list_fingerprint(') < reviewed.index(
+        'lines = run_adapter(')
+    assert reviewed.index('lines = run_adapter(') < reviewed.index(
+        'current_xml = _export_one(selection)')
