@@ -2105,3 +2105,20 @@ td {
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
+
+/* Add / Clone HMI device — collapsed by default. */
+.hmi-device-management > summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1.06rem;
+    padding: 12px 2px;
+}
+.hmi-device-management > .form-grid {
+    margin: 15px 0 12px;
+}
+.hmi-device-management .action-row {
+    margin: 12px 0;
+}
+.hmi-device-management .hint {
+    max-width: 105ch;
+}
