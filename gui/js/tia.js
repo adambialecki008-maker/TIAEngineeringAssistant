@@ -12,6 +12,7 @@ import {
 
 import { createPlcMemberTree } from "./plc_member_tree.js";
 import { createHmiSkippedManager } from "./hmi_skipped_manager.js";
+import { initHmiDeviceManagement } from "./hmi_device_management.js";
 
 
 const MANUAL_SELECTION =
@@ -502,6 +503,14 @@ export function initTiaUi(
 
     let existingHmis = [];
 
+    const hmiDeviceManagement = initHmiDeviceManagement({
+        getHmis: () => existingHmis,
+        getPlcs: () => existingPlcs,
+        getProcessId: () => selectedProcessId(),
+        postJson,
+        refreshProject: () => refreshProjectPlcs(),
+    });
+
     let projectLanguages = [];
 
     let selectedHmiForTranslation = null;
@@ -945,7 +954,7 @@ export function initTiaUi(
             );
 
         cell.colSpan =
-            5;
+            7;
 
         cell.className =
             "empty-table-cell";
@@ -1003,6 +1012,10 @@ export function initTiaUi(
                     ||
                     "—",
 
+                    hmi.ip_address || "—",
+
+                    (hmi.plc_connections || []).join(", ") || "—",
+
                     hmi.hmi_type_identifier
                     ||
                     hmi.device_type_identifier
@@ -1045,6 +1058,13 @@ export function initTiaUi(
                         openHmiTranslation(
                             hmi
                         )
+                )
+            );
+
+            actionsCell.appendChild(
+                createActionButton(
+                    "Clone",
+                    () => hmiDeviceManagement.openFor(hmi)
                 )
             );
 
@@ -7069,6 +7089,7 @@ export function initTiaUi(
             renderEmptyHmis(
                 "Select a TIA process first."
             );
+            hmiDeviceManagement.render();
 
             await refreshProjectLanguages();
 
@@ -7147,6 +7168,7 @@ export function initTiaUi(
             renderExistingPlcs();
 
             renderExistingHmis();
+            hmiDeviceManagement.render();
 
             await refreshProjectLanguages();
 
@@ -7174,6 +7196,7 @@ export function initTiaUi(
             renderEmptyHmis(
                 "HMI discovery failed."
             );
+            hmiDeviceManagement.render();
 
 
             setStatus(
