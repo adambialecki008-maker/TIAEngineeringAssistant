@@ -1417,6 +1417,8 @@ export function initTiaUi(
         return (hmiTextListsData?.lists || []).find(item =>
             Number.isInteger(item.eligible_missing_entries)
                 && item.eligible_missing_entries > 0
+                && (!hmiReviewQueueActive
+                    || !hmiReviewQueueBlockedLists.has(item.name))
         ) || null;
     }
 
@@ -2019,6 +2021,7 @@ export function initTiaUi(
             + "Use a BACKUP/COPY of the TIA project."
         )) return;
 
+        startHmiRunReport();
         hmiUnifiedRunning = true;
         hmiUnifiedPauseRequested = false;
         hmiUnifiedQuota = quota;
@@ -2077,8 +2080,10 @@ export function initTiaUi(
                 "Translation stopped: " + error.message
                 + ". Check TIA before retrying an uncertain import.";
         } finally {
+            if (useProject && hmiBatchJobId) await collectHmiXlsxRunSkips();
             hmiUnifiedRunning = false;
             hmiUnifiedPauseRequested = false;
+            showHmiRunReport();
             renderHmiBatchPlan();
             updateHmiTranslateButtonState();
         }
@@ -2187,6 +2192,7 @@ export function initTiaUi(
         hmiReviewQueuePaused = false;
         hmiReviewQueuePending = false;
         hmiReviewQueueCurrentScope = null;
+        showHmiRunReport();
         if (hmiUnifiedStatus) {
             hmiUnifiedStatus.textContent = message;
             hmiUnifiedStatus.classList.toggle("error", isError);
@@ -2209,6 +2215,9 @@ export function initTiaUi(
         hmiReviewQueueQuota = quota;
         hmiReviewQueueStartApproved = hmiCombinedApprovedCount;
         hmiReviewQueueTypes = {project: useProject, text_lists: useXml};
+        hmiReviewQueueProjectExhausted = false;
+        hmiReviewQueueBlockedLists.clear();
+        startHmiRunReport();
         if (hmiEditDetails) hmiEditDetails.open = true;
         renderHmiBatchProgress(0, quota);
         updateHmiTranslateButtonState();
@@ -2232,9 +2241,10 @@ export function initTiaUi(
         }
         const remaining = hmiReviewQueueQuota - verified;
         const project = hmiReviewQueueTypes.project
+            && !hmiReviewQueueProjectExhausted
             && hmiScopeEnabled("project") && (latestHmiScan?.missingUnique || 0) > 0;
         const xml = hmiReviewQueueTypes.text_lists
-            && hmiScopeEnabled("text_lists") && eligibleXmlEntries() > 0;
+            && hmiScopeEnabled("text_lists") && Boolean(nextEligibleTextList());
         if (!project && !xml) {
             finishReviewedHmiQueue("Reviewed queue finished — "
                 + verified + " verified in TIA. No more eligible targets.");
@@ -2256,10 +2266,15 @@ export function initTiaUi(
             return;
         }
         if (!prepared) {
-            finishReviewedHmiQueue(
-                "No safe proposals were prepared. No import performed. "
-                + "Inspect skipped texts or rescan before continuing.", true
-            );
+            // No import occurred: QA-rejected batch may safely advance.
+            if (project) hmiReviewQueueProjectExhausted = true;
+            else {
+                const name = hmiTextListSelect?.value;
+                if (name) hmiReviewQueueBlockedLists.add(name);
+            }
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "No safe proposal — skipped. Continuing with next queue item.";
+            await prepareNextReviewedHmiBatch();
             return;
         }
         hmiReviewQueuePending = true;
@@ -2591,6 +2606,15 @@ export function initTiaUi(
             if (identity !== textListReviewKey()) return;
             hmiTextListReviewToken = result.review_id;
             hmiTextListPreparedKey = identity;
+            if (hmiReviewQueueActive) {
+                for (const item of result.skipped || []) {
+                    appendHmiRunIssue("XML", hmiTextListSelect.value,
+                        item.source, item.proposal, item.reason);
+                }
+                if (result.skipped?.length) {
+                    hmiReviewQueueBlockedLists.add(hmiTextListSelect.value);
+                }
+            }
             if (hmiTextListReviewRows) {
                 hmiTextListReviewRows.replaceChildren();
                 for (const item of result.rows || []) {
@@ -2774,6 +2798,10 @@ export function initTiaUi(
                     "/api/v1/tia/hmis/text-lists/prepare",
                     {...selection, text_list_name: list.name, max_rows: count}
                 );
+                for (const item of prepared.skipped || []) {
+                    appendHmiRunIssue("XML", list.name,
+                        item.source, item.proposal, item.reason);
+                }
                 if (!prepared.review_id || !prepared.approved_count) {
                     // Rejected by QA: do not process the same entry forever.
                     blockedLists.add(list.name);
@@ -3756,6 +3784,12 @@ export function initTiaUi(
                 return;
             }
 
+            if (hmiReviewQueueActive) {
+                for (const item of result.skipped || []) {
+                    appendHmiRunIssue("XLSX", "Project texts",
+                        item.source_text, item.proposed_target, item.reason);
+                }
+            }
             renderPreparedHmiReview(result, key);
             return Boolean(preparedHmiReview);
         } catch (error) {
@@ -8999,6 +9033,7 @@ export function initTiaUi(
         }
     });
 
+    hmiRunReportButton?.addEventListener("click", downloadHmiRunReport);
     hmiBatchStartButton?.addEventListener(
         "click", () => { void translateAllSelectedHmi(); }
     );
