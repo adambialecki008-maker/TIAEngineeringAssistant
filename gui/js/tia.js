@@ -2802,10 +2802,21 @@ export function initTiaUi(
                     hmiXmlAutoStatus.textContent = "XML batch "
                         + completedBatches + ": preparing " + count
                         + " entry/entries from " + list.name + "...";
-                const prepared = await postJson(
-                    "/api/v1/tia/hmis/text-lists/prepare",
-                    {...selection, text_list_name: list.name, max_rows: count}
-                );
+                let prepared;
+                try {
+                    prepared = await postJson(
+                        "/api/v1/tia/hmis/text-lists/prepare",
+                        {...selection, text_list_name: list.name, max_rows: count}
+                    );
+                } catch (error) {
+                    // Prepare is read-only: an isolated failed list can be
+                    // skipped without risking any unverified TIA writes.
+                    appendHmiRunIssue("XML", list.name, "", "",
+                        "Preparation failed before import: " + error.message,
+                        "Skipped list");
+                    blockedLists.add(list.name);
+                    continue;
+                }
                 for (const item of prepared.skipped || []) {
                     appendHmiRunIssue("XML", list.name,
                         item.source, item.proposal, item.reason);
@@ -2820,7 +2831,11 @@ export function initTiaUi(
                     proposal: row.proposal,
                 }));
                 if (proposals.length !== prepared.approved_count) {
-                    throw new Error("XML prepared rows/count mismatch; no import.");
+                    appendHmiRunIssue("XML", list.name, "", "",
+                        "Prepared XML row count mismatch; no import attempted",
+                        "Skipped list");
+                    blockedLists.add(list.name);
+                    continue;
                 }
                 if (hmiXmlAutoStatus)
                     hmiXmlAutoStatus.textContent = "XML batch "
