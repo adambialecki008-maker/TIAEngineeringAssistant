@@ -94,6 +94,8 @@ class IoChannel(BaseModel):
 
 class IoInventory(BaseModel):
     project_name: str | None = None
+    # Name configured on the PROFINET node (PnDeviceName) by TIA station name.
+    profinet_device_names: dict[str, str] = Field(default_factory=dict)
     items: list[HardwareItem]
     addresses: list[IoAddress]
     channels: list[IoChannel]
