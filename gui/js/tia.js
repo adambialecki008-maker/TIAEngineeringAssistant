@@ -1805,7 +1805,7 @@ export function initTiaUi(
         let lastJob = null;
         try {
             let retry = retryFirst;
-            while (!hmiBatchPauseRequested) {
+            while (!hmiBatchPauseRequested && !hmiUnifiedPauseRequested) {
                 const job = await postJson(
                     "/api/v1/tia/hmis/batch-translations/" + jobId + "/next",
                     {retry_failed_batch: retry}
@@ -1840,6 +1840,131 @@ export function initTiaUi(
             updateHmiTranslateButtonState();
         }
         return lastJob;
+    }
+
+    // A single user confirmation starts the selected safe TIA import pipelines.
+    // When both checkboxes are on, finish XLSX before importing the first XML list.
+    async function translateAllSelectedHmi() {
+        const selection = hmiTranslationSelection();
+        const useProject = hmiScopeEnabled("project");
+        const useXml = hmiScopeEnabled("text_lists");
+        const projectCount = useProject ? (latestHmiScan?.missingUnique || 0) : 0;
+        const xmlCount = useXml ? eligibleXmlEntries() : 0;
+        const projectVerified = !useProject || (
+            hmiScanKey(selection) === verifiedHmiScanKey
+            && (projectCount === 0 || Boolean(selection?.view_path_root))
+        );
+        const xmlVerified = !useXml || (
+            hmiScanKey(selection, "text_lists") === verifiedHmiTextListsScanKey
+        );
+        const size = Number(hmiBatchSizeInput?.value);
+        const raw = hmiBatchTotalInput?.value?.trim() || "";
+        const total = raw ? Number(raw) : null;
+        const eligible = projectCount + xmlCount;
+        const quota = total === null ? eligible
+            : Math.min(eligible, Math.max(0, total - hmiCombinedApprovedCount));
+        const valid = selection?.ollama_model && (useProject || useXml)
+            && projectVerified && xmlVerified
+            && Number.isInteger(size) && size >= 1 && size <= 50
+            && (total === null || (Number.isInteger(total)
+                && total >= 1 && total <= 100000
+                && total <= eligible + hmiCombinedApprovedCount))
+            && quota > 0;
+        if (!valid || hmiUnifiedRunning || hmiBatchRunning || hmiBatchStarting
+            || hmiXmlAutoRunning || hmiTextListBusy || hmiReviewInProgress
+            || hmiPreviewInProgress || hmiAuditInProgress) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Scan all checked types and select a valid Ollama model, "
+                + "batch size and shared total before translating.";
+            return;
+        }
+        const order = [useProject && "Project texts (XLSX)",
+            useXml && "Text lists (XML)"].filter(Boolean).join(" → ");
+        if (!confirm(
+            "TRANSLATE ALL SELECTED HMI TEXTS?\n\n"
+            + "Order: " + order + "\n"
+            + "Ollama: " + selection.ollama_model + "\n"
+            + "Batch size: " + size + "; remaining shared limit: " + quota
+            + " texts.\n\n"
+            + "Each batch is validated, imported and VERIFIED in TIA. "
+            + "Unsafe entries are skipped. XML lists are processed one at a time. "
+            + "No blind retry after an uncertain import. "
+            + "Use a BACKUP/COPY of the TIA project."
+        )) return;
+
+        hmiUnifiedRunning = true;
+        hmiUnifiedPauseRequested = false;
+        hmiUnifiedQuota = quota;
+        hmiUnifiedXlsxVerified = 0;
+        hmiXmlAutoVerified = 0;
+        renderUnifiedHmiProgress();
+        discardHmiTextListReview();
+        discardHmiReview();
+        updateHmiTranslateButtonState();
+        try {
+            if (useProject && projectCount > 0) {
+                if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                    "Stage 1 — translating Project texts (XLSX)...";
+                const job = await startHmiBatchImport(
+                    {confirmed: true, forceAll: true}
+                );
+                if (!job || job.status !== "completed" || hmiUnifiedPauseRequested) {
+                    if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                        "Stopped after XLSX: "
+                        + (job?.status || "error / uncertain import")
+                        + ". XML has NOT started. Inspect TIA before continuing.";
+                    return;
+                }
+            }
+            if (hmiUnifiedPauseRequested) {
+                if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                    "Paused after XLSX. XML has not started.";
+                return;
+            }
+            const quotaLeft = total === null ? eligibleXmlEntries()
+                : Math.max(0, total - hmiCombinedApprovedCount);
+            if (useXml && xmlCount > 0 && quotaLeft > 0) {
+                if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                    "Stage " + (useProject ? "2" : "1")
+                    + " — translating Text lists (XML) one list at a time...";
+                // Re-scan XML after XLSX; no stale XML catalogues before writing.
+                if (useProject && !(await scanHmiTextLists())) {
+                    if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                        "XML re-scan failed after XLSX. No XML import started.";
+                    return;
+                }
+                const result = await startAutomaticXmlBatches({confirmed: true});
+                if (result !== "completed") {
+                    if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                        "Stopped in XML (" + (result || "not started")
+                        + "). Inspect TIA before attempting a retry.";
+                    return;
+                }
+            }
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Finished: " + hmiUnifiedXlsxVerified + " Project texts + "
+                + hmiXmlAutoVerified + " XML entries verified in TIA. "
+                + "Skipped entries require manual review.";
+        } catch (error) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Translation stopped: " + error.message
+                + ". Check TIA before retrying an uncertain import.";
+        } finally {
+            hmiUnifiedRunning = false;
+            hmiUnifiedPauseRequested = false;
+            renderHmiBatchPlan();
+            updateHmiTranslateButtonState();
+        }
+    }
+
+    function pauseUnifiedHmiTranslation() {
+        if (!hmiUnifiedRunning || hmiUnifiedPauseRequested) return;
+        hmiUnifiedPauseRequested = true;
+        if (hmiBatchRunning) void pauseHmiBatchImport();
+        if (hmiXmlAutoRunning) pauseAutomaticXmlBatches();
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+            "Pause requested. Current TIA batch will finish verification first.";
+        updateHmiTranslateButtonState();
     }
 
     async function startHmiBatchImport({confirmed = false, forceAll = false} = {}) {
