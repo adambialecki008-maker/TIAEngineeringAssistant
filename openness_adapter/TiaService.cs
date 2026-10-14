@@ -230,7 +230,8 @@ namespace TiaOpennessAdapter
 
 
                 WriteProjectHmis(
-                    project
+                    project,
+                    portal
                 );
             }
 
@@ -3238,9 +3239,12 @@ namespace TiaOpennessAdapter
 
 
         private static void WriteProjectHmis(
-            Project project
+            Project project,
+            TiaPortal portal
         )
         {
+            Dictionary<string, string> modelCache =
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             HashSet<string> yielded =
                 new HashSet<string>(
                     StringComparer.OrdinalIgnoreCase
@@ -3352,6 +3356,17 @@ namespace TiaOpennessAdapter
                         );
 
 
+                    string hmiTypeId = ReadHmiTypeIdentifier(device, item);
+                    string modelName = ReadHmiModelName(
+                        portal, hmiTypeId, modelCache);
+
+                    Console.WriteLine(
+                        "HMI_MODEL|" +
+                        SanitizeOutput(device.Name) + "|" +
+                        SanitizeOutput(item.Name) + "|" +
+                        SanitizeOutput(modelName)
+                    );
+
                     Console.WriteLine(
                         "HMI_NETWORK|" +
                         SanitizeOutput(device.Name) + "|" +
@@ -3376,7 +3391,7 @@ namespace TiaOpennessAdapter
                         ) +
                         "|" +
                         SanitizeOutput(
-                            ReadHmiTypeIdentifier(device, item)
+                            hmiTypeId
                         ) +
                         "|" +
                         SanitizeOutput(
