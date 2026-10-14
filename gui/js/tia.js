@@ -2786,7 +2786,27 @@ export function initTiaUi(
             const row = document.createElement("tr");
             addHmiTextCell(row, item.source_text);
             addHmiTextCell(row, item.current_target || "— (empty)");
-            addHmiTextCell(row, item.proposed_target);
+            const valueCell = document.createElement("td");
+            const editor = document.createElement("textarea");
+            editor.className = "hmi-project-review-editor";
+            editor.rows = 2;
+            editor.maxLength = 50000;
+            editor.value = item.proposed_target || "";
+            // Source identity is unique within the 1–50-text review.
+            // The backend revalidates every edited proposal before TIA writes.
+            editor.dataset.sourceText = item.source_text;
+            editor.setAttribute("aria-label",
+                "Editable Project text translation for " + item.source_text);
+            const useSource = document.createElement("button");
+            useSource.type = "button";
+            useSource.className = "secondary-button";
+            useSource.textContent = "Use source";
+            useSource.addEventListener("click", () => {
+                editor.value = item.source_text;
+                editor.dispatchEvent(new Event("input", {bubbles: true}));
+            });
+            valueCell.append(editor, useSource);
+            row.appendChild(valueCell);
             addHmiDetailsCell(row, item.view_path, "", item.sheet, null);
             hmiReviewRows?.appendChild(row);
         }
@@ -3094,9 +3114,22 @@ export function initTiaUi(
             return;
         }
 
+        const proposals = [...(hmiReviewRows?.querySelectorAll(
+            "textarea.hmi-project-review-editor[data-source-text]") || [])]
+            .map(element => ({
+                source_text: element.dataset.sourceText,
+                proposal: element.value,
+            }));
+        if (proposals.length !== review.rowCount) {
+            setHmiTranslationStatus(
+                "Not all prepared Project texts are visible/editable. "
+                + "Prepare the review again before importing.", "error"
+            );
+            return;
+        }
         if (!confirm(
             "Import " + review.rowCount
-            + " PREPARED text row(s) into the selected TIA project? "
+            + " REVIEWED text row(s) into the selected TIA project? "
             + "The project will be saved and each imported value verified."
         )) {
             return;
@@ -3113,7 +3146,7 @@ export function initTiaUi(
         try {
             const result = await postJson(
                 "/api/v1/tia/hmis/import-reviewed-translations",
-                { review_id: review.reviewId }
+                { review_id: review.reviewId, proposals }
             );
             const count = result.verified_rows || 0;
             // Count unique approved texts, not repeated matching XLSX rows.
@@ -3161,8 +3194,9 @@ export function initTiaUi(
             }
         } catch (error) {
             setHmiTranslationStatus(
-                error.message + " Prepare a new translation review before retrying.",
-                "error"
+                error.message + " If validation failed before import, correct "
+                + "the edited values; if TIA write status is uncertain, "
+                + "rescan before retrying.", "error"
             );
         } finally {
             hmiReviewInProgress = false;
