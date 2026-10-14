@@ -1,5 +1,8 @@
 """Contract and mocked API tests for guarded HMI device cloning."""
+import base64
 from pathlib import Path
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -117,3 +120,101 @@ def test_adapter_clone_requires_existing_configured_plc_and_tag_links():
     assert 'node.SetAttribute("Address", newIp)' in adapter
     assert "temporaryMaster.Delete();" in adapter
     assert "SaveProject(project);" in adapter
+
+
+def _encoded(value):
+    return base64.b64encode(value.encode("utf-8")).decode("ascii")
+
+
+def _connection_line(name, driver="", station="", partner="", node="",
+                     online=""):
+    return "HMI_CONNECTION|" + "|".join(_encoded(value) for value in (
+        "HMI_00_Main", "HMI_RT_1", name, driver, station, partner, node,
+        online,
+    ))
+
+
+def _status_line(status, diagnostic=""):
+    return "HMI_CONNECTION_STATUS|" + "|".join((
+        _encoded("HMI_00_Main"), _encoded("HMI_RT_1"), status,
+        _encoded(diagnostic),
+    ))
+
+
+def _project_hmi(monkeypatch, connection_lines):
+    monkeypatch.setattr(project, "run_adapter", lambda *_args: [
+        "PROJECT|OpennnesTest_Torowisko",
+        "HMI_NETWORK|HMI_00_Main|HMI_RT_1|192.168.1.3|Krata1",
+        "HMI|HMI_00_Main|HMI_RT_1|||"
+        "Siemens.Engineering.Hmi.HmiTarget|HMI_RT_1",
+        *connection_lines,
+    ])
+    response = CLIENT.get("/api/v1/tia/project-context?process_id=23464")
+    assert response.status_code == 200, response.text
+    return response.json()["hmis"][0]
+
+
+@pytest.mark.parametrize("names", [
+    [],
+    ["HMI_Connection_1"],
+    ["HMI_Connection_1", "Krata1"],
+    ["HMI_Connection_1", "Krata1", "Backup", "Diagnostics"],
+])
+def test_structured_hmi_connections_preserve_adapter_order(monkeypatch, names):
+    item = _project_hmi(monkeypatch, [
+        *(_connection_line(name) for name in names),
+        _status_line("complete"),
+    ])
+    assert [connection["name"] for connection in item["connections"]] == names
+    assert item["plc_connections"] == names
+    assert item["connection_read_status"] == "complete"
+
+
+def test_realistic_hmi_fixture_keeps_driver_partner_and_encoding(monkeypatch):
+    item = _project_hmi(monkeypatch, [
+        _connection_line(
+            "HMI_Connection_1", "SIMATIC S7 1500",
+            "S7-1500/1515F-2PN", "PPFKA2", "CPU 1515F-2 PN", "true",
+        ),
+        _connection_line("Krata1", "OPC UA"),
+        _status_line("partial", "Integrated connections may be absent."),
+    ])
+    assert item["connections"][0] == {
+        "name": "HMI_Connection_1",
+        "communication_driver": "SIMATIC S7 1500",
+        "station": "S7-1500/1515F-2PN",
+        "partner": "PPFKA2",
+        "node": "CPU 1515F-2 PN",
+        "online": True,
+    }
+    assert item["connections"][1]["communication_driver"] == "OPC UA"
+    assert item["connection_read_status"] == "partial"
+    assert item["connection_diagnostic"] == "Integrated connections may be absent."
+
+
+def test_hmi_connection_names_with_delimiters_are_lossless(monkeypatch):
+    name = "Line, A | PLC\nbackup"
+    item = _project_hmi(monkeypatch, [
+        _connection_line(name, partner="PLC | A, B"),
+        _status_line("complete"),
+    ])
+    assert item["connections"][0]["name"] == name
+    assert item["connections"][0]["partner"] == "PLC | A, B"
+    assert item["plc_connections"] == [name]
+
+
+def test_unavailable_hmi_connection_read_does_not_claim_none(monkeypatch):
+    item = _project_hmi(monkeypatch, [
+        _status_line("unavailable", "EngineeringNotSupportedException"),
+    ])
+    assert item["connections"] == []
+    assert item["plc_connections"] == []
+    assert item["connection_read_status"] == "unavailable"
+    assert item["connection_diagnostic"] == "EngineeringNotSupportedException"
+
+
+def test_legacy_hmi_names_are_partial_not_confirmed_complete(monkeypatch):
+    item = _project_hmi(monkeypatch, [])
+    assert item["plc_connections"] == ["Krata1"]
+    assert [entry["name"] for entry in item["connections"]] == ["Krata1"]
+    assert item["connection_read_status"] == "partial"

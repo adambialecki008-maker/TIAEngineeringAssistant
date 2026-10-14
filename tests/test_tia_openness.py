@@ -215,6 +215,10 @@ def test_tia_project_context_is_parsed(
 
                 "plc_connections":
                     [],
+                "connections": [],
+                "connection_read_status": "unavailable",
+                "connection_diagnostic":
+                    "Connection status was not returned by the adapter.",
             },
         ],
     }

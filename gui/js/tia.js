@@ -973,6 +973,62 @@ export function initTiaUi(
     }
 
 
+    function hmiConnectionsCell(hmi) {
+        const cell = document.createElement("td");
+        const connections = hmi.connections?.length
+            ? hmi.connections
+            : (hmi.connection_read_status
+                ? []
+                : (hmi.plc_connections || []).map(name => ({name})));
+        const status = hmi.connection_read_status || "unavailable";
+        const diagnostic = hmi.connection_diagnostic || "";
+        if (!connections.length) {
+            cell.textContent = status === "complete"
+                ? "No connections" : "Connections unavailable";
+            cell.title = diagnostic;
+            return cell;
+        }
+
+        const first = document.createElement("span");
+        first.textContent = connections[0].name;
+        cell.appendChild(first);
+        if (connections.length > 1) {
+            const details = document.createElement("details");
+            details.className = "hmi-connection-details";
+            const summary = document.createElement("summary");
+            summary.textContent = "+" + (connections.length - 1);
+            details.appendChild(summary);
+            for (const connection of connections) {
+                const item = document.createElement("div");
+                item.className = "hmi-connection-item";
+                const fields = [
+                    ["Name", connection.name],
+                    ["Driver", connection.communication_driver],
+                    ["Partner", connection.partner],
+                    ["Station", connection.station],
+                    ["Node", connection.node],
+                    ["Online", connection.online === null
+                        || connection.online === undefined
+                        ? "" : String(connection.online)],
+                ];
+                item.textContent = fields
+                    .filter(([, value]) => value)
+                    .map(([label, value]) => label + ": " + value)
+                    .join(" | ");
+                details.appendChild(item);
+            }
+            cell.appendChild(details);
+        }
+        if (status !== "complete") {
+            const note = document.createElement("span");
+            note.className = "hmi-connection-status";
+            note.textContent = " (partial)";
+            note.title = diagnostic || "Connection list may be incomplete.";
+            cell.appendChild(note);
+        }
+        return cell;
+    }
+
     function renderExistingHmis() {
         if (!existingHmisBody) {
             return;
@@ -1013,8 +1069,7 @@ export function initTiaUi(
                     "—",
 
                     hmi.ip_address || "—",
-
-                    (hmi.plc_connections || []).join(", ") || "—",
+                    null,
 
                     hmi.hmi_type_identifier
                     ||
@@ -1034,6 +1089,10 @@ export function initTiaUi(
                         "td"
                     );
 
+                if (value === null) {
+                    row.appendChild(hmiConnectionsCell(hmi));
+                    continue;
+                }
                 cell.textContent =
                     value;
 

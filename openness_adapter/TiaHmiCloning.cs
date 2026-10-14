@@ -105,11 +105,8 @@ namespace TiaOpennessAdapter
                     return 4;
                 }
                 var sourceConnections = GetHmiConnectionPartners(sourceSoftware);
-                if (!sourceConnections.TryGetValue(connectionName, out string partner)
-                    || !(string.Equals(partner, plcName,
-                            StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(partner, plcDeviceName,
-                            StringComparison.OrdinalIgnoreCase)))
+                if (!sourceConnections.TryGetValue(connectionName, out object partner)
+                    || !ConnectionPartnerMatchesPlc(partner, plc))
                 {
                     Console.Error.WriteLine(
                         "Source HMI connection must already target the selected "
@@ -189,11 +186,8 @@ namespace TiaOpennessAdapter
                         var clonedConnections =
                             GetHmiConnectionPartners(clonedSoftware);
                         if (!clonedConnections.TryGetValue(connectionName,
-                            out string clonedPartner)
-                            || !(string.Equals(clonedPartner, plcName,
-                                    StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(clonedPartner, plcDeviceName,
-                                    StringComparison.OrdinalIgnoreCase)))
+                            out object clonedPartner)
+                            || !ConnectionPartnerMatchesPlc(clonedPartner, plc))
                             throw new InvalidOperationException(
                                 "Master copy did not preserve the existing PLC "
                                 + "connection. HMI clone rolled back.");
@@ -284,10 +278,21 @@ namespace TiaOpennessAdapter
             return null;
         }
 
-        private static Dictionary<string, string> GetHmiConnectionPartners(
+        private static bool ConnectionPartnerMatchesPlc(
+            object partner, PlcTarget plc)
+        {
+            // A name alone cannot identify a PLC when devices share names.
+            // If Openness does not expose the engineering object, fail closed.
+            return (partner is DeviceItem item
+                    && item.Equals(plc.DeviceItem))
+                || (partner is Device device
+                    && device.Equals(plc.Device));
+        }
+
+        private static Dictionary<string, object> GetHmiConnectionPartners(
             object software)
         {
-            var result = new Dictionary<string, string>(
+            var result = new Dictionary<string, object>(
                 StringComparer.OrdinalIgnoreCase);
             object collection = software.GetType()
                 .GetProperty("Connections")?.GetValue(software, null);
@@ -299,8 +304,8 @@ namespace TiaOpennessAdapter
                 Type t = connection.GetType();
                 string name = Convert.ToString(
                     t.GetProperty("Name")?.GetValue(connection, null)) ?? "";
-                string partner = Convert.ToString(
-                    t.GetProperty("Partner")?.GetValue(connection, null)) ?? "";
+                object partner =
+                    t.GetProperty("Partner")?.GetValue(connection, null);
                 if (!string.IsNullOrWhiteSpace(name)) result[name] = partner;
             }
             return result;

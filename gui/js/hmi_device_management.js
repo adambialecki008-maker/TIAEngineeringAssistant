@@ -50,23 +50,40 @@ export function initHmiDeviceManagement({
             select.value = previous;
     }
 
+    function sourceConnections() {
+        const from = source();
+        return from?.connections?.length
+            ? from.connections
+            : (from?.plc_connections || []).map(name => ({name}));
+    }
+
     function updateConnectionOptions() {
         if (!connectionSelect) return;
         const previous = connectionSelect.value;
         connectionSelect.replaceChildren();
         const empty = document.createElement("option");
         empty.value = "";
-        empty.textContent = "Select configured source connection";
+        empty.textContent = "Select configured source PLC connection";
         connectionSelect.appendChild(empty);
-        const list = source()?.plc_connections || [];
-        for (const value of list) {
+        const list = sourceConnections();
+        for (const connection of list) {
             const option = document.createElement("option");
-            option.value = value;
-            option.textContent = value;
+            option.value = connection.name;
+            option.textContent = connection.name
+                + (connection.communication_driver
+                    ? " | " + connection.communication_driver : "")
+                + (connection.partner ? " | " + connection.partner : "");
+            option.disabled = /opc[\s_-]*ua/i.test(
+                connection.communication_driver || ""
+            );
             connectionSelect.appendChild(option);
         }
-        if (list.includes(previous)) connectionSelect.value = previous;
-        else if (list.length === 1) connectionSelect.value = list[0];
+        const selectable = Array.from(connectionSelect.options)
+            .filter(option => option.value && !option.disabled);
+        if (selectable.some(option => option.value === previous))
+            connectionSelect.value = previous;
+        else if (selectable.length === 1)
+            connectionSelect.value = selectable[0].value;
     }
 
     function validIp(value) {
@@ -88,7 +105,8 @@ export function initHmiDeviceManagement({
         const ipUsed = getHmis().some(item =>
             item.ip_address === address);
         const ready = from && targetPlc && connectionSelect?.value
-            && from.ip_address && from.plc_connections?.length
+            && from.ip_address
+            && !connectionSelect.selectedOptions[0]?.disabled
             && from.software_type?.includes("Siemens.Engineering.Hmi.HmiTarget")
             && name && name.length <= 128
             && name.toLowerCase() !== from.device_name.toLowerCase()
@@ -100,12 +118,13 @@ export function initHmiDeviceManagement({
     function render() {
         options(sourceSelect, getHmis().map(item => ({
             label: item.device_name + " / " + item.hmi_name
-                + " · IP " + (item.ip_address || "unknown")
-                + " · PLC connections: "
-                + ((item.plc_connections || []).join(", ") || "none"),
-            disabled: !item.ip_address || !item.plc_connections?.length
-                || !item.software_type?.includes("Siemens.Engineering.Hmi.HmiTarget"),
-        })), "Select configured existing Classic HMI");
+                + " | IP " + (item.ip_address || "unknown")
+                + " | Connections: "
+                + ((item.connections?.length
+                    ? item.connections.map(connection => connection.name)
+                    : (item.plc_connections || [])).join(", ")
+                    || "unavailable"),
+        })), "Select existing HMI");
         options(plcSelect, getPlcs().map(item => ({
             label: item.plc_name + " (" + item.device_name + ")",
         })), "Select existing PLC");
@@ -128,10 +147,10 @@ export function initHmiDeviceManagement({
         if (from && newName && !newName.value.trim())
             newName.value = from.device_name + "_copy";
         message(from ? "Source " + from.device_name
-            + " · IP " + (from.ip_address || "unavailable")
-            + ". Clone uses identical model/resolution. Choose its existing PLC."
-            : "This HMI has no verified IP/PLC connection for cloning.",
-            !from?.plc_connections?.length);
+            + " | IP " + (from.ip_address || "unavailable")
+            + ". Clone requires a configured PLC connection, backup, and matching device model."
+            : "Select an HMI source.",
+            !sourceConnections().length);
         update();
         menu?.scrollIntoView?.({behavior: "smooth", block: "start"});
     }

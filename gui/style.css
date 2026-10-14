@@ -2122,3 +2122,23 @@ td {
 .hmi-device-management .hint {
     max-width: 105ch;
 }
+
+
+.hmi-connection-details {
+    display: inline-block;
+    margin-left: 0.4rem;
+}
+.hmi-connection-details > summary {
+    display: inline;
+    cursor: pointer;
+    color: #8ec9ec;
+}
+.hmi-connection-item {
+    margin: 0.3rem 0;
+    color: #d8e0e6;
+    overflow-wrap: anywhere;
+}
+.hmi-connection-status {
+    color: #f0c091;
+    font-size: 0.9em;
+}
