@@ -125,6 +125,22 @@ def test_preview_api_preserves_explicit_attributes():
     assert "\nRETAIN\n" in source
 
 
+def test_variable_options_exist_in_shared_editors_and_persist_with_config():
+    from pathlib import Path
+    base = Path(__file__).resolve().parents[1] / "gui" / "js"
+    member = (base / "member-editor.js").read_text(encoding="utf-8")
+    db = (base / "db.js").read_text(encoding="utf-8")
+    assert 'prefix + "-start-value"' in member
+    for option in ("hmi_visible", "hmi_accessible", "hmi_writable"):
+        assert option + ": optionalBooleanValue" in member
+    assert "saveProjectConfig()" in db
+    assert 'db.retain = retainInput.checked' in db
+    assert '"RETAIN" if retain else "NON_RETAIN"' in (
+        (Path(__file__).resolve().parents[1] / "functions"
+         / "tia_source_generator.py").read_text(encoding="utf-8")
+    )
+
+
 def test_no_unsafe_scl_injection_in_preview():
     client = TestClient(app)
     bad = spec().model_dump()
