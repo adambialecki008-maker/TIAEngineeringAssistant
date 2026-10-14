@@ -397,7 +397,7 @@ def test_mixed_conflict_imports_only_independent_structures(monkeypatch):
     assert applied.json()["skipped_conflicts"] == ["UDT_Motor", "DB_Motors"]
 
 
-def test_unchecked_udt_missing_from_tia_blocks_only_its_dependent_db(monkeypatch):
+def test_missing_configured_udt_is_auto_included_before_dependent_db(monkeypatch):
     calls = []
     monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
     payload = add_structures(request_data())
@@ -406,14 +406,76 @@ def test_unchecked_udt_missing_from_tia_blocks_only_its_dependent_db(monkeypatch
     plan = preflight(payload)
     assert plan.status_code == 200, plan.text
     data = plan.json()
-    assert data["will_create"] == ["UDT_Valve", "DB_Valves"]
-    statuses = {x["name"]: x["status"] for x in data["items"]}
-    assert statuses == {
-        "UDT_Valve": "create", "DB_Motors": "blocked",
-        "DB_Valves": "create",
+    assert set(data["will_create"]) == {
+        "UDT_Motor", "UDT_Valve", "DB_Motors", "DB_Valves"
     }
-    assert "UDT_Motor" in next(x["reason"] for x in data["items"]
-                               if x["name"] == "DB_Motors")
+    assert data["will_create"].index("UDT_Motor") < data["will_create"].index("DB_Motors")
+    assert data["auto_dependencies"] == ["UDT_Motor"]
+    statuses = {x["name"]: x["status"] for x in data["items"]}
+    assert all(value == "create" for value in statuses.values())
+    assert data["counts"]["blocked"] == 0
+
+
+def test_single_checked_db_only_generates_it_and_required_udt(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = add_structures(request_data())
+    payload["selected_udts"] = []
+    payload["selected_dbs"] = ["DB_Motors"]
+    preview = client.post("/api/v1/tia/plc-structure-import/preview", json={
+        "project": payload["project"],
+        "selected_udts": [], "selected_dbs": ["DB_Motors"],
+    })
+    assert preview.status_code == 200, preview.text
+    data = preview.json()
+    assert [item["name"] for item in data["items"]] == ["UDT_Motor", "DB_Motors"]
+    assert data["items"][0]["auto_dependency"] is True
+    assert 'TYPE "UDT_Motor"' in data["source"]
+    assert 'DATA_BLOCK "DB_Motors"' in data["source"]
+    assert 'UDT_Valve' not in data["source"]
+    assert 'DB_Valves' not in data["source"]
+    plan = preflight(payload)
+    assert plan.status_code == 200, plan.text
+    assert plan.json()["will_create"] == ["UDT_Motor", "DB_Motors"]
+    assert plan.json()["auto_dependencies"] == ["UDT_Motor"]
+
+
+def test_single_checked_db_uses_existing_matching_udt_without_reimport(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_UDT||UDT_Motor|PlcType|True"]
+    ))
+    payload = add_structures(request_data())
+    payload["selected_udts"] = []
+    payload["selected_dbs"] = ["DB_Motors"]
+    plan = preflight(payload)
+    assert plan.status_code == 200, plan.text
+    data = plan.json()
+    assert data["will_create"] == ["DB_Motors"]
+    assert data["auto_dependencies"] == []
+    assert data["counts"]["blocked"] == 0
+    assert 'of "UDT_Motor"' in data["items"][0]["source"]
+
+
+def test_single_db_blocks_if_required_existing_udt_differs(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_UDT||UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static">'
+                          '<Member Name="Unexpected" Datatype="Int"/>'
+                          '</Section></Document>'},
+    ))
+    payload = add_structures(request_data())
+    payload["selected_udts"] = []
+    payload["selected_dbs"] = ["DB_Motors"]
+    plan = preflight(payload)
+    assert plan.status_code == 200, plan.text
+    data = plan.json()
+    assert data["counts"]["blocked"] == 1
+    assert data["can_apply"] is False
+    assert data["will_create"] == []
+    assert "unchecked UDT not verified" in data["items"][0]["reason"]
+
 
 
 def test_empty_and_unknown_selection_are_rejected_before_tia(monkeypatch):
