@@ -175,6 +175,12 @@ def _has_unverifiable_attributes(definition: dict) -> bool:
 
 
 def _compare_existing(request, definition: dict, existing) -> tuple[str, str]:
+    if definition["kind"] == "db" and (
+        getattr(existing, "block_kind", "").casefold() not in
+        {"globaldb", "global data block", "global"}
+    ):
+        return "conflict", ("Existing DB is not confirmed as a global data "
+                            "block. Never overwrite an instance DB.")
     if _has_unverifiable_attributes(definition):
         return "conflict", ("Existing source has attributes/RETAIN/start values "
                             "that this read-only comparison cannot fully verify; "
@@ -190,7 +196,11 @@ def _compare_existing(request, definition: dict, existing) -> tuple[str, str]:
             definition["spec"].fields if definition["kind"] == "udt"
             else definition["spec"].members)
         if actual == expected and all(not m.comment for m in detail.members):
-            return "identical", "Matching declared field paths/types. Skipped."
+            return "identical", (
+                "Declared field paths/types and comments match. No import. "
+                "TIA metadata beyond these declarations is not independently "
+                "verified; inspect retain/HMI/optimization settings if relevant."
+            )
         return "conflict", ("Existing member paths, types or comments differ. "
                             "No existing object will be overwritten.")
     except Exception as exc:
