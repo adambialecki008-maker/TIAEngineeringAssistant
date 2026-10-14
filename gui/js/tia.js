@@ -2486,6 +2486,10 @@ export function initTiaUi(
         const reviewListName = hmiReviewQueueCurrentScope === "text_lists"
             ? hmiTextListSelect?.value || "Text list" : "Project texts";
         hmiReviewQueueOperation = "importing / verifying";
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+            "Approve clicked for " + reviewListName
+            + ". Check the confirmation dialog; no import begins until "
+            + "you confirm the TIA write.";
         updateHmiTranslateButtonState();
         let completed;
         try {
@@ -2988,12 +2992,25 @@ export function initTiaUi(
             + "This overrides the selected list XML, preserves the other "
             + "lists, and verifies every entry by re-export.\n"
             + "Use a BACKUP/COPY of the TIA project for the first import."
-        )) return "cancelled";
+        )) {
+            if (hmiUnifiedStatus && hmiReviewQueueActive) {
+                hmiUnifiedStatus.textContent =
+                    "XML approval cancelled. Nothing imported. Edit in Step 2 "
+                    + "or click Approve & import again in Step 3.";
+            }
+            return "cancelled";
+        }
         const token = hmiTextListReviewToken;
         const batchIdentity = textListBatchIdentity();
         // Keep editable proposals visible during server-side QA; only the
         // server consumes the review token once all pre-write checks pass.
         hmiTextListBusy = true;
+        if (hmiUnifiedStatus && hmiReviewQueueActive) {
+            hmiUnifiedStatus.textContent =
+                "Sending reviewed XML import for " + listName + " ("
+                + selected.length + " entries). Awaiting TIA write and "
+                + "independent re-export verification.";
+        }
         updateHmiTranslateButtonState();
         if (hmiTextListStatus)
             hmiTextListStatus.textContent = "Importing and verifying " + listName + "...";
@@ -4057,12 +4074,25 @@ export function initTiaUi(
     }
 
     async function importSelectedHmiBatch() {
+        // An active reviewed queue determines the format explicitly.
+        // Never silently fall through to XLSX or return false for a stale XML
+        // review: the XML import handler returns a meaningful prewrite reason.
+        if (hmiReviewQueueActive) {
+            if (hmiReviewQueueCurrentScope === "text_lists") {
+                return await importReviewedHmiTextList();
+            }
+            if (hmiReviewQueueCurrentScope === "project") {
+                return await importReviewedHmiTexts();
+            }
+            return {state: "prewrite_rejected",
+                detail: "No selected format in current review queue; "
+                    + "nothing was imported."};
+        }
         if (hmiTextListReviewToken
             && hmiTextListPreparedKey === textListReviewKey()) {
             return await importReviewedHmiTextList();
-        } else if (preparedHmiReview) {
-            return await importReviewedHmiTexts();
         }
+        if (preparedHmiReview) return await importReviewedHmiTexts();
         return false;
     }
 
