@@ -303,3 +303,31 @@ def test_queue_descriptions_follow_selected_scope_and_xml_imports_one_list_at_ti
     assert 'const xmlNote = "Text lists (XML):' in js
     assert 'hmiQueueScopeNote.textContent = projectSelected && listsSelected' in js
     assert 'Each XML import sends one full Text list at a time.' in js
+
+
+def test_application_wide_design_tokens_unify_controls_and_disclosure_chevrons():
+    css = (ROOT / "gui/style.css").read_text(encoding="utf-8")
+    html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
+    assert '/* Application-wide design system v1:' in css
+    for token in (
+        "--ui-primary:", "--ui-primary-hover:", "--ui-text:",
+        "--ui-blue-accent:", "--ui-focus:", "--ui-font:",
+    ):
+        assert token in css
+    for selector in (
+        'button.primary-button {',
+        'button.primary-button:hover:not(:disabled) {',
+        'button.primary-button:disabled {',
+        'input[type="checkbox"]:checked {',
+        'details > summary::before {',
+        'details[open] > summary::before {',
+        'details > summary::-webkit-details-marker {',
+        'details > summary::marker {',
+    ):
+        assert selector in css
+    assert 'prefers-reduced-motion: reduce' in css
+    assert 'button:not(.primary-button):not(.danger-button):not(:disabled)' not in css
+    # PLC, HMI and hardware sections use native details/summary elements.
+    assert 'class="tia-inventory-details"' in html
+    assert 'id="tia-hmi-text-lists-details"' in html
+    assert 'id="tia-hmi-edit-details"' in html
