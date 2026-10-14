@@ -64,7 +64,9 @@ def _references(members):
                    else m.data_type)
 
 
-def _definitions(spec: ProjectSpecification) -> list[dict]:
+def _definitions(
+    spec: ProjectSpecification, known_udts: list[str] | None = None
+) -> list[dict]:
     if not spec.udts and not spec.dbs:
         raise HTTPException(422, "Select at least one UDT or DB.")
     names: set[str] = set()
@@ -98,7 +100,8 @@ def _definitions(spec: ProjectSpecification) -> list[dict]:
 
     for udt in spec.udts:
         visit(udt)
-    mapping = {udt.name.casefold(): udt.name for udt in spec.udts}
+    mapping = {name.casefold(): name for name in (known_udts or [])}
+    mapping.update({udt.name.casefold(): udt.name for udt in spec.udts})
     definitions = []
     for kind, items in (("udt", ordered), ("db", spec.dbs)):
         for item in items:
@@ -205,6 +208,11 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
         raise HTTPException(404, "Selected PLC is not in the open TIA project.")
     structures = get_plc_structures(
         request.process_id, request.device_name, request.plc_name)
+    # A DB may refer to a type already present in TIA but not recreated here.
+    # Source declarations must quote those UDT names exactly like newly
+    # generated UDT references.
+    definitions = _definitions(
+        request.project, known_udts=[u.name for u in structures.udts])
     existing = {}
     for item in structures.udts:
         existing.setdefault(item.name.casefold(), []).append(("udt", item))
