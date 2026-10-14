@@ -34,7 +34,7 @@ _ACTIVE_JOBS: set[str] = set()
 class StartBatchJobRequest(TranslateHmiTextsRequest):
     # One Ollama-to-TIA import transaction per batch, not the internal
     # Ollama JSON requests (whose size is OLLAMA_TRANSLATION_BATCH_SIZE).
-    batch_size: int = Field(default=50, ge=1, le=200)
+    batch_size: int = Field(default=50, ge=1, le=50)
     total_to_translate: int | None = Field(default=None, ge=1, le=100000)
 
 
