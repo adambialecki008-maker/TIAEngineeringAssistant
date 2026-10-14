@@ -79,7 +79,7 @@ const sourcePreview =
 
 
 loadProjectConfig();
-initSourceImportUi();
+const sourceImportUi = initSourceImportUi();
 
 
 if (plcFamilySelect) {
@@ -106,6 +106,7 @@ let devicesUi = null;
 
 
 function renderAll() {
+    sourceImportUi?.refreshSelection();
     if (udtContainer) {
         renderUdts(
             udtContainer,
@@ -278,9 +279,9 @@ if (
     generatePreviewButton.addEventListener(
         "click",
         () =>
-            generatePreview(
-                sourcePreview
-            )
+            sourceImportUi
+                ? sourceImportUi.generateSelectionPreview()
+                : generatePreview(sourcePreview)
     );
 }
 
