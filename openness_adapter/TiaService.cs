@@ -4589,6 +4589,10 @@ namespace TiaOpennessAdapter
                 case "s7-1500":
                     return "s7-1500";
 
+                case "et-200":
+                case "et200":
+                    return "et-200";
+
 
                 default:
                     return null;
@@ -4610,6 +4614,7 @@ namespace TiaOpennessAdapter
 
 
                 case "s7-1500":
+                case "et-200":
                     return "15";
 
 
@@ -4653,11 +4658,20 @@ namespace TiaOpennessAdapter
                 family
             )
             {
+                case "et-200":
+                    // ET 200SP and ET 200pro distributed CPUs.
+                    // Search the local V21 hardware catalogue; never
+                    // hardcode firmware variants/order numbers.
+                    return normalizedName.StartsWith("cpu 15")
+                        && (normalizedName.Contains("sp")
+                            || normalizedName.Contains("pro")
+                            || (normalizedPath.Contains("et 200")
+                                && normalizedPath.Contains("cpu")));
+
                 case "s7-1500":
-                    return normalizedName
-                        .StartsWith(
-                            "cpu 15"
-                        );
+                    return normalizedName.StartsWith("cpu 15")
+                        && !normalizedName.Contains("sp")
+                        && !normalizedName.Contains("pro");
 
 
                 case "s7-1200-g2":
