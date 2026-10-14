@@ -30,6 +30,7 @@ def get_project_io(
 
 
     project_name = None
+    profinet_device_names = {}
     items = []
     addresses = []
     channels = []
@@ -48,6 +49,11 @@ def get_project_io(
             if len(parts) == 2:
                 project_name = parts[1]
 
+
+        elif line.startswith("PN_DEVICE_NAME|"):
+            parts = line.split("|", 2)
+            if len(parts) == 3 and parts[1].strip() and parts[2].strip():
+                profinet_device_names[parts[1]] = parts[2]
 
         elif line.startswith(
             "HW_ITEM|"
@@ -181,6 +187,7 @@ def get_project_io(
 
     return IoInventory(
         project_name=project_name,
+        profinet_device_names=profinet_device_names,
         items=items,
         addresses=addresses,
         channels=channels,
