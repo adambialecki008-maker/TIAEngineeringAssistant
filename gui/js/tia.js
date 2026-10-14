@@ -102,6 +102,7 @@ export function initTiaUi(
     const hmiBatchReadiness =
         document.getElementById("tia-hmi-batch-readiness");
     const hmiBatchPlan = document.getElementById("tia-hmi-batch-plan");
+    const hmiTranslationQueue = document.getElementById("tia-hmi-translation-queue");
     const hmiBatchAutoRepeat = document.getElementById("tia-hmi-batch-auto-repeat");
     const hmiBatchProgress = document.getElementById("tia-hmi-batch-progress");
     const hmiBatchProgressText =
@@ -1689,7 +1690,48 @@ export function initTiaUi(
         }
     }
 
+    function renderHmiTranslationQueue() {
+        if (!hmiTranslationQueue) return;
+        hmiTranslationQueue.replaceChildren();
+        const selection = hmiTranslationSelection();
+        let position = 0;
+        const append = (label, count) => {
+            const tr = document.createElement("tr");
+            addHmiTextCell(tr, ++position);
+            addHmiTextCell(tr, label);
+            addHmiTextCell(tr, String(count));
+            hmiTranslationQueue.appendChild(tr);
+        };
+        // The queue always starts with Project texts if checked.
+        if (hmiScopeEnabled("project")) {
+            const scanned = hmiScanKey(selection) === verifiedHmiScanKey;
+            append("Project texts (XLSX)",
+                scanned ? (latestHmiScan?.missingUnique ?? 0) : "Scan required");
+        }
+        if (hmiScopeEnabled("text_lists")) {
+            const scanned = hmiScanKey(selection, "text_lists")
+                === verifiedHmiTextListsScanKey;
+            if (!scanned) {
+                append("Text lists (XML)", "Scan required");
+            } else {
+                const lists = (hmiTextListsData?.lists || []).filter(item =>
+                    Number.isInteger(item.eligible_missing_entries)
+                    && item.eligible_missing_entries > 0);
+                if (!lists.length) {
+                    append("Text lists (XML)", 0);
+                } else {
+                    for (const list of lists) {
+                        append("Text list: " + list.name + " (XML)",
+                            list.eligible_missing_entries);
+                    }
+                }
+            }
+        }
+        if (!position) append("Select Project texts and/or Text lists", "—");
+    }
+
     function renderHmiBatchPlan() {
+        renderHmiTranslationQueue();
         if (!hmiBatchPlan) return;
         const batch = Number(hmiBatchSizeInput?.value);
         const raw = hmiBatchTotalInput?.value?.trim() || "";
