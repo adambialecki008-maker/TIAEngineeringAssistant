@@ -2892,7 +2892,12 @@ export function initTiaUi(
                     exclude_entry_indices: hmiReviewQueueActive
                         ? [...excluded] : []}
             );
-            if (identity !== textListReviewKey()) return;
+            if (identity !== textListReviewKey()) {
+                if (hmiTextListStatus) hmiTextListStatus.textContent =
+                    "XML batch prepared but HMI/TextList selection changed. "
+                    + "The review was discarded without any TIA import.";
+                return false;
+            }
             hmiTextListReviewToken = result.review_id;
             hmiTextListPreparedKey = identity;
             if (hmiReviewQueueActive) {
@@ -2953,8 +2958,21 @@ export function initTiaUi(
     }
 
     async function importReviewedHmiTextList() {
-        if (!hmiTextListReviewToken || hmiTextListBusy
-            || hmiTextListPreparedKey !== textListReviewKey()) return;
+        if (hmiTextListBusy) {
+            return {state: "prewrite_rejected",
+                detail: "TextList operation is already in progress. "
+                    + "No second import was attempted."};
+        }
+        if (!hmiTextListReviewToken) {
+            return {state: "prewrite_rejected",
+                detail: "No prepared XML review token. "
+                    + "Prepare a batch before importing; no write attempted."};
+        }
+        if (hmiTextListPreparedKey !== textListReviewKey()) {
+            return {state: "prewrite_rejected",
+                detail: "Selected HMI/TextList/model changed since XML preparation. "
+                    + "No import attempted. Prepare a fresh review."};
+        }
         const listName = hmiTextListSelect.value;
         const selected = [...(hmiTextListReviewRows
             ?.querySelectorAll("textarea[data-entry-index]") || [])]
