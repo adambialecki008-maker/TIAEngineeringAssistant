@@ -1,11 +1,10 @@
-"""Pilot PLC UDT/DB import: read-only plan and guarded apply."""
+"""Read-only multi-structure preflight and guarded create-only import."""
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 import engine.tia_openness as facade
 from engine.main import app
-
 
 client = TestClient(app)
 
@@ -18,170 +17,251 @@ def request_data():
         "project": {
             "plc_family": "S7-1500",
             "udts": [{
-                "name": "UDT_Motor",
-                "fields": [
+                "name": "UDT_Motor", "fields": [
                     {"name": "Cmd", "data_type": "Struct", "struct_members": [
                         {"name": "Start", "data_type": "Bool"},
                         {"name": "Stop", "data_type": "Bool"},
                     ]},
-                    {"name": "Sts", "data_type": "Struct", "struct_members": [
-                        {"name": "Running", "data_type": "Bool"},
-                    ]},
                 ],
             }],
             "dbs": [{
-                "name": "DB_Motors",
-                "members": [{
-                    "name": "Motors",
-                    "data_type": "Array",
+                "name": "DB_Motors", "members": [{
+                    "name": "Motors", "data_type": "Array",
                     "array_element_type": "UDT_Motor",
-                    "array_lower_bound": 1,
-                    "array_upper_bound": 10,
+                    "array_lower_bound": 1, "array_upper_bound": 10,
                 }],
             }],
         },
     }
 
 
-def mock_adapter(calls, existing=None, changed=False):
-    existing = existing or []
+def add_structures(data):
+    data["project"]["udts"].append({
+        "name": "UDT_Valve",
+        "fields": [{"name": "Opened", "data_type": "Bool"}],
+    })
+    data["project"]["dbs"].append({
+        "name": "DB_Valves",
+        "members": [{"name": "Valve", "data_type": "UDT_Valve"}],
+    })
+    return data
+
+
+def mock_adapter(calls, *, existing=(), xml=None, project="Test_Project_Copy",
+                 without_confirm=None):
+    existing = tuple(existing)
+    xml = xml or {
+        "UDT_Motor": (
+            '<Document><Section Name="Static"><Member Name="Cmd" '
+            'Datatype="Struct"><Member Name="Start" Datatype="Bool"/>'
+            '<Member Name="Stop" Datatype="Bool"/></Member></Section></Document>'
+        ),
+        "DB_Motors": (
+            '<Document><Section Name="Static"><Member Name="Motors" '
+            'Datatype="Array[1..10] of UDT_Motor"/></Section></Document>'
+        ),
+    }
 
     def run(*args):
         calls.append(args)
         if args[0] == "list-project-plcs":
-            project = "Other_Project" if changed else "Test_Project_Copy"
             return [
                 "PROJECT|" + project,
                 "PLC|Device_1|PLC_1|System:Device.S71500|CPU_1",
             ]
         if args[0] == "list-structures":
-            return existing
-        if args[0] == "import-plc-structures":
-            assert len(args) == 9
+            return list(existing)
+        if args[0] == "export-structure":
+            Path(args[7]).write_text(xml[args[6]], encoding="utf-8")
+            return ["STRUCTURE_EXPORTED|" + args[6]]
+        if args[0] == "import-plc-structure-batch":
+            assert len(args) == 6
             assert args[4] == "Test_Project_Copy"
-            assert args[5:7] == ("UDT_Motor", "DB_Motors")
-            assert Path(args[7]).exists() and Path(args[8]).exists()
-            assert 'TYPE "UDT_Motor"' in Path(args[7]).read_text("ascii")
-            assert 'Array[1..10] of "UDT_Motor"' in Path(args[8]).read_text("ascii")
-            return [
-                "STRUCTURE_IMPORTED|UDT|UDT_Motor",
-                "STRUCTURE_IMPORTED|DB|DB_Motors",
-                "PROJECT_SAVED|Test_Project_Copy",
-            ]
-        raise AssertionError("Unexpected command " + str(args))
-
+            manifest = Path(args[5])
+            assert manifest.exists()
+            rows = [row.split("|", 2) for row in
+                    manifest.read_text("utf-8").splitlines()]
+            for kind, name, path in rows:
+                body = Path(path).read_text("ascii")
+                assert (kind == "UDT" and 'TYPE "' + name + '"' in body
+                        or kind == "DB" and 'DATA_BLOCK "' + name + '"' in body)
+            names = [row[1] for row in rows]
+            return ([
+                f"STRUCTURE_IMPORTED|{kind}|{name}"
+                for kind, name, _ in rows if name != without_confirm
+            ] + ["PROJECT_SAVED|Test_Project_Copy"])
+        raise AssertionError("Unexpected adapter command " + str(args))
     return run
 
 
-def test_plan_is_read_only_and_lists_expected_sources(monkeypatch):
+def preflight(payload):
+    return client.post("/api/v1/tia/plc-structure-import/plan", json=payload)
+
+
+def apply(payload, plan, *, backup=True, names=None):
+    return client.post("/api/v1/tia/plc-structure-import/apply", json={
+        **payload, "expected_token": plan["token"],
+        "backup_confirmed": backup,
+        "approved_create": plan["will_create"] if names is None else names,
+    })
+
+
+def test_plan_is_read_only_and_lists_sources(monkeypatch):
     calls = []
     monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
-    response = client.post(
-        "/api/v1/tia/plc-structure-import/plan", json=request_data()
-    )
-    assert response.status_code == 200, response.text
-    result = response.json()
-    assert result["project_name"] == "Test_Project_Copy"
-    assert result["udt_name"] == "UDT_Motor"
-    assert result["db_name"] == "DB_Motors"
-    assert len(result["token"]) == 64
-    assert 'TYPE "UDT_Motor"' in result["udt_source"]
-    assert 'DATA_BLOCK "DB_Motors"' in result["db_source"]
-    assert [call[0] for call in calls] == [
-        "list-project-plcs", "list-structures"
+    result = preflight(request_data())
+    assert result.status_code == 200, result.text
+    data = result.json()
+    assert data["counts"] == {"create": 2, "identical": 0, "conflict": 0}
+    assert data["will_create"] == ["UDT_Motor", "DB_Motors"]
+    assert data["can_apply"] is True
+    assert len(data["token"]) == 64
+    assert 'TYPE "UDT_Motor"' in data["items"][0]["source"]
+    assert 'DATA_BLOCK "DB_Motors"' in data["items"][1]["source"]
+    assert [call[0] for call in calls] == ["list-project-plcs", "list-structures"]
+
+
+def test_many_structures_udts_before_dbs_and_explicit_subset(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = add_structures(request_data())
+    plan = preflight(payload).json()
+    assert plan["will_create"] == [
+        "UDT_Motor", "UDT_Valve", "DB_Motors", "DB_Valves"
     ]
+    invalid = apply(payload, plan, names=["UDT_Motor"])
+    assert invalid.status_code == 422
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+    result = apply(payload, plan)
+    assert result.status_code == 200, result.text
+    assert result.json()["created"] == plan["will_create"]
+    assert any(c[0] == "import-plc-structure-batch" for c in calls)
 
 
-def test_conflicts_block_import_even_in_nested_tia_groups(monkeypatch):
+def test_same_existing_structure_is_skipped_and_missing_db_is_created(monkeypatch):
     calls = []
     monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
         calls, existing=["PLC_UDT|Nested|UDT_Motor|PlcType|True"]
     ))
-    response = client.post(
-        "/api/v1/tia/plc-structure-import/plan", json=request_data()
+    payload = request_data()
+    plan = preflight(payload)
+    assert plan.status_code == 200, plan.text
+    data = plan.json()
+    assert data["counts"] == {"create": 1, "identical": 1, "conflict": 0}
+    assert data["will_create"] == ["DB_Motors"]
+    applied = apply(payload, data)
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["created"] == ["DB_Motors"]
+    assert applied.json()["skipped_identical"] == ["UDT_Motor"]
+
+
+def test_all_identical_means_no_import(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=[
+            "PLC_UDT||UDT_Motor|PlcType|True",
+            "PLC_DB||DB_Motors|1|GlobalDB|True",
+        ]
+    ))
+    data = preflight(request_data()).json()
+    assert data["counts"]["identical"] == 2
+    assert data["can_apply"] is False
+    refused = apply(request_data(), data)
+    assert refused.status_code == 409
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+def test_different_existing_structure_blocks_whole_job(monkeypatch):
+    calls = []
+    adapter = mock_adapter(
+        calls, existing=["PLC_UDT|Nested|UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static">'
+                            '<Member Name="Changed" Datatype="Bool"/>'
+                            '</Section></Document>'},
     )
-    assert response.status_code == 409
-    assert "UDT_Motor" in response.json()["detail"]
-    assert all(call[0] != "import-plc-structures" for call in calls)
+    monkeypatch.setattr(facade, "_run_adapter", adapter)
+    data = preflight(request_data()).json()
+    assert data["counts"] == {"create": 1, "identical": 0, "conflict": 1}
+    assert "UDT_Motor" in [x["name"] for x in data["items"]
+                            if x["status"] == "conflict"]
+    assert data["can_apply"] is False
+    assert apply(request_data(), data).status_code == 409
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
 
 
-def test_apply_requires_confirmed_backup_and_unchanged_plan(monkeypatch):
+def test_name_collision_with_other_object_type_blocks(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB|Nested|UDT_Motor|27|GlobalDB|True"]
+    ))
+    data = preflight(request_data()).json()
+    assert data["counts"]["conflict"] == 1
+    assert data["can_apply"] is False
+
+
+def test_attributes_that_cannot_be_verified_must_not_be_skipped_as_identical(
+        monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_UDT||UDT_Motor|PlcType|True"]
+    ))
+    payload = request_data()
+    payload["project"]["udts"][0]["fields"][0]["struct_members"][0][
+        "hmi_accessible"] = True
+    data = preflight(payload).json()
+    assert data["counts"]["conflict"] == 1
+    assert "cannot fully verify" in data["items"][0]["reason"]
+
+
+def test_reject_circular_types_and_duplicate_names_before_tia(monkeypatch):
     calls = []
     monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
     payload = request_data()
-    preview = client.post(
-        "/api/v1/tia/plc-structure-import/plan", json=payload
-    ).json()
-    apply = {**payload, "expected_token": preview["token"]}
-    refused = client.post("/api/v1/tia/plc-structure-import/apply", json=apply)
-    assert refused.status_code == 422
-    changed = {**apply, "backup_confirmed": True}
-    changed["project"] = {**payload["project"], "dbs": [{
-        **payload["project"]["dbs"][0],
-        "name": "DB_Motors_Revised",
-    }]}
-    stale = client.post(
-        "/api/v1/tia/plc-structure-import/apply", json=changed
-    )
-    assert stale.status_code == 409
-    assert all(call[0] != "import-plc-structures" for call in calls)
-
-
-def test_confirmed_apply_sends_separate_udt_and_db_files(monkeypatch):
-    calls = []
-    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload["project"]["udts"].append({
+        "name": "UDT_Motor",
+        "fields": [{"name": "X", "data_type": "Bool"}],
+    })
+    assert preflight(payload).status_code == 422
     payload = request_data()
-    plan = client.post(
-        "/api/v1/tia/plc-structure-import/plan", json=payload
-    ).json()
-    result = client.post(
-        "/api/v1/tia/plc-structure-import/apply",
-        json={**payload, "expected_token": plan["token"],
-              "backup_confirmed": True},
-    )
-    assert result.status_code == 200, result.text
-    assert result.json()["status"] == "imported"
-    assert result.json()["project_saved"] == "Test_Project_Copy"
-    assert [call[0] for call in calls].count("import-plc-structures") == 1
-
-
-def test_name_or_source_restrictions_reject_before_tia(monkeypatch):
-    calls = []
-    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
-    payload = request_data()
-    payload["project"]["udts"][0]["name"] = "UDT\"; Inject"
-    response = client.post(
-        "/api/v1/tia/plc-structure-import/plan", json=payload
-    )
-    assert response.status_code == 422
+    payload["project"]["udts"][0]["fields"] = [{
+        "name": "Self", "data_type": "UDT_Motor",
+    }]
+    assert preflight(payload).status_code == 422
     assert calls == []
 
+
+def test_apply_requires_backup_and_rechecks_current_snapshot(monkeypatch):
+    calls = []
+    mock = mock_adapter(calls)
+    monkeypatch.setattr(facade, "_run_adapter", mock)
+    payload = request_data()
+    plan = preflight(payload).json()
+    assert apply(payload, plan, backup=False).status_code == 422
+    changed = request_data()
+    changed["project"]["dbs"][0]["name"] = "Changed"
+    assert apply(changed, plan).status_code == 409
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+def test_import_must_confirm_all_created_objects_and_save(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, without_confirm="DB_Motors"
+    ))
+    payload = request_data()
+    plan = preflight(payload).json()
+    result = apply(payload, plan)
+    assert result.status_code == 502
+    assert "Missing TIA creation confirmation" in result.json()["detail"]
+
+
+def test_preflight_rejects_bad_member_names_and_non_ascii_comments(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = request_data()
+    payload["project"]["udts"][0]["name"] = 'UDT"; Inject'
+    assert preflight(payload).status_code == 422
     payload = request_data()
     payload["project"]["udts"][0]["fields"][0]["comment"] = "Zażółć"
-    response = client.post(
-        "/api/v1/tia/plc-structure-import/plan", json=payload
-    )
-    assert response.status_code == 422
-    assert "non-ASCII" in response.json()["detail"]
+    assert preflight(payload).status_code == 422
     assert calls == []
-
-
-def test_import_must_not_claim_success_without_adapter_confirmation(monkeypatch):
-    calls = []
-    fake = mock_adapter(calls)
-    def without_db(*args):
-        if args[0] == "import-plc-structures":
-            return ["STRUCTURE_IMPORTED|UDT|UDT_Motor"]
-        return fake(*args)
-    monkeypatch.setattr(facade, "_run_adapter", without_db)
-    payload = request_data()
-    token = client.post(
-        "/api/v1/tia/plc-structure-import/plan", json=payload
-    ).json()["token"]
-    response = client.post(
-        "/api/v1/tia/plc-structure-import/apply",
-        json={**payload, "expected_token": token,
-              "backup_confirmed": True},
-    )
-    assert response.status_code == 502
-    assert "did not confirm DB" in response.json()["detail"]
