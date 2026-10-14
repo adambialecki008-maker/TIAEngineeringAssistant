@@ -1571,16 +1571,7 @@
 
 
 
-                            <div class="action-row hmi-reviewed-import-actions">
-                            <button id="tia-hmi-import-reviewed-button"
-                                    type="button" class="primary-button hidden" disabled>
-                                ✓ Approve &amp; import reviewed batch
-                            </button>
-                            <button id="tia-hmi-skip-reviewed" type="button"
-                                    class="secondary-button hidden" disabled>
-                                Skip reviewed batch
-                            </button>
-                            </div>
+
                             </div>
                         </details>
                         </section>
@@ -1610,9 +1601,21 @@
                         <div class="action-row hmi-translation-actions">
                             <button id="tia-hmi-batch-start" type="button"
                                     class="primary-button" disabled>Translate all</button>
+                            <button id="tia-hmi-import-reviewed-button"
+                                    type="button" class="primary-button hidden" disabled>
+                                ✓ Approve &amp; import reviewed batch
+                            </button>
+                            <button id="tia-hmi-skip-reviewed" type="button"
+                                    class="secondary-button hidden" disabled>
+                                Skip reviewed batch
+                            </button>
 
                             <button id="tia-hmi-batch-pause" type="button"
                                     class="secondary-button" disabled>Pause after current batch</button>
+                            <button id="tia-hmi-batch-stop" type="button"
+                                    class="danger-button hidden" disabled>
+                                <span aria-hidden="true">■</span> Stop translation
+                            </button>
 
                             <button id="tia-hmi-batch-resume" type="button"
                                     class="secondary-button hidden" disabled>Resume saved job</button>
