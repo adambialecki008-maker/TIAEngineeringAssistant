@@ -211,6 +211,16 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
             available = ", ".join(sorted(previews)) or "none"
             reason = ("No source text in " + source_culture
                       + " (available cultures: " + available + ")")
+        read_only_source = previews.get(source_culture.casefold(), "")
+        if not read_only_source:
+            # Show a labelled example from another culture if the selected
+            # source slot is absent; this never changes import eligibility.
+            fallback = next(
+                ((culture, value) for culture, value in previews.items() if value),
+                None,
+            )
+            if fallback:
+                read_only_source = "[" + fallback[0] + "] " + fallback[1]
         result.append({
             "entry_index": i,
             "node": node,
@@ -219,7 +229,7 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
             "languages": languages,
             "source": source[2] if source else "",
             "target": target[2] if target else "",
-            "preview_source": previews.get(source_culture.casefold(), ""),
+            "preview_source": read_only_source,
             "preview_target": previews.get(target_culture.casefold(), ""),
             "supported": not complex_text and parent is not None
                          and source is not None,
