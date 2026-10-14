@@ -2706,6 +2706,11 @@ export function initTiaUi(
         } catch (error) {
             if (hmiTextListStatus)
                 hmiTextListStatus.textContent = "Prepare failed: " + error.message;
+            if (hmiReviewQueueActive) {
+                appendHmiRunIssue("XML", hmiTextListSelect?.value || "Text list",
+                    "", "", "Read-only preparation failed: " + error.message,
+                    "Skipped list");
+            }
             return false;
         } finally {
             hmiTextListBusy = false;
@@ -3865,6 +3870,11 @@ export function initTiaUi(
             return Boolean(preparedHmiReview);
         } catch (error) {
             setHmiTranslationStatus(error.message, "error");
+            if (hmiReviewQueueActive) {
+                appendHmiRunIssue("XLSX", "Project texts", "", "",
+                    "Read-only preparation failed: " + error.message,
+                    "Skipped batch");
+            }
             return false;
         } finally {
             activeProgress = false;
