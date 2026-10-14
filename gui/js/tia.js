@@ -992,44 +992,54 @@ export function initTiaUi(
                 );
 
 
-            for (
-                const value
-                of [
-                    hmi.device_name
-                    ||
-                    "—",
-
-                    hmi.hmi_name
-                    ||
-                    "—",
-
-                    hmi.ip_address || "—",
-
-                    hmi.hmi_type_identifier
-                    ||
-                    hmi.device_type_identifier
-                    ||
-                    "—",
-
-                    hmi.software_name
-                    ||
-                    hmi.software_type
-                    ||
-                    "—",
-                ]
-            ) {
-                const cell =
-                    document.createElement(
-                        "td"
-                    );
-
-                cell.textContent =
-                    value;
-
-                row.appendChild(
-                    cell
-                );
+            for (const value of [
+                hmi.device_name || "—",
+                hmi.hmi_name || "—",
+                hmi.ip_address || "—",
+            ]) {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+                row.appendChild(cell);
             }
+
+            // Show the human-readable catalog model by default. The native
+            // details marker is the only control for inspecting the full
+            // TIA OrderNumber/TypeIdentifier, without another full-width row.
+            const typeCell = document.createElement("td");
+            typeCell.className = "hmi-model-cell";
+            const modelName = hmi.model_name?.trim() || "Model unavailable";
+            const typeIdentifiers = [
+                ["HMI type identifier", hmi.hmi_type_identifier],
+                ["Device type identifier", hmi.device_type_identifier],
+            ].filter((entry, index, all) => entry[1]
+                && !all.slice(0, index).some((earlier) =>
+                    earlier[1] === entry[1]));
+            if (typeIdentifiers.length > 0) {
+                const details = document.createElement("details");
+                details.className = "hmi-model-details";
+                const summary = document.createElement("summary");
+                summary.textContent = modelName;
+                details.appendChild(summary);
+                const detailBody = document.createElement("div");
+                detailBody.className = "hmi-model-identifier";
+                for (const [label, value] of typeIdentifiers) {
+                    const line = document.createElement("div");
+                    const heading = document.createElement("strong");
+                    heading.textContent = label + ": ";
+                    line.append(heading, document.createTextNode(value));
+                    detailBody.appendChild(line);
+                }
+                details.appendChild(detailBody);
+                typeCell.appendChild(details);
+            } else {
+                typeCell.textContent = modelName;
+            }
+            row.appendChild(typeCell);
+
+            const softwareCell = document.createElement("td");
+            softwareCell.textContent =
+                hmi.software_name || hmi.software_type || "—";
+            row.appendChild(softwareCell);
 
 
             const actionsCell =
