@@ -60,10 +60,17 @@ def test_combined_count_and_shared_total_across_formats():
 
 
 def test_automatic_xlsx_and_xml_imports_are_separate_workflows():
-    # Step 4 was introduced for independently confirmed XML automation.
-    # Step 5 keeps the original XLSX batch importer XLSX-only.
-    assert 'Step 4 — Automatic Text lists (XML) import' in HTML
-    assert 'Step 5 — Automatic Project texts (XLSX) import' in HTML
+    # Both automatic mechanisms live in the SAME Step 3 container,
+    # and no standalone Step 4/5 panels exist.
+    assert HTML.count('class="hmi-step-heading">Step ') == 3
+    assert 'Step 1 — Scan the selected HMI' in HTML
+    assert 'Step 2 — Batch settings (selected text types)' in HTML
+    assert 'Step 3 — Prepare and review selected texts' in HTML
+    assert 'Step 4 — ' not in HTML
+    assert 'Step 5 — ' not in HTML
+    assert 'class="hmi-automation-controls"' in HTML
+    assert 'id="tia-hmi-xml-auto-section"' in HTML
+    assert 'class="hmi-automatic-scope" data-hmi-scope="project"' in HTML
     assert 'id="tia-hmi-xml-auto-start"' in HTML
     assert 'id="tia-hmi-xml-auto-pause"' in HTML
     assert 'id="tia-hmi-batch-start"' in HTML
@@ -84,3 +91,41 @@ def test_automatic_xlsx_and_xml_imports_are_separate_workflows():
     assert 'const refreshed = await scanHmiTextLists()' in xml_start
     assert '"/api/v1/tia/hmis/batch-translations/start"' not in xml_start
     assert 'hmiXmlAutoPauseRequested' in xml_start
+
+
+def test_project_and_xml_scan_details_are_one_level_inside_step_one():
+    start = HTML.index('Step 1 — Scan the selected HMI')
+    end = HTML.index('Step 2 — Batch settings (selected text types)')
+    section = HTML[start:end]
+    xml = section.index('id="tia-hmi-text-lists-details"')
+    project = section.index('id="tia-hmi-project-texts-details"')
+    assert xml < project
+    assert 'id="tia-hmi-dedicated-project-texts"' in section
+    assert 'id="tia-hmi-preview-results"' in section
+    assert 'id="tia-hmi-text-lists-catalog"' in section
+    assert 'data-hmi-scope="text_lists"' in section
+    assert 'data-hmi-scope="project"' in section
+    assert 'setHmiScanDetailLabel(' in JS
+    assert '"Project texts"' in JS
+    assert '"Text lists"' in JS
+
+
+def test_auto_actions_and_both_manual_reviews_reside_in_step_three():
+    start = HTML.index('Step 3 — Prepare and review selected texts')
+    end = HTML.index('data-tab-panel="devices"')
+    section = HTML[start:end]
+    for key in (
+        'tia-hmi-translate-button',
+        'tia-hmi-import-reviewed-button',
+        'tia-hmi-text-list-review-rows',
+        'tia-hmi-review-rows',
+        'tia-hmi-xml-auto-start',
+        'tia-hmi-xml-auto-pause',
+        'tia-hmi-batch-start',
+        'tia-hmi-batch-resume',
+        'tia-hmi-batch-pause',
+    ):
+        assert section.count('id="' + key + '"') == 1
+    assert 'hmi-batch-panel hmi-workflow-step' not in section
+    assert 'hmiScopeEnabled(element.dataset.hmiScope)' in JS
+    assert 'hmiAutomationControls?.classList.toggle("hidden", !scope)' in JS
