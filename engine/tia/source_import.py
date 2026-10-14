@@ -261,6 +261,7 @@ def _include_required_udts(
     configured: ProjectSpecification,
     selected: ProjectSpecification,
     existing_udts: set[str],
+    existing_db_names: set[str] | None = None,
 ) -> tuple[ProjectSpecification, set[str]]:
     """Add configured UDTs required by checked DBs and UDTs when TIA lacks them.
 
@@ -298,7 +299,11 @@ def _include_required_udts(
     for udt in selected.udts:
         visit(udt)
     for db in selected.dbs:
-        inspect(db.members)
+        # A name collision means this DB cannot be created. Do not pull in
+        # otherwise-unselected UDTs solely for a blocked/identical DB.
+        # Explicitly selected UDTs remain eligible independently.
+        if db.name.casefold() not in (existing_db_names or set()):
+            inspect(db.members)
     resolved = ProjectSpecification(
         plc_family=selected.plc_family,
         udts=list(included.values()),
@@ -322,6 +327,7 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
     selected, auto_udts = _include_required_udts(
         request.project, selected,
         {u.name.casefold() for u in structures.udts},
+        {db.name.casefold() for db in structures.data_blocks},
     )
     definitions = _definitions(
         selected, known_udts=[u.name for u in structures.udts])
