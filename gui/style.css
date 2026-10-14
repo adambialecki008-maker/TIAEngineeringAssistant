@@ -2572,6 +2572,28 @@ details > summary::before {
 details[open] > summary::before { transform: rotate(45deg); }
 details > summary:hover { color: #fff; }
 details[open] > summary { border-bottom-color: var(--ui-border-soft); }
+/* Same accent/shape for expanded PLC/UDT/DB tree buttons as for <details>. */
+.plc-member-toggle,
+.member-tree-toggle,
+button[aria-expanded] {
+    color: var(--ui-blue-accent);
+    border-color: var(--ui-border);
+    border-radius: var(--ui-radius);
+}
+.plc-member-toggle:hover:not(:disabled),
+.member-tree-toggle:hover:not(:disabled),
+button[aria-expanded]:hover:not(:disabled) {
+    color: #fff;
+    border-color: var(--ui-focus);
+}
+button[aria-expanded="true"] {
+    color: #c3e6ff;
+}
+/* Icons on file rows and in section headers use the shared typography. */
+.hmi-file-icon,
+.hmi-section-icon {
+    font-family: var(--ui-font);
+}
 /* Readable blue information/counts, consistent with the HMI scan details. */
 .hmi-scan-details-status, .hmi-queue-subtitle {
     color: var(--ui-blue-accent);
