@@ -209,6 +209,12 @@ def test_tia_project_context_is_parsed(
 
                 "software_name":
                     "HMI_1",
+
+                "ip_address":
+                    "",
+
+                "plc_connections":
+                    [],
             },
         ],
     }
