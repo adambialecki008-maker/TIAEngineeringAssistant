@@ -265,3 +265,34 @@ def test_preflight_rejects_bad_member_names_and_non_ascii_comments(monkeypatch):
     payload["project"]["udts"][0]["fields"][0]["comment"] = "Zażółć"
     assert preflight(payload).status_code == 422
     assert calls == []
+
+
+def test_db_only_references_existing_tia_udt_by_quoted_name(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_UDT|Types|UDT_Motor|PlcType|True"]
+    ))
+    payload = request_data()
+    payload["project"]["udts"] = []
+    data = preflight(payload)
+    assert data.status_code == 200, data.text
+    plan = data.json()
+    assert plan["will_create"] == ["DB_Motors"]
+    assert 'Array[1..10] of "UDT_Motor"' in plan["items"][0]["source"]
+
+
+def test_udt_dependencies_generate_in_correct_order_even_if_declared_backward(
+        monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = request_data()
+    payload["project"]["udts"] = [
+        {"name": "UDT_Outer", "fields": [
+            {"name": "Nested", "data_type": "UDT_Inner"}]},
+        {"name": "UDT_Inner", "fields": [
+            {"name": "Value", "data_type": "Bool"}]},
+    ]
+    plan = preflight(payload)
+    assert plan.status_code == 200, plan.text
+    assert plan.json()["will_create"][:2] == ["UDT_Inner", "UDT_Outer"]
+    assert '"UDT_Inner"' in plan.json()["items"][1]["source"]
