@@ -116,6 +116,10 @@ export function initTiaUi(
     const hmiTextListStatus = document.getElementById("tia-hmi-text-list-status");
     const hmiTextListReview = document.getElementById("tia-hmi-text-list-review");
     const hmiTextListReviewRows = document.getElementById("tia-hmi-text-list-review-rows");
+    const hmiXmlAutoStart = document.getElementById("tia-hmi-xml-auto-start");
+    const hmiXmlAutoPause = document.getElementById("tia-hmi-xml-auto-pause");
+    const hmiXmlAutoStatus = document.getElementById("tia-hmi-xml-auto-status");
+    const hmiXmlAutoProgress = document.getElementById("tia-hmi-xml-auto-progress");
     const hmiScopeProject = document.getElementById("tia-hmi-scope-project");
     const hmiScopeLists = document.getElementById("tia-hmi-scope-lists");
     const hmiScopeSections = document.querySelectorAll("[data-hmi-scope]");
@@ -516,6 +520,9 @@ export function initTiaUi(
     let hmiTextListsData = null;
     let hmiTextListReviewToken = null;
     let hmiTextListBusy = false;
+    let hmiXmlAutoRunning = false;
+    let hmiXmlAutoPauseRequested = false;
+    let hmiXmlAutoVerified = 0;
     let hmiTextListPreparedKey = null;
     let hmiTextListImportedCount = 0;
     let hmiTextListProgressKey = null;
@@ -1408,7 +1415,7 @@ export function initTiaUi(
         const isVerified = Boolean(scanKey && scanKey === verifiedHmiScanKey);
         const busy = hmiPreviewInProgress || hmiReviewInProgress
             || hmiBatchRunning || hmiBatchStarting || hmiAuditInProgress
-            || hmiTextListBusy;
+            || hmiTextListBusy || hmiXmlAutoRunning;
         if (hmiScopeProject) hmiScopeProject.disabled = busy;
         if (hmiScopeLists) hmiScopeLists.disabled = busy;
         // One shared action pair; internal XML list is selected automatically.
@@ -1470,6 +1477,18 @@ export function initTiaUi(
                 ? "Import reviewed XML batch"
                 : projectReviewReady ? "Import reviewed XLSX batch"
                 : "Import reviewed batch";
+        }
+        // XML imports use their own one-list-at-a-time validated protocol.
+        if (hmiXmlAutoStart) {
+            hmiXmlAutoStart.disabled = busy || !listsSelected
+                || hmiScanKey(selection, "text_lists")
+                    !== verifiedHmiTextListsScanKey
+                || !hasTranslationEngine || !validBatchSize || !validTotal
+                || !quotaRemaining || eligibleXmlEntries() < 1;
+        }
+        if (hmiXmlAutoPause) {
+            hmiXmlAutoPause.disabled = !hmiXmlAutoRunning
+                || hmiXmlAutoPauseRequested;
         }
         if (hmiBatchStartButton) {
             const cannotStart = busy || !projectSelected || !isVerified
@@ -2171,6 +2190,162 @@ export function initTiaUi(
         }
     }
 
+    // One explicit confirmation enables unattended XML imports for this run.
+    // Every individual list is validated and verified by the EXISTING backend
+    // endpoints. A failure or uncertain write stops the loop: no blind retries.
+    async function startAutomaticXmlBatches() {
+        const selection = hmiTranslationSelection();
+        const identity = hmiScanKey(selection, "text_lists");
+        if (hmiXmlAutoRunning || hmiTextListBusy || hmiBatchRunning
+            || !hmiScopeEnabled("text_lists") || !selection?.ollama_model
+            || identity !== verifiedHmiTextListsScanKey) {
+            if (hmiXmlAutoStatus)
+                hmiXmlAutoStatus.textContent =
+                    "Scan Text lists and choose an Ollama model first.";
+            return;
+        }
+        const batchSize = Number(hmiBatchSizeInput?.value);
+        const rawLimit = hmiBatchTotalInput?.value?.trim() || "";
+        const total = rawLimit ? Number(rawLimit) : null;
+        const remaining = total === null ? eligibleXmlEntries()
+            : Math.max(0, total - hmiCombinedApprovedCount);
+        if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 50
+            || (total !== null && (!Number.isInteger(total) || total < 1))
+            || remaining <= 0 || eligibleXmlEntries() <= 0) {
+            if (hmiXmlAutoStatus)
+                hmiXmlAutoStatus.textContent =
+                    "No eligible XML targets or invalid batch size/total.";
+            return;
+        }
+        if (!confirm(
+            "START UNATTENDED XML TEXT LIST IMPORT?\\n\\n"
+            + "Project: " + currentProjectName + "\\n"
+            + "HMI: " + selection.hmi_name + "\\n"
+            + "Ollama: " + selection.ollama_model + "\\n"
+            + "Max per batch: " + batchSize + "\\n"
+            + "Remaining shared quota: " + remaining + "\\n\\n"
+            + "All accepted plain-text proposals will be imported WITHOUT "
+            + "individual manual approval. Each list is verified by re-export. "
+            + "Unsupported/unsafe proposals are skipped.\\n"
+            + "No automatic retry or resume after errors.\\n\\n"
+            + "Continue ONLY with a backup/test copy of the TIA project?"
+        )) return;
+
+        hmiXmlAutoRunning = true;
+        hmiXmlAutoPauseRequested = false;
+        hmiXmlAutoVerified = 0;
+        hmiTextListBusy = true;
+        discardHmiTextListReview();
+        discardHmiReview();
+        const blockedLists = new Set();
+        let completedBatches = 0;
+        updateHmiTranslateButtonState();
+        try {
+            while (!hmiXmlAutoPauseRequested) {
+                if (hmiScanKey(hmiTranslationSelection(), "text_lists")
+                    !== identity || !hmiScopeEnabled("text_lists")) {
+                    throw new Error("HMI selection changed. Stop XML import.");
+                }
+                const quota = total === null ? eligibleXmlEntries()
+                    : Math.max(0, total - hmiCombinedApprovedCount);
+                const list = (hmiTextListsData?.lists || []).find(item =>
+                    !blockedLists.has(item.name)
+                    && Number.isInteger(item.eligible_missing_entries)
+                    && item.eligible_missing_entries > 0);
+                if (!list || quota <= 0) break;
+                const count = Math.min(
+                    batchSize, quota, list.eligible_missing_entries, 50
+                );
+                completedBatches++;
+                if (completedBatches > 500) {
+                    throw new Error("XML safety cap (500 batches) reached. Rescan manually.");
+                }
+                if (hmiXmlAutoStatus)
+                    hmiXmlAutoStatus.textContent = "XML batch "
+                        + completedBatches + ": preparing " + count
+                        + " entry/entries from " + list.name + "...";
+                const prepared = await postJson(
+                    "/api/v1/tia/hmis/text-lists/prepare",
+                    {...selection, text_list_name: list.name, max_rows: count}
+                );
+                if (!prepared.review_id || !prepared.approved_count) {
+                    // Rejected by QA: do not process the same entry forever.
+                    blockedLists.add(list.name);
+                    continue;
+                }
+                const proposals = (prepared.rows || []).map(row => ({
+                    entry_index: row.entry_index,
+                    proposal: row.proposal,
+                }));
+                if (proposals.length !== prepared.approved_count) {
+                    throw new Error("XML prepared rows/count mismatch; no import.");
+                }
+                if (hmiXmlAutoStatus)
+                    hmiXmlAutoStatus.textContent = "XML batch "
+                        + completedBatches + ": importing and verifying "
+                        + proposals.length + " entries in " + list.name + "...";
+                // One-shot review token; the server validates each proposal,
+                // checks a fresh XML fingerprint, and re-exports after import.
+                const result = await postJson(
+                    "/api/v1/tia/hmis/text-lists/import",
+                    {review_id: prepared.review_id, proposals}
+                );
+                if (result.status !== "verified"
+                    || result.verified_entries !== proposals.length) {
+                    throw new Error("XML verification mismatch in " + list.name);
+                }
+                hmiXmlAutoVerified += result.verified_entries;
+                hmiCombinedApprovedCount += result.verified_entries;
+                hmiTextListImportedCount += result.verified_entries;
+                if (hmiXmlAutoProgress)
+                    hmiXmlAutoProgress.textContent = "Verified in TIA: "
+                        + hmiXmlAutoVerified + " entries / "
+                        + completedBatches + " batch(es)";
+                // This is a fresh real XML export, not a cached count.
+                const refreshed = await scanHmiTextLists();
+                if (!refreshed) {
+                    throw new Error("XML re-scan failed after verified import. "
+                        + "Inspect TIA before continuing.");
+                }
+                if (prepared.skipped?.length) {
+                    // Do not endlessly revisit a list that still has only
+                    // rejected entries after its safe values are imported.
+                    if ((hmiTextListsData?.lists || []).some(item =>
+                        item.name === list.name && item.eligible_missing_entries > 0)
+                        && prepared.approved_count < count) {
+                        blockedLists.add(list.name);
+                    }
+                }
+            }
+            if (hmiXmlAutoStatus)
+                hmiXmlAutoStatus.textContent =
+                    (hmiXmlAutoPauseRequested ? "PAUSED" : "COMPLETE")
+                    + " — " + hmiXmlAutoVerified + " XML entries verified in TIA. "
+                    + (blockedLists.size ? blockedLists.size
+                        + " list(s) with skipped entries; inspect manually. " : "")
+                    + "No XLSX Project texts changed by this operation.";
+        } catch (error) {
+            if (hmiXmlAutoStatus)
+                hmiXmlAutoStatus.textContent = "XML AUTOMATION STOPPED — "
+                    + error.message + " Inspect the TIA project; do not "
+                    + "automatically retry an uncertain XML import.";
+        } finally {
+            hmiXmlAutoRunning = false;
+            hmiXmlAutoPauseRequested = false;
+            hmiTextListBusy = false;
+            updateHmiTranslateButtonState();
+        }
+    }
+
+    function pauseAutomaticXmlBatches() {
+        if (!hmiXmlAutoRunning) return;
+        hmiXmlAutoPauseRequested = true;
+        if (hmiXmlAutoStatus)
+            hmiXmlAutoStatus.textContent =
+                "Pause requested — finishing the current XML batch safely...";
+        updateHmiTranslateButtonState();
+    }
+
     async function auditExistingHmiTranslations() {
         const selection = hmiTranslationSelection();
         if (!hmiScopeEnabled("project") || !selection?.view_path_root
@@ -2331,8 +2506,7 @@ export function initTiaUi(
                     "Eligible selected scopes: " + combinedMissingCount();
             renderHmiBatchPlan();
             setHmiTranslationStatus(
-                "Text lists scanned. The shared batch automatically chooses the next "
-                + "eligible list for manual review; XML imports are never automatic.", "success"
+                "Text lists scanned. Use Prepare for manual review or choose automatic XML batches after backing up the project.", "success"
             );
             return true;
         } catch (error) {
@@ -8199,6 +8373,12 @@ export function initTiaUi(
     );
     hmiImportReviewedButton?.addEventListener(
         "click", () => { void importSelectedHmiBatch(); }
+    );
+    hmiXmlAutoStart?.addEventListener(
+        "click", () => { void startAutomaticXmlBatches(); }
+    );
+    hmiXmlAutoPause?.addEventListener(
+        "click", pauseAutomaticXmlBatches
     );
 
     if (hmiPreviewFilter) {
