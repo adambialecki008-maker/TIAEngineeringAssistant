@@ -103,6 +103,9 @@ namespace TiaOpennessAdapter
                     case "import-plc-structures":
                         return ImportPlcStructures(args);
 
+                    case "import-plc-structure-batch":
+                        return ImportPlcStructureBatch(args);
+
 
                     case "export-program-block":
                         return ExportProgramBlock(args);
@@ -708,6 +711,19 @@ namespace TiaOpennessAdapter
         }
 
 
+        private static int ImportPlcStructureBatch(string[] args)
+        {
+            if (args.Length != 6)
+            {
+                Console.Error.WriteLine(
+                    "PID, DEVICE_NAME, PLC_NAME, PROJECT_NAME, MANIFEST_FILE are required.");
+                return 1;
+            }
+            if (!TryReadProcessId(args, out int processId)) return 1;
+            return TiaService.ImportPlcStructureBatch(
+                processId, args[2], args[3], args[4], args[5]);
+        }
+
         private static int ImportPlcStructures(string[] args)
         {
             if (args.Length != 9)
@@ -868,6 +884,9 @@ namespace TiaOpennessAdapter
             );
             Console.WriteLine(
                 "  import-plc-structures <PID> <DEVICE_NAME> <PLC_NAME> <PROJECT_NAME> <UDT_NAME> <DB_NAME> <UDT_FILE> <DB_FILE>"
+            );
+            Console.WriteLine(
+                "  import-plc-structure-batch <PID> <DEVICE_NAME> <PLC_NAME> <PROJECT_NAME> <MANIFEST_FILE>"
             );
 
             Console.WriteLine(
