@@ -224,3 +224,17 @@ def test_xml_backend_preserves_prewrite_safety_and_reexport_verification():
         'lines = run_adapter(')
     assert reviewed.index('lines = run_adapter(') < reviewed.index(
         'current_xml = _export_one(selection)')
+
+
+def test_reviewed_xml_prepare_never_reselects_list_or_invalidates_review_identity():
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    start = js.split("async function prepareHmiTextList()", 1)[1]
+    prepare = start.split("async function importReviewedHmiTextList()", 1)[0]
+    assert "hmiTextListSelect.value = nextEligibleTextList()" not in prepare
+    assert "const identity = textListReviewKey();" in prepare
+    assert "if (identity !== textListReviewKey()) return;" in prepare
+    assert "hmiTextListPreparedKey = identity;" in prepare
+    review_import = js.split("async function importReviewedHmiTextList()", 1)[1]
+    assert "hmiTextListPreparedKey !== textListReviewKey()" in review_import
+    assert '"/api/v1/tia/hmis/text-lists/import"' in review_import
+    assert 'result.status !== "verified"' in review_import
