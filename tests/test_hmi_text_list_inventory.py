@@ -114,3 +114,31 @@ def test_inventory_cannot_read_graphic_lists_or_import_project(monkeypatch):
     assert result.status_code == 200
     assert result.json()["text_list_count"] == 0
     assert commands == ["export-hmi-text-lists"]
+
+
+def test_inventory_shows_read_only_formatted_text_without_enabling_import(monkeypatch):
+    formatted = XML.replace(
+        "<Text>Karuzela gotowa</Text>",
+        '<Text><body><p>Karuzela <field ref="0"/></p></body></Text>',
+    )
+    def adapter(*args):
+        assert args[0] == "export-hmi-text-lists"
+        (Path(args[-1]) / "text_list_00001.xml").write_text(
+            formatted, encoding="utf-8"
+        )
+        encoded = base64.b64encode(b"Auto Status").decode("ascii")
+        return [
+            "HMI_TEXT_LIST_EXPORTED|text_list_00001.xml|" + encoded,
+            "HMI_TEXT_LIST_COUNT|1",
+        ]
+    monkeypatch.setattr(facade, "_run_adapter", adapter)
+    response = CLIENT.post("/api/v1/tia/hmis/inspect-text-lists", json=REQUEST)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["entry_count"] == 2
+    assert result["eligible_missing_entries"] == 0
+    first = result["lists"][0]["preview_rows"][0]
+    assert first["source_text"] == ""
+    assert first["preview_source"] == "Karuzela"
+    assert first["supported"] is False
+    assert "field" in first["reason"]
