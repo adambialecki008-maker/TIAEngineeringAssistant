@@ -1405,6 +1405,10 @@
                                 </button>
                             </div>
                         </div>
+                        <p id="tia-hmi-batch-plan" class="hmi-batch-plan"
+                           aria-live="polite">
+                            Scan the selected text types to calculate the combined batch plan.
+                        </p>
                         </section>
 
                     </div>
@@ -1441,8 +1445,6 @@
                        role="status" aria-live="polite" aria-atomic="true">
                         Select source slot and target language.
                     </p>
-                    </section>
-
                     <div id="tia-hmi-text-list-workflow" class="hidden" data-hmi-scope="text_lists">
                         <p id="tia-hmi-text-list-status" class="status-box hmi-action-status"
                            role="status" aria-live="polite"></p>
@@ -1461,6 +1463,8 @@
                             </div>
                         </section>
                     </div>
+                    </section>
+
                     <section class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project">
                         <h5 class="hmi-step-heading">Step 4 — Automatic Project texts (XLSX) import</h5>
                         <p class="hint">
@@ -1470,11 +1474,7 @@
                             translations are not approved before import.
                             Use only after a successful pilot and project backup.
                         </p>
-                        <p id="tia-hmi-batch-plan" class="hmi-batch-plan"
-                           aria-live="polite">
-                            Example: batch size 5 and total 50 means 10 batches.
-                            Every completed batch is imported and verified in TIA.
-                        </p>
+
                         <label class="hmi-batch-repeat-label" for="tia-hmi-batch-auto-repeat">
                             <input type="checkbox" id="tia-hmi-batch-auto-repeat" checked>
                             Continue automatically with the next batch until
