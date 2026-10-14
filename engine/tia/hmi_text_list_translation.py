@@ -33,6 +33,9 @@ _MAX_XML_BYTES = 20 * 1024 * 1024
 
 class PrepareTextListRequest(TranslateHmiTextsRequest):
     text_list_name: str = Field(min_length=1, max_length=256)
+    # Read-only exclusion of previously QA-rejected entries in THIS run.
+    # A review still imports only explicitly validated accepted entries.
+    exclude_entry_indices: list[int] = Field(default_factory=list, max_length=10000)
 
 
 class TextListProposal(BaseModel):
@@ -367,9 +370,13 @@ def prepare_text_list(request: PrepareTextListRequest):
     rows = _extract_entries(
         root, entries, request.source_culture, request.target_culture
     )
+    excluded = set(request.exclude_entry_indices)
+    if any(index < 0 for index in excluded):
+        raise HTTPException(422, "Excluded TextList entry indices must be >= 0.")
     candidates = [
         r for r in rows
-        if r["supported"] and needs_target_fill(r["source"], r["target"])
+        if r["entry_index"] not in excluded
+        and r["supported"] and needs_target_fill(r["source"], r["target"])
     ][:request.max_rows]
     if not candidates:
         raise HTTPException(
