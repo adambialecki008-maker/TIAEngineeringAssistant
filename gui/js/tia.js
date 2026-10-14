@@ -561,6 +561,7 @@ export function initTiaUi(
     let hmiRunStartedAt = null;
     let hmiRunReportSelection = null;
     let hmiRunReportStartCount = 0;
+    let hmiRunBatchJobId = null;
     let latestHmiScan = null;
     let hmiBatchRunning = false;
     let hmiBatchStarting = false;
@@ -1526,7 +1527,7 @@ export function initTiaUi(
                 : "Prepare one XLSX batch for manual review.";
         }
         if (hmiScanButton) {
-            hmiScanButton.disabled = busy || !scope || !selection;
+            hmiScanButton.disabled = busy || hmiReviewQueueActive || !scope || !selection;
         }
         if (hmiAuditExistingButton) {
             hmiAuditExistingButton.disabled = busy || !projectSelected || !isVerified
@@ -1620,6 +1621,10 @@ export function initTiaUi(
             || hmiReviewQueueActive;
         if (hmiBatchTotalInput) hmiBatchTotalInput.disabled = busy
             || hmiReviewQueueActive;
+        for (const control of [hmiSourceLanguageSelect, hmiTargetLanguageSelect,
+            hmiViewPathRootSelect, hmiOllamaModelSelect]) {
+            if (control) control.disabled = hmiReviewQueueActive;
+        }
     }
 
     async function refreshHmiOllamaModels() {
@@ -1939,6 +1944,7 @@ export function initTiaUi(
         hmiBatchRunning = true;
         hmiBatchPauseRequested = false;
         hmiBatchJobId = jobId;
+        if (hmiUnifiedRunning) hmiRunBatchJobId = jobId;
         updateHmiTranslateButtonState();
         const timer = window.setInterval(
             () => { void pollHmiBatchProgress(jobId); }, 1800
@@ -2126,6 +2132,7 @@ export function initTiaUi(
     function startHmiRunReport() {
         hmiRunReport = [];
         hmiRunReportStartCount = hmiCombinedApprovedCount;
+        hmiRunBatchJobId = null;
         hmiRunStartedAt = new Date().toISOString();
         hmiRunReportSelection = hmiTranslationSelection();
         if (hmiRunReportButton) {
@@ -2187,11 +2194,11 @@ export function initTiaUi(
     }
 
     async function collectHmiXlsxRunSkips() {
-        if (!hmiBatchJobId) return;
+        if (!hmiRunBatchJobId) return;
         try {
             const data = await getJson(
                 "/api/v1/tia/hmis/batch-translations/"
-                + encodeURIComponent(hmiBatchJobId) + "/skipped"
+                + encodeURIComponent(hmiRunBatchJobId) + "/skipped"
             );
             for (const item of data.items || []) {
                 if (!item.resolved) appendHmiRunIssue("XLSX", "Project texts",
