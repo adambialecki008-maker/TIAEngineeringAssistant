@@ -1465,6 +1465,37 @@ export function initTiaUi(
         return null;
     }
 
+    function syncHmiReviewPreview() {
+        // Step 2 has NO placeholder preview: display the editor only after
+        // an actual XML or XLSX preparation returned editable/rejected rows.
+        const projectReview = hmiScopeEnabled("project")
+            && hmiReviewResults
+            && !hmiReviewResults.classList.contains("hidden")
+            && Boolean(hmiReviewRows?.children.length
+                || hmiReviewSkippedList?.children.length);
+        const xmlReview = hmiScopeEnabled("text_lists")
+            && hmiTextListReview
+            && !hmiTextListReview.classList.contains("hidden")
+            && Boolean(hmiTextListReviewRows?.children.length);
+        const hasReview = Boolean(projectReview || xmlReview);
+        if (!hmiEditDetails) return;
+        const wasHidden = hmiEditDetails.classList.contains("hidden");
+        hmiEditDetails.classList.toggle("hidden", !hasReview);
+        if (!hasReview) {
+            hmiEditDetails.open = false;
+            if (hmiEditCaption) hmiEditCaption.textContent =
+                "Translations are shown after preparing a batch";
+            return;
+        }
+        if (hmiEditCaption) {
+            const source = projectReview && xmlReview
+                ? "Project texts + Text lists"
+                : projectReview ? "Project texts" : "Text list";
+            hmiEditCaption.textContent = source + " — editable prepared batch";
+        }
+        if (wasHidden) hmiEditDetails.open = true;
+    }
+
     function updateHmiTranslateButtonState() {
         const selection = hmiTranslationSelection();
         const scanKey = hmiScanKey(selection);
@@ -1625,6 +1656,7 @@ export function initTiaUi(
             hmiViewPathRootSelect, hmiOllamaModelSelect]) {
             if (control) control.disabled = hmiReviewQueueActive;
         }
+        syncHmiReviewPreview();
     }
 
     async function refreshHmiOllamaModels() {
