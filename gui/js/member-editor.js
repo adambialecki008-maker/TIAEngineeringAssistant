@@ -28,6 +28,43 @@ function udtDefinitions(ownerUdtName, replacement) {
     ]));
 }
 
+function validateStartValue(member, location) {
+    const raw = member.start_value;
+    if (raw === null || raw === undefined || String(raw).trim() === "") return null;
+    const value = String(raw).trim();
+    const kind = normalized(member.data_type);
+    if (kind === "array" || kind === "struct") {
+        return location + ": set Start value on a scalar member, not a group.";
+    }
+    if (kind === "bool") {
+        return /^(true|false|0|1)$/i.test(value)
+            ? null : location + ": Bool Start value must be TRUE or FALSE.";
+    }
+    const ranges = {
+        sint: [-128n, 127n], usint: [0n, 255n],
+        int: [-32768n, 32767n], uint: [0n, 65535n],
+        dint: [-2147483648n, 2147483647n],
+        udint: [0n, 4294967295n],
+        lint: [-9223372036854775808n, 9223372036854775807n],
+        ulint: [0n, 18446744073709551615n],
+    };
+    if (ranges[kind]) {
+        if (!/^[+-]?[0-9]+$/.test(value)) {
+            return location + ": invalid decimal integer Start value.";
+        }
+        const number = BigInt(value);
+        const [min, max] = ranges[kind];
+        return number >= min && number <= max
+            ? null : location + ": Start value out of range for " + member.data_type;
+    }
+    if (kind === "real" || kind === "lreal") {
+        const decimal = /^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/;
+        return decimal.test(value) && Number.isFinite(Number(value))
+            ? null : location + ": Real Start value must be a finite decimal.";
+    }
+    return location + ": this data type has no supported Start value syntax yet.";
+}
+
 function validateGroup(members, path, types, udts) {
     if (!Array.isArray(members) || members.length === 0) {
         return path + " must contain at least one member.";
@@ -83,6 +120,8 @@ function validateGroup(members, path, types, udts) {
                 return location + ": unknown data type " + type + ".";
             }
         }
+        const startError = validateStartValue(member, location);
+        if (startError) return startError;
     }
     return null;
 }
