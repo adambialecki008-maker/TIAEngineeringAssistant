@@ -128,3 +128,25 @@ def test_unprocessed_literal_backslash_n_cannot_reach_tia():
     with pytest.raises(HTTPException) as error:
         validate_hmi_translation("Awaria PLC", r"Awaria\nPLC")
     assert "literal" in str(error.value.detail)
+
+
+@pytest.mark.parametrize("source,proposal", [
+    ("(Pneumatyczna)", "({Pneumatyczna})"),
+    ("(Hydrauliczna)", "({Hydrauliczna})"),
+])
+def test_generated_extra_braces_can_only_be_removed_when_source_is_recovered(
+    source, proposal,
+):
+    normalized = normalize_hmi_translation(source, proposal)
+    assert normalized == source
+    validate_hmi_translation(source, normalized)
+
+
+def test_legitimate_braced_identifiers_are_never_normalized_away():
+    assert normalize_hmi_translation("{Tag_1} Alarm", "{Tag_1} Alarm") == (
+        "{Tag_1} Alarm"
+    )
+    bad = "({Zmiana znaczenia})"
+    assert normalize_hmi_translation("(Pneumatyczna)", bad) == bad
+    with pytest.raises(HTTPException):
+        validate_hmi_translation("(Pneumatyczna)", bad)
