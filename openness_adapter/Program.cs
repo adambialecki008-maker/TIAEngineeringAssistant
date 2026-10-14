@@ -611,6 +611,24 @@ namespace TiaOpennessAdapter
         }
 
 
+        private static int CloneHmi(string[] args)
+        {
+            // clone-hmi PID SOURCE_DEVICE SOURCE_HMI TARGET_DEVICE TARGET_IP
+            //           PLC_DEVICE PLC_NAME CONNECTION_NAME
+            if (args.Length != 9)
+            {
+                Console.Error.WriteLine(
+                    "clone-hmi requires PID, source device and HMI, new device "
+                    + "name, new IP, existing PLC device/name and connection name.");
+                return 1;
+            }
+            if (!TryReadProcessId(args, out int processId)) return 1;
+            return TiaService.CloneConfiguredHmi(
+                processId, args[2], args[3], args[4], args[5],
+                args[6], args[7], args[8]);
+        }
+
+
         private static int CreatePlc(
             string[] args
         )
@@ -865,6 +883,10 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  create-plc <PID> <TYPE_IDENTIFIER_OR_ORDER_NUMBER> <PLC_NAME> <DEVICE_NAME>"
+            );
+
+            Console.WriteLine(
+                "  clone-hmi <PID> <SOURCE_DEVICE> <SOURCE_HMI> <TARGET_DEVICE> <NEW_IP> <PLC_DEVICE> <PLC_NAME> <EXISTING_CONNECTION>"
             );
 
             Console.WriteLine(
