@@ -240,3 +240,39 @@ def test_reviewed_xml_prepare_never_reselects_list_or_invalidates_review_identit
     assert "hmiTextListPreparedKey !== textListReviewKey()" in review_import
     assert '"/api/v1/tia/hmis/text-lists/import"' in review_import
     assert 'result.status !== "verified"' in review_import
+
+
+def test_reviewed_xml_approval_uses_step3_and_does_not_silently_fallback():
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
+    router = js.split('async function importSelectedHmiBatch()', 1)[1].split(
+        'async function translateSelectedHmi()', 1
+    )[0]
+    assert 'if (hmiReviewQueueActive)' in router
+    assert 'hmiReviewQueueCurrentScope === "text_lists"' in router
+    assert 'return await importReviewedHmiTextList();' in router
+    assert 'hmiReviewQueueCurrentScope === "project"' in router
+    assert 'return await importReviewedHmiTexts();' in router
+    assert 'No selected format in current review queue' in router
+    approval = js.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
+        'async function skipReviewedHmiQueueBatch()', 1
+    )[0]
+    assert 'Approve clicked for ' in approval
+    assert 'completed = await importSelectedHmiBatch()' in approval
+    xml_import = js.split('async function importReviewedHmiTextList()', 1)[1].split(
+        'async function startAutomaticXmlBatches(', 1
+    )[0]
+    assert 'Sending reviewed XML import for ' in xml_import
+    assert '"/api/v1/tia/hmis/text-lists/import"' in xml_import
+    assert 'result.status !== "verified"' in xml_import
+    assert 'No prepared XML review token' in xml_import
+    assert 'XML approval cancelled.' in xml_import
+    # No approval button in Step 2; Step 3 owns the one active control.
+    assert html.count('id="tia-hmi-import-reviewed-button"') == 1
+    step2 = html.split('Step 2 — Batch settings (selected text types)', 1)[1].split(
+        'Step 3 — Translate, review &amp; import', 1
+    )[0]
+    step3 = html.split('Step 3 — Translate, review &amp; import', 1)[1]
+    assert 'id="tia-hmi-import-reviewed-button"' not in step2
+    assert 'id="tia-hmi-import-reviewed-button"' in step3
+    assert 'approve and import each batch here in Step 3.' in js
