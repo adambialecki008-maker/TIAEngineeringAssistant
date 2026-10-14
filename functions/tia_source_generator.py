@@ -29,6 +29,7 @@ def generate_project_source(
                 db.name,
                 db.members,
                 udt_names,
+                retain=db.retain,
             )
         )
 
@@ -69,12 +70,13 @@ def generate_db_source(
     name: str,
     members: list[TiaMember],
     udt_names: dict[str, str],
+    retain: bool = False,
 ) -> str:
     lines = [
         f'DATA_BLOCK "{name}"',
         "{ S7_Optimized_Access := 'TRUE' }",
         "VERSION : 0.1",
-        "NON_RETAIN",
+        "RETAIN" if retain else "NON_RETAIN",
         "VAR",
     ]
 
@@ -108,8 +110,11 @@ def generate_member_lines(
     if member.comment:
         lines.append(f"{indent}// " f"{sanitize_comment(member.comment)}")
 
+    attributes = format_member_attributes(member)
+    declaration_prefix = f"{member.name}{attributes} : "
+
     if member.data_type.lower() == "struct":
-        lines.append(f"{indent}{member.name} : Struct")
+        lines.append(f"{indent}{declaration_prefix}Struct")
 
         for child in member.struct_members or []:
             lines.extend(
@@ -143,9 +148,35 @@ def generate_member_lines(
             udt_names,
         )
 
-    lines.append(f"{indent}" f"{member.name} : " f"{declaration};")
+    initial = format_start_value(member)
+    lines.append(f"{indent}{declaration_prefix}{declaration}{initial};")
 
     return lines
+
+
+def format_member_attributes(member: TiaMember) -> str:
+    names = (
+        ("EXTERNALVISIBLE", member.hmi_visible),
+        ("EXTERNALACCESSIBLE", member.hmi_accessible),
+        ("EXTERNALWRITABLE", member.hmi_writable),
+    )
+    attributes = [
+        f"{name} := '{str(value).upper()}'"
+        for name, value in names if value is not None
+    ]
+    return " { " + "; ".join(attributes) + " }" if attributes else ""
+
+
+def format_start_value(member: TiaMember) -> str:
+    if member.start_value is None or member.start_value == "":
+        return ""
+    kind = member.data_type.casefold()
+    if kind == "bool":
+        literal = ("TRUE" if member.start_value.casefold() in ("true", "1")
+                   else "FALSE")
+    else:
+        literal = member.start_value
+    return " := " + literal
 
 
 def format_data_type(
