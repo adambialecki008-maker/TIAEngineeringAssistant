@@ -1,6 +1,6 @@
 # Resume: existing UDT reuse and HMI Text List import
 
-Status: UDT/DB functional fix completed and targeted checks passed; HMI XML fix pending.
+Status: both functional fixes completed and targeted checks passed; final full-suite/build verification pending.
 Branch: codex/fix-udt-reuse-text-list-import
 Repository: https://github.com/adambialecki008-maker/TIAEngineeringAssistant
 Base commit: c025b1c
@@ -27,10 +27,23 @@ Open this repository and this branch, read this file, and continue the requested
 - These are mocked Openness tests plus compilation against locally installed Siemens V21 assemblies. No real TIA write/import was executed. Live verification must confirm DB_Motors2 creation with the existing UDT_Motor and unchanged UDT.
 - Compatibility scope is DB declaration structure. Existing UDT defaults/HMI/retention/comments are retained and reported; they are never claimed identical to requested metadata. Unknown structural layout remains blocked; inspect/export/repair the existing type in TIA and re-run preflight (no unchecked override).
 
+## Completed functional fix 2: native V21 Text List XML and progress
+- Real read-only exports revealed changing DocumentInfo/Created timestamps, hexadecimal engineering IDs, and ordinary body/p/br line breaks. The old snapshot treated export timestamps as content changes and rejected line-break lists as rich formatting.
+- Fingerprint ignores only DocumentInfo/Created and generated hex IDs on known engineering tags. It still checks list identity, entry order, values, languages, leaf text, structure, references and other metadata.
+- Plain unstyled body/p/br is mapped to newlines and written back using real br elements; source/other-language strings stay protected. Styled text, fields/OpenLinks, multiple paragraphs and unmapped content remain blocked.
+- New target-language items mint unused hexadecimal IDs, avoiding collision with existing A-F IDs.
+- Prepare and import use the existing translation-progress endpoint. UI polls manual/automatic XML preparation, QA, import and independent re-export; verified totals increase only after confirmed re-export. Timers stop on success/error and late polls cannot replace the final result.
+- Targeted checks: XML translation/inventory/auto-review/batch UI/scope tests => 72 passed in 2.03s; XML translation plus asynchronous Node progress regression => 36 passed in 2.17s. node --check gui/js/tia.js passed.
+- Real TIA READ-ONLY check: process 23464, project OpennnesTest_Torowisko, HMI_00_Main/HMI_RT_1. Two consecutive exports of 33 lists have 33 stable fingerprints. Parsed 154 plain entries (15 with line breaks), 97 eligible missing targets, all 33 lists plain-supported. Imports/writes performed: zero.
+
+## Real TIA limitation discovered
+- Selected PLC S7-1500/1515F-2PN / PPFKA2 contains UDT_Motor with IsConsistent=False. Siemens V21 explicitly refuses its export: "Inconsistent blocks and PLC data types (UDT) cannot be exported." DB_Motors2 was not found in the read-only inventory.
+- Do NOT claim this particular live UDT is compatible or that DB_Motors2 has been created. The application reports unknown/blocked until the user repairs/compiles this existing UDT in TIA and its structure can be exported. No automatic modification of the existing type was performed.
+
 ## Next steps
-1. Investigate XML Text List import/progress. Relevant files: engine/tia/hmi_text_list_translation.py, openness_adapter/TiaService.cs, gui/js/tia.js and tests/test_hmi_text_list_translation.py. Existing code verifies all languages after re-export but actual failure cause is not yet established.
-2. Add meaningful XML/UI regressions, use targeted tests, commit the completed HMI fix separately.
-3. Run full pytest once at end, JS checks and final .NET build. Update this file with exact results and remaining real TIA checks, then commit/push source and docs only.
+1. Run full pytest ONCE now, JS checks and final .NET build. If failures occur, fix their actual cause using targeted reruns, then repeat full suite only after changes.
+2. Record final exact counts/results here and commit/push the final checkpoint. Keep adapter generated bin/obj artifacts unstaged.
+3. Real write verification remains a user-operated test on a backup: compile/repair existing UDT_Motor, Check target for DB_Motors2 only, verify compatible/reuse and DB-only creation plan, acknowledge backup and approve import, check DB compilation and unchanged UDT. For HMI: fresh scan, prepare 1-2 XML entries including a line break, review/approve import, verify target language in TIA and re-export. Do not run these writes automatically.
 
 ## Siemens references consulted
 - [V21 interface XML declarations and WithDefaults](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/export/import/importing/exporting-data-of-a-plc-device/blocks/xml-structure-of-the-block-interface-section)

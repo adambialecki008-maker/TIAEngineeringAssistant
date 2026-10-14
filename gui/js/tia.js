@@ -2887,6 +2887,53 @@ export function initTiaUi(
         if (hmiImportReviewedButton) hmiImportReviewedButton.disabled = true;
     }
 
+    async function postTextListWithProgress(path, payload, listName, statusElement) {
+        const progressId = crypto.randomUUID().replace(/-/g, "");
+        let active = true;
+        let polling = false;
+        const labels = {
+            exporting_text_list: "Exporting current XML (read-only)",
+            translating: "Ollama translation",
+            preparing_review: "Validating proposals / one repair attempt if needed",
+            ready: "Review prepared — awaiting approval",
+            validating_review: "Validating reviewed edits (no write yet)",
+            importing_text_list: "Importing approved XML into TIA",
+            verifying_text_list: "Re-exporting XML to verify actual TIA texts",
+            verified: "XML translations verified in TIA",
+            failed: "XML operation failed — see final diagnostic",
+        };
+        const poll = async () => {
+            if (!active || polling) return;
+            polling = true;
+            try {
+                const progress = await getJson(
+                    "/api/v1/tia/hmis/translation-progress/" + progressId
+                );
+                if (!active) return;
+                const text = listName + ": "
+                    + (labels[progress.stage] || progress.stage)
+                    + (progress.total ? " — " + progress.completed
+                        + " / " + progress.total : "")
+                    + ". Elapsed: " + progress.elapsed_seconds + " s.";
+                if (statusElement) statusElement.textContent = text;
+                if (hmiReviewQueueActive && hmiUnifiedStatus)
+                    hmiUnifiedStatus.textContent = text;
+                // Preparation/QA progress must never increment verified totals.
+            } catch (_error) {
+                // Polling may race the first event. The main POST owns errors.
+            } finally {
+                polling = false;
+            }
+        };
+        const timer = window.setInterval(() => { void poll(); }, 1000);
+        try {
+            return await postJson(path, {...payload, progress_id: progressId});
+        } finally {
+            active = false;
+            window.clearInterval(timer);
+        }
+    }
+
     async function prepareHmiTextList() {
         if (!hasTextListSelection() || hmiTextListBusy) return;
         const maxRows = textListBatchCount();
@@ -2906,11 +2953,11 @@ export function initTiaUi(
         try {
             const listName = hmiTextListSelect.value;
             const excluded = hmiReviewQueueExcludedXml.get(listName) || new Set();
-            const result = await postJson(
+            const result = await postTextListWithProgress(
                 "/api/v1/tia/hmis/text-lists/prepare",
                 {...selection, text_list_name: listName, max_rows: maxRows,
                     exclude_entry_indices: hmiReviewQueueActive
-                        ? [...excluded] : []}
+                        ? [...excluded] : []}, listName, hmiTextListStatus
             );
             if (identity !== textListReviewKey()) {
                 if (hmiTextListStatus) hmiTextListStatus.textContent =
@@ -3031,9 +3078,9 @@ export function initTiaUi(
         if (hmiTextListStatus)
             hmiTextListStatus.textContent = "Importing and verifying " + listName + "...";
         try {
-            const result = await postJson(
+            const result = await postTextListWithProgress(
                 "/api/v1/tia/hmis/text-lists/import",
-                {review_id: token, proposals: selected}
+                {review_id: token, proposals: selected}, listName, hmiTextListStatus
             );
             // Only the backend's confirmed re-export is evidence of a TIA write.
             if (result.status !== "verified"
@@ -3185,12 +3232,12 @@ export function initTiaUi(
                         + " entry/entries from " + list.name + "...";
                 let prepared;
                 try {
-                    prepared = await postJson(
+                    prepared = await postTextListWithProgress(
                         "/api/v1/tia/hmis/text-lists/prepare",
                         {...selection, text_list_name: list.name, max_rows: count,
                             exclude_entry_indices: [
                                 ...(rejectedIndicesByList.get(list.name) || [])
-                            ]}
+                            ]}, list.name, hmiXmlAutoStatus
                     );
                 } catch (error) {
                     // Prepare is read-only: an isolated failed list can be
@@ -3231,9 +3278,9 @@ export function initTiaUi(
                         + proposals.length + " entries in " + list.name + "...";
                 // One-shot review token; the server validates each proposal,
                 // checks a fresh XML fingerprint, and re-exports after import.
-                const result = await postJson(
+                const result = await postTextListWithProgress(
                     "/api/v1/tia/hmis/text-lists/import",
-                    {review_id: prepared.review_id, proposals}
+                    {review_id: prepared.review_id, proposals}, list.name, hmiXmlAutoStatus
                 );
                 if (result.status !== "verified"
                     || result.verified_entries !== proposals.length) {

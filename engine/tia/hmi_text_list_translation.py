@@ -44,6 +44,7 @@ class TextListProposal(BaseModel):
 
 
 class ImportTextListRequest(BaseModel):
+    progress_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     review_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     proposals: list[TextListProposal] = Field(min_length=1, max_length=50)
 
@@ -94,18 +95,47 @@ def _parse(xml_bytes: bytes, expected_name: str):
 
 
 def _plain_value(node):
-    """Accept plain direct Value or a single, unformatted <body><p>."""
+    """Plain text or one unformatted body/p with line-break elements.
+
+    A native TIA <br/> is a newline, not rich formatting or a link. Styles,
+    fields, multiple paragraphs and all other nested markup remain protected.
+    """
     if node is None:
         return None
     if not len(node):
         return node, node.text or ""
-    if len(node) == 1 and _local(node[0].tag) == "body":
+    if (len(node) == 1 and _local(node[0].tag) == "body" and not node[0].attrib
+            and not (node.text or "").strip() and not (node[0].tail or "").strip()):
         body = node[0]
-        if len(body) == 1 and _local(body[0].tag) == "p":
+        if (len(body) == 1 and _local(body[0].tag) == "p" and not body[0].attrib
+                and not (body.text or "").strip() and not (body[0].tail or "").strip()):
             paragraph = body[0]
-            if not len(paragraph):
-                return paragraph, paragraph.text or ""
+            if all(_local(child.tag) == "br" and not child.attrib
+                   and not len(child) and not (child.text or "") for child in paragraph):
+                value = (paragraph.text or "") + "".join(
+                    "\n" + (child.tail or "") for child in paragraph)
+                return paragraph, value
     return None
+
+
+def _set_plain_value(node, proposal):
+    # For native body/p storage write real <br/> elements. A literal newline
+    # inside HTML text may be collapsed by WinCC on import/re-export.
+    if _local(node.tag) != "p":
+        if "\n" not in proposal:
+            node.text = proposal
+            return
+        paragraph = ET.SubElement(ET.SubElement(node, "body"), "p")
+        node.text = None
+    else:
+        paragraph = node
+        for child in list(paragraph):
+            paragraph.remove(child)
+    parts = proposal.split("\n")
+    paragraph.text = parts[0]
+    namespace = paragraph.tag.rsplit("}", 1)[0] + "}" if "}" in paragraph.tag else ""
+    for part in parts[1:]:
+        ET.SubElement(paragraph, namespace + "br").tail = part
 
 
 def _multilingual_entry(entry):
@@ -255,7 +285,8 @@ def _text_list_fingerprint(xml_bytes: bytes, expected_name: str) -> str:
     """Semantic, lossless-for-editable-content snapshot of one validated list.
 
     Normalize ONLY serialization noise: attribute order, formatting whitespace
-    between child elements, and exporter-assigned numeric engineering object IDs.
+    between child elements, and exporter-assigned hexadecimal engineering object IDs. The direct
+    DocumentInfo/Created timestamp describes the export, not list content.
     Leave leaf text (including whitespace), children/order, and every other
     attribute exact, so real changes still block the full-list Override.
     """
@@ -266,9 +297,11 @@ def _text_list_fingerprint(xml_bytes: bytes, expected_name: str) -> str:
             (key, value) for key, value in node.attrib.items()
             if not (key == "ID"
                     and _local(node.tag) in _TRANSIENT_EXPORT_ID_TAGS
-                    and value.isdecimal())
+                    and re.fullmatch(r"[0-9a-fA-F]+", value))
         ))
-        children = tuple(snapshot(child) for child in node)
+        children = tuple(snapshot(child) for child in node
+                         if not (_local(node.tag) == "DocumentInfo"
+                                 and _local(child.tag) == "Created"))
         text = node.text or ""
         # Indentation between child elements is not part of any plain target.
         if children and not text.strip():
@@ -327,7 +360,7 @@ def _prune():
 def _write_proposal(root, row, target_culture, proposal):
     old = row["languages"].get(target_culture.casefold())
     if old:
-        old[1].text = proposal
+        _set_plain_value(old[1], proposal)
         return
     # TIA may omit unused cultures. Duplicate ONLY a simple source item,
     # mint an unused engineering XML ID and change Culture/Text.
@@ -340,23 +373,31 @@ def _write_proposal(root, row, target_culture, proposal):
         payload = _plain_value(clone)
         if payload is None:
             raise HTTPException(409, "Cannot clone complex target TextList XML.")
-        payload[0].text = proposal
+        _set_plain_value(payload[0], proposal)
     else:
-        existing_ids = {int(e.attrib["ID"]) for e in root.iter()
-                        if e.attrib.get("ID", "").isdigit()}
-        clone.set("ID", str(max(existing_ids or {0}) + 1))
+        existing_ids = {int(e.attrib["ID"], 16) for e in root.iter()
+                        if re.fullmatch(r"[0-9a-fA-F]+", e.attrib.get("ID", ""))}
+        clone.set("ID", format(max(existing_ids or {0}) + 1, "X"))
         culture = _attribute(clone, "Culture")
         text = _attribute(clone, "Text")
         plain = _plain_value(text)
         if culture is None or plain is None:
             raise HTTPException(409, "Cannot safely add target language to TextList.")
         culture.text = target_culture
-        plain[0].text = proposal
+        _set_plain_value(plain[0], proposal)
     row["parent"].append(clone)
 
 
 @router.post("/hmis/text-lists/prepare")
 def prepare_text_list(request: PrepareTextListRequest):
+    try:
+        return _prepare_text_list(request)
+    except Exception:
+        review._record_progress(request.progress_id, "failed")
+        raise
+
+
+def _prepare_text_list(request: PrepareTextListRequest):
     if request.source_culture.casefold() == request.target_culture.casefold():
         raise HTTPException(422, "Source and target languages must differ.")
     if request.max_rows is None or not 1 <= request.max_rows <= 50:
@@ -365,6 +406,7 @@ def prepare_text_list(request: PrepareTextListRequest):
         "source-copy" if request.translation_strategy == "copy"
         else review.resolve_ollama_model(request.ollama_model)
     )
+    review._record_progress(request.progress_id, "exporting_text_list")
     xml = _export_one(request)
     root, entries = _parse(xml, request.text_list_name)
     rows = _extract_entries(
@@ -384,15 +426,22 @@ def prepare_text_list(request: PrepareTextListRequest):
             "Populated and formatted target texts are protected."
         )
     sources = list(dict.fromkeys(row["source"] for row in candidates))
+    review._record_progress(request.progress_id, "translating", 0, len(sources))
     translated = (
         {source: source for source in sources}
         if request.translation_strategy == "copy"
         else review._translate_texts(
-            sources, request.target_culture, model
+            sources, request.target_culture, model,
+            **({"progress": lambda done, total: review._record_progress(
+                request.progress_id, "translating", done, total)}
+               if request.progress_id else {})
         )
     )
+    review._record_progress(request.progress_id, "preparing_review", 0, len(candidates))
     accepted, skipped = [], []
-    for row in candidates:
+    for candidate_index, row in enumerate(candidates):
+        review._record_progress(request.progress_id, "preparing_review",
+                                candidate_index, len(candidates))
         source = row["source"]
         proposal = normalize_hmi_translation(source, translated.get(source))
         try:
@@ -437,6 +486,7 @@ def prepare_text_list(request: PrepareTextListRequest):
                 "fingerprint": _text_list_fingerprint(xml, request.text_list_name),
                 "accepted": accepted,
             }
+    review._record_progress(request.progress_id, "ready", len(candidates), len(candidates))
     return {
         "review_id": token,
         "text_list_name": request.text_list_name,
@@ -461,11 +511,15 @@ def import_text_list(request: ImportTextListRequest):
         if not prepared:
             raise HTTPException(404, "TextList review expired or already used.")
         return _perform_reviewed_import(prepared, request)
+    except Exception:
+        review._record_progress(request.progress_id, "failed")
+        raise
     finally:
         _IMPORT_LOCK.release()
 
 
 def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
+    review._record_progress(request.progress_id, "validating_review", 0, len(request.proposals))
     selection = PrepareTextListRequest(**prepared["request"])
     approved = {item["entry_index"]: item for item in prepared["accepted"]}
     provided = {item.entry_index: item.proposal for item in request.proposals}
@@ -488,6 +542,7 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
         if not needs_target_fill(row["source"], row["current_target"]):
             raise HTTPException(409, "Prepared target was already populated.")
 
+    review._record_progress(request.progress_id, "exporting_text_list", 0, len(provided))
     xml = _export_one(selection)
     if _text_list_fingerprint(xml, selection.text_list_name) != prepared["fingerprint"]:
         raise HTTPException(
@@ -557,6 +612,7 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
         with _LOCK:
             if _REVIEWS.pop(request.review_id, None) is not prepared:
                 raise HTTPException(404, "TextList review expired or already used.")
+        review._record_progress(request.progress_id, "importing_text_list", 0, len(provided))
         lines = run_adapter(
             "import-hmi-text-list",
             str(selection.process_id),
@@ -571,6 +627,7 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
                 502, "TextList import not confirmed. Inspect TIA before retrying."
             )
     # Check all language strings in all entries, including untouched siblings.
+    review._record_progress(request.progress_id, "verifying_text_list", 0, len(provided))
     current_xml = _export_one(selection)
     current_root, current_entries = _parse(
         current_xml, selection.text_list_name
@@ -584,6 +641,7 @@ def _perform_reviewed_import(prepared: dict, request: ImportTextListRequest):
             502, "TextList import may have changed TIA, but re-export "
             "verification failed. Inspect the project before retrying."
         )
+    review._record_progress(request.progress_id, "verified", len(provided), len(provided))
     return {
         "status": "verified",
         "text_list_name": selection.text_list_name,

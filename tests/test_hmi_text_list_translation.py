@@ -548,3 +548,138 @@ def test_unknown_text_aggregation_still_shows_read_only_language_preview():
     assert rows[0]["source"] == ""
     assert rows[0]["preview_source"] == "Open valve"
     assert "Unsupported Text aggregation" in rows[0]["reason"]
+
+
+
+def native_export(xml, timestamp, id_shift=0):
+    """Sanitized V21 shape: export-only timestamp, hexadecimal engineering IDs."""
+    root = ET.fromstring(xml)
+    info = root.find("DocumentInfo")
+    if info is None:
+        info = ET.Element("DocumentInfo")
+        root.insert(0, info)
+        ET.SubElement(info, "Created")
+    info.find("Created").text = timestamp
+    for index, node in enumerate(n for n in root.iter() if "ID" in n.attrib):
+        node.set("ID", format(index + id_shift, "X"))
+    return ET.tostring(root, encoding="utf-8")
+
+
+def test_real_export_timestamp_and_hex_ids_do_not_block_reviewed_import(mock_tia, monkeypatch):
+    adapter = tia._run_adapter
+    mock_tia["xml"] = native_export(mock_tia["xml"], "2026-10-14T17:00:00Z")
+    export_number = 0
+    def changing_export(*args):
+        nonlocal export_number
+        if args[0] == "export-hmi-text-lists":
+            export_number += 1
+            mock_tia["xml"] = native_export(mock_tia["xml"],
+                f"2026-10-14T17:00:{export_number:02d}Z", id_shift=export_number * 32)
+        return adapter(*args)
+    monkeypatch.setattr(tia, "_run_adapter", changing_export)
+    prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE).json()
+    response = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"], "proposals": [
+            {"entry_index": row["entry_index"], "proposal": row["proposal"]}
+            for row in prepared["rows"]]})
+    assert response.status_code == 200, response.text
+    assert response.json()["verified_entries"] == 3
+    assert len(mock_tia["imported"]) == 1
+    root = ET.fromstring(mock_tia["imported"][0])
+    ids = [int(node.attrib["ID"], 16) for node in root.iter() if "ID" in node.attrib]
+    assert len(ids) == len(set(ids)), "Missing-language clone must mint an unused hex ID"
+
+
+def test_only_export_created_timestamp_is_transient():
+    initial = native_export(XML, "2026-10-14T17:00:00Z")
+    changed = native_export(initial, "2026-10-14T17:00:01Z", 32)
+    assert lists._text_list_fingerprint(initial, "Auto Status") == lists._text_list_fingerprint(changed, "Auto Status")
+    root = ET.fromstring(changed)
+    list_attributes = root.find("Hmi.TextGraphicList.TextList/AttributeList")
+    ET.SubElement(list_attributes, "Created").text = "This is list metadata"
+    assert lists._text_list_fingerprint(initial, "Auto Status") != lists._text_list_fingerprint(ET.tostring(root), "Auto Status")
+
+
+def test_plain_tia_linebreaks_are_translated_and_written_as_br(mock_tia, monkeypatch):
+    mock_tia["xml"] = XML.replace('<Text>Open valve</Text>',
+        '<Text><body><p>Open<br />valve</p></body></Text>').encode("utf-8")
+    translations = {"Open\nvalve": "Otwórz\nzawór", "Awaria PLC": "Awaria PLC", "Ready": "Gotowy"}
+    monkeypatch.setattr(review, "_translate_texts", lambda sources, *args: {s: translations[s] for s in sources})
+    response = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE)
+    assert response.status_code == 200, response.text
+    prepared = response.json()
+    assert prepared["rows"][0]["source"] == "Open\nvalve"
+    imported = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"], "proposals": [
+            {"entry_index": row["entry_index"], "proposal": row["proposal"]}
+            for row in prepared["rows"]]})
+    assert imported.status_code == 200, imported.text
+    root, entries = lists._parse(mock_tia["xml"], "Auto Status")
+    actual = lists._extract_entries(root, entries, "en-US", "pl-PL")
+    assert actual[0]["target"] == "Otwórz\nzawór"
+    assert actual[0]["source"] == "Open\nvalve"
+    assert actual[2]["target"] == "Zatrzymanie awaryjne"
+    paragraph = actual[0]["languages"]["pl-pl"][0].find("AttributeList/Text/body/p")
+    assert paragraph.text == "Otwórz" and paragraph[0].tag == "br"
+    assert paragraph[0].tail == "zawór"
+
+
+@pytest.mark.parametrize("markup", [
+    '<body><p style="font-weight:bold">Open</p></body>',
+    '<body><p>Open<br style="color:red"/>valve</p></body>',
+    '<body><p>Open<field ref="A"/></p></body>',
+    '<body><p>Open</p><p>valve</p></body>',
+    '<body>Unmapped text<p>Open</p></body>',
+])
+def test_linebreak_support_does_not_accept_formatted_or_unmapped_content(markup):
+    assert lists._plain_value(ET.fromstring('<Text>' + markup + '</Text>')) is None
+
+
+def test_text_list_reports_translation_and_verified_import_progress(mock_tia, monkeypatch):
+    prepare_id, import_id = "a" * 32, "b" * 32
+    translated = review._translate_texts
+    observed = []
+    def translate(sources, target, model, progress):
+        progress(1, len(sources))
+        status = CLIENT.get("/api/v1/tia/hmis/translation-progress/" + prepare_id).json()
+        assert status["stage"] == "translating" and status["completed"] == 1
+        assert status["total"] == len(sources)
+        assert not mock_tia["imported"]
+        return translated(sources, target, model)
+    monkeypatch.setattr(review, "_translate_texts", translate)
+    prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json={**BASE, "progress_id": prepare_id}).json()
+    ready = CLIENT.get("/api/v1/tia/hmis/translation-progress/" + prepare_id).json()
+    assert ready["stage"] == "ready" and ready["completed"] == ready["total"] == 3
+    adapter = tia._run_adapter
+    def capture(*args):
+        observed.append(CLIENT.get("/api/v1/tia/hmis/translation-progress/" + import_id).json())
+        return adapter(*args)
+    monkeypatch.setattr(tia, "_run_adapter", capture)
+    result = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"], "progress_id": import_id,
+        "proposals": [{"entry_index": row["entry_index"], "proposal": row["proposal"]} for row in prepared["rows"]]})
+    assert result.status_code == 200, result.text
+    assert [x["stage"] for x in observed] == ["exporting_text_list", "importing_text_list", "verifying_text_list"]
+    assert all(x["completed"] == 0 for x in observed)
+    verified = CLIENT.get("/api/v1/tia/hmis/translation-progress/" + import_id).json()
+    assert verified["stage"] == "verified" and verified["completed"] == 3
+
+
+def test_xml_verification_failure_never_reports_verified_progress(mock_tia, monkeypatch):
+    prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE).json()
+    adapter = tia._run_adapter
+    def discard_translation(*args):
+        lines = adapter(*args)
+        if args[0] == "import-hmi-text-list":
+            mock_tia["xml"] = XML.encode("utf-8")
+        return lines
+    monkeypatch.setattr(tia, "_run_adapter", discard_translation)
+    progress_id = "c" * 32
+    result = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"], "progress_id": progress_id,
+        "proposals": [{"entry_index": row["entry_index"], "proposal": row["proposal"]} for row in prepared["rows"]]})
+    assert result.status_code == 502
+    progress = CLIENT.get("/api/v1/tia/hmis/translation-progress/" + progress_id).json()
+    assert progress["stage"] == "failed" and progress["completed"] == 0
+    assert len(mock_tia["imported"]) == 1
+    assert prepared["review_id"] not in lists._REVIEWS
