@@ -3723,7 +3723,7 @@ export function initTiaUi(
     }
 
 
-    function populateHmiTranslationLanguages() {
+    function populateHmiTranslationLanguages(preserveQuota = false) {
         if (
             !selectedHmiForTranslation
             ||
@@ -3877,7 +3877,7 @@ export function initTiaUi(
                 previousTarget;
         }
 
-        invalidateHmiPreview();
+        invalidateHmiPreview(!preserveQuota);
     }
 
 
@@ -4427,7 +4427,7 @@ export function initTiaUi(
             );
 
             try {
-                await refreshProjectLanguages();
+                await refreshProjectLanguages(true);
                 const restored = restoreHmiTranslationAfterImport(
                     selectionBeforeImport
                 );
@@ -4466,11 +4466,11 @@ export function initTiaUi(
     }
 
 
-    async function refreshProjectLanguages() {
+    async function refreshProjectLanguages(preserveQuota = false) {
         const processId = selectedProcessId();
         if (!processId) {
             projectLanguages = [];
-            populateHmiTranslationLanguages();
+            populateHmiTranslationLanguages(preserveQuota);
             return;
         }
         try {
@@ -4487,7 +4487,7 @@ export function initTiaUi(
                 "error"
             );
         }
-        populateHmiTranslationLanguages();
+        populateHmiTranslationLanguages(preserveQuota);
     }
 
 
