@@ -296,3 +296,19 @@ def test_udt_dependencies_generate_in_correct_order_even_if_declared_backward(
     assert plan.status_code == 200, plan.text
     assert plan.json()["will_create"][:2] == ["UDT_Inner", "UDT_Outer"]
     assert '"UDT_Inner"' in plan.json()["items"][1]["source"]
+
+
+def test_instance_db_name_collision_must_not_be_treated_as_identical(
+        monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB|Nested|DB_Motors|11|InstanceDB|True"]
+    ))
+    plan = preflight(request_data())
+    assert plan.status_code == 200, plan.text
+    report = plan.json()
+    assert report["can_apply"] is False
+    match = next(x for x in report["items"] if x["name"] == "DB_Motors")
+    assert match["status"] == "conflict"
+    assert "not confirmed as a global" in match["reason"]
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
