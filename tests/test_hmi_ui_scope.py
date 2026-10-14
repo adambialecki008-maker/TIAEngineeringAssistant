@@ -56,7 +56,9 @@ def test_only_selected_scope_shows_related_translation_sections():
     assert 'hmiScopeEnabled("text_lists")' in JS
     assert '!hmiScopeEnabled("project")' in JS
     assert 'const activeManualScope = nextHmiManualScope();' in JS
-    assert 'hmiBatchResumeButton.disabled = busy || !projectSelected' in JS
+    # Resume is now a reviewed-queue control, not a Project texts-only control.
+    assert 'hmiBatchResumeButton.disabled = !hmiReviewQueuePaused' in JS
+    assert 'hmiBatchResumeButton.classList.toggle("hidden",' in JS
 
 
 def test_text_list_preview_and_import_are_separate_from_project_workflow():
