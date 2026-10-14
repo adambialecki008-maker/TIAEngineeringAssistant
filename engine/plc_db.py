@@ -15,6 +15,7 @@ class DataBlockMember(TiaMember):
 
 class DataBlockSpecification(BaseModel):
     name: str = Field(min_length=1)
+    retain: bool = False  # Whole-DB RETAIN/NON_RETAIN in SCL source.
 
     members: list[DataBlockMember] = Field(min_length=1)
 
