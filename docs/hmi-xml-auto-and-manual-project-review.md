@@ -1,84 +1,96 @@
-# HMI translation workflows — October 2026
+# HMI translation workflows — TIA Portal V21
 
-Two independent import mechanisms coexist.
+## Unified GUI (Step 1–3)
 
-## Unified three-step HMI interface
+The same three steps control **Project texts (XLSX)** and **Text lists (XML)**.
+Scope checkboxes select one or both formats. There is **no separate Step 4** or
+second automatic-import window.
 
-The HMI screen contains **only Step 1, Step 2 and Step 3**.
-The `Project texts (XLSX)` and `Text lists (XML)` checkboxes determine
-which controls and details appear. They do not create separate workflow
-windows.
+1. **Step 1 — Scan**: read-only export of the checked formats for the selected
+   HMI, source culture and target culture. Project texts and Text lists retain
+   independent scan identities; Graphic lists are excluded.
+2. **Step 2 — Batch settings / review**: one batch size (1–50) and one combined
+   `Total to translate`. The expandable review editor appears only when a
+   batch has prepared translations.
+3. **Step 3 — Translate / approve / import**: the common **Translate** button
+   starts the queue. When `Review each batch before import` is enabled,
+   inspect/edit the prepared batch in Step 2 and select **Approve & import
+   reviewed batch** in Step 3. When disabled, the selected formats run with
+   automatic per-batch verification after the initial user confirmation.
 
-- **Step 1 — Scan**: two matching blue/white expandable disclosures:
-  **Text lists** followed by **Project texts**. Each includes its own
-  read-only scanned data; Project texts details contain the XLSX table,
-  ViewPath diagnostics and read-only audit.
-- **Step 2 — Batch settings**: one shared batch size and total count.
-- **Step 3 — Prepare and review**: one pair of manual review/import actions,
-  both editable review tables, and a single **Automatic import (optional)**
-  area. Within this area XML and XLSX actions appear only when their
-  respective checkbox is selected. Their execution and verification remain
-  independent; selecting both does not silently mix formats in one write.
+Queue order is Project texts first, then individual XML Text lists.
+Selecting both formats does **not** combine them in one Siemens import.
 
-## Project texts (XLSX)
+### Limits and progress
 
-1. Select HMI, source language, target language and Ollama model.
-2. Check **Project texts (XLSX)** and scan.
-3. Click **Prepare XLSX batch for review** (1–50 unique texts).
-4. Each validated row now has an editable target textarea and a **Use source**
-   button. This includes AI-approved proposals; manual edits aren't restricted
-   to previously skipped rows anymore.
-5. Click **Import reviewed XLSX batch**. ALL displayed proposals are sent
-   along with the ephemeral review token. The backend matches the exact set
-   of selected sources and performs structural/technical QA again before
-   consuming the token or calling TIA.
-6. Invalid manual proposals are rejected without TIA writes. Correct the
-   text and retry using the same prepared review. On uncertain Openness
-   failure, do not blindly retry; rescan the project.
+`Batch size = 5` and `Total to translate = 10` means up to ten eligible
+translations across multiple batches of at most five. For XML, each import
+reimports one complete Text list while preserving untouched entries.
 
-The existing automatic XLSX batch-job API remains compatible; it omits the
-optional manually edited proposals and follows its original checkpoint logic.
+The shared progress bar records only translations **verified after a fresh
+TIA export**, not mere Ollama responses. Rejected QA proposals are not counted
+as verified. Previously verified translations remain saved when Stop/Pause
+is requested.
 
-## Text lists (Classic XML)
+- **Pause**: finish the current safe operation before pausing.
+- **Stop**: finish any ongoing TIA operation and verification, clear the
+  current run's *visual* progress, and require a fresh scan before restarting.
+  Previously verified TIA texts are **not undone**.
+- Switching review **off** during an active reviewed queue authorizes
+  automatic continuation at a safe boundary. Existing pause requests remain
+  effective until the user resumes.
+- Automatic XML execution has no persistent resume checkpoint; if a write's
+  outcome is uncertain, inspect TIA and rescan before further imports.
+- Automatic XLSX batch jobs maintain checkpoints under the ignored
+  `.local/hmi_translation_jobs/` directory and do not blindly repeat
+  previously verified batches.
 
-There are now two modes with different approval guarantees:
+### Project texts (XLSX)
 
-- **Manual XML** (Step 3): prepare, inspect and edit the selected list's
-  proposals, then explicitly approve its import.
-- **Automatic XML** (Step 4): first scan eligible Text lists, then click
-  **Start automatic XML batches** and approve the global warning ONCE.
-  The frontend runs separate sequential cycles
-  `prepare -> QA -> import -> re-export verification -> rescan -> next`.
-  No two XML imports run concurrently and no Graphic lists are touched.
-  Every batch is capped at 50 entries and imports only the current Text list.
-  Unsafe proposals are excluded, and lists with no acceptable candidates
-  are skipped to prevent an infinite loop.
+Prepare only missing/placeholder target texts in the selected ViewPath root.
+Ollama proposals and user edits are validated again before import. The backend
+uses a fresh export to verify each changed target cell. Review tokens are
+single-use after writes may have started. Never automatically retry an
+uncertain write. Existing translations and unrelated HMIs are preserved.
 
-**Pause after current XML batch** finishes the current verification before
-stopping. It is NOT a safe hard-cancel of a running Siemens import.
+### Text lists (XML)
 
-The automatic XML mode is intentionally **not resumable after page reload**
-and never retries a failed/uncertain import. It keeps progress only in the
-current browser session. An interrupted job must be inspected in TIA and
-freshly scanned before any new import. A fully resumable XML job requires
-a persisted, server-side checkpoint and snapshot/verification reconciliation.
+Each XML Text list is prepared, validated, imported and re-exported
+independently. Unchanged entries and other Text lists remain intact.
+**Graphic lists are never translated.** XML automation can skip a list with
+unsafe proposals but stops on an uncertain import outcome.
 
-XML automation and automatic XLSX are **separate** buttons. Selecting both
-scopes doesn't silently import across both data formats.
+## Diagnostics and reports
 
-## Local validation
+Step 3 includes:
+
+- **Download complete run report (CSV)**: a summary of confirmed write counts
+  and skipped/errors collected during the run; the verified count is snapshotted
+  so a later Scan cannot turn it negative.
+- **Download HMI diagnostics (JSON)**: read-only GUI-state snapshot for
+  diagnosing stuck queues, selected scopes, quotas, scans, review/automatic
+  transitions and Pause/Stop. The snapshot includes no source texts,
+  proposals or credentials. It does not contact TIA.
+
+The diagnostics JSON describes **frontend state**, not independent evidence
+that Siemens imported a translation.
+
+## Local verification
+
+Work on a separate backed-up TIA Portal V21 project. Tests must **not**
+perform automatic TIA imports:
 
 ```powershell
 git status
-git pull --ff-only
-.\.venv\Scripts\python.exe -m pytest tests/test_hmi_xml_auto_and_manual_review.py tests/test_hmi_model_disclosure.py -q
+node --check gui/js/tia.js
 .\.venv\Scripts\python.exe -m pytest -q
 dotnet build .\openness_adapter\TiaOpennessAdapter.csproj
 ```
 
-Then restart the FastAPI server, Ctrl+F5 in the browser, select the same
-HMI and scan again. First test manual XLSX correction and manual XML
-with 1–2 entries. Use the automatic XML mode only on an isolated test copy.
+Then restart the server, Ctrl+F5, select the same HMI and run a read-only Scan.
+Smoke-test small XLSX and XML batches on the test copy; independently
+confirm imported values in a fresh TIA export.
 
-Neither the API tests nor static JS checks substitute for a real TIA V21
-end-to-end test. If the import status is uncertain, stop, inspect and rescan.
+A passing mocked test suite and successful adapter build do **not** replace
+real TIA V21 verification. The user has confirmed XML imports work on a test
+copy; XLSX behavior remains subject to final end-to-end verification.

@@ -1,54 +1,64 @@
-# UDT/DB import pilot — TIA Portal V21
+# UDT / global DB import — TIA Portal V21
 
-This is a **controlled proof of concept**, not a production import workflow.
+## Supported workflow
 
-## Scope and safety
+The source editor supports **independent checkbox selection of multiple UDTs
+and global DBs**. Only selected items and missing required UDT dependencies
+are considered for generation/import; unselected independent DBs are excluded.
 
-- Exactly **one UDT and one global DB** from the local UDT/Data Blocks editor.
-- The target PLC must already exist in the selected open TIA project.
-- The connected PLC must be offline during generation from external source.
-- The plan endpoint is **read-only**. It verifies the live TIA project and scans
-  the selected PLC for existing UDT and DB names.
-- A backup/copy acknowledgement and an additional interactive confirmation
-  are required before the apply endpoint is called.
-- Before writing, the adapter repeats collision checks (including objects
-  inside user folders). Overwriting existing objects is prohibited.
-- Imports are performed in dependency order: UDT first, then DB.
-- **NOT ATOMIC**: if DB generation fails, an unsaved generated UDT may remain
-  in the open TIA project. Inspect and resolve manually; do not blindly retry.
-- A successful result means the adapter found both generated objects and
-  received a project-save confirmation. Compile the PLC in TIA to verify.
-- This workflow **does not** download to the PLC or generate Safety blocks.
-- Siemens' external source importer is limited to ASCII in this pilot; using
-  non-ASCII comments or identifiers produces a validation error.
+The preflight is read-only. It compares selected objects and required type
+dependencies with the **selected target PLC** in the running TIA project.
+Possible decisions include:
 
-## Local test
+- **Missing**: eligible for create-only import.
+- **Existing and compatible**: reuse the existing UDT as a DB dependency;
+  do not recreate it.
+- **Conflicting or unverifiable**: block the affected item and its dependent
+  objects; do not silently override compatibility checks.
+- **Existing equivalent object**: skip rather than overwrite.
+- **Unrelated independent object**: can remain eligible even if a different
+  dependency conflicts.
 
-1. Open **a separate backed-up copy** of a TIA Portal V21 project.
-2. Make sure the target CPU is offline.
-3. In the application, connect to TIA and select the correct target PLC.
-4. Under **UDT**, define `UDT_Motor`; under **Data Blocks**, define
-   `DB_Motors` with `Motors : Array[1..10] of UDT_Motor`.
-5. In **Source preview**, click **Generate source** and inspect it.
-6. Click **Check target and prepare import**. Confirm it reports the correct
-   project/PLC and the exact two object names.
-7. Only if satisfied, tick **I confirm the open TIA project is a
-   test/backup copy**, then click **Import to TIA Portal** and approve.
-8. Inspect the generated UDT in PLC data types and DB in Program blocks.
-   Compile the PLC in TIA. Record compiler errors verbatim if any.
-9. If the import fails, inspect the **open TIA project for partial state**
-   before trying again. Do not overwrite or delete existing objects.
+Missing UDT dependencies are imported in dependency order before their DBs.
+Compatible existing UDTs are reused. Retentive DB sections must use valid
+SCL syntax, e.g. `VAR RETAIN`, not separate `RETAIN` and `VAR` lines.
 
-## Tests
+## Safety guarantees and limitations
+
+- Import into a **backed-up test copy** first, with the target PLC offline.
+- The user must acknowledge the backup and confirm import.
+- Import is **create-only**: existing UDTs/DBs are never overwritten.
+- A batch is **not atomic**. If the DB import fails, earlier generated UDTs
+  may remain in the open project. Check TIA before retrying.
+- Preflight and apply repeat collision/identity checks; an unknown
+  compatibility result must never be treated as a verified match.
+- No PLC download or generation of Safety blocks is performed.
+- Inspect and compile the resulting DB/UDT in TIA even when the adapter
+  reports import success.
+
+## Manual smoke test
+
+1. Open a backed-up project in TIA V21; select the target PLC.
+2. Define `UDT_Motor` and `DB_Motors` with an array of `UDT_Motor`.
+3. Select only `DB_Motors` for import; inspect **Generate source**.
+4. If `UDT_Motor` already exists and is compatible, the preflight must
+   select **reuse** for the UDT and **create** for the missing DB.
+5. If the UDT is absent, confirm it is included as a required dependency.
+6. Inspect the read-only preflight report and explicit backup acknowledgement
+   before importing.
+7. Confirm the objects exist in the correct PLC, then compile in TIA.
+8. Re-run preflight: previously imported objects must not be overwritten.
+9. For a mismatched existing UDT, confirm the dependent DB is blocked and
+   the diagnostics identify the reason.
+
+## Local validation
 
 ```powershell
-git pull --ff-only
 .\.venv\Scripts\python.exe -m pytest tests/test_plc_structure_import.py -q
 .\.venv\Scripts\python.exe -m pytest -q
 dotnet build .\openness_adapter\TiaOpennessAdapter.csproj
 ```
 
-Windows TIA Openness V21 and Siemens DLLs are required for meaningful adapter
-compilation and end-to-end verification. Unit tests mock the external adapter.
-Report the actual local test and compiler results; no end-to-end TIA import
-has been performed by the author of this pilot.
+The automated tests use mock adapters for many paths. The user has confirmed
+successful manual UDT/DB imports in TIA V21 on a test project. A successful
+manual sample is not blanket production validation for all target configurations.
