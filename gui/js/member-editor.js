@@ -58,7 +58,7 @@ function validateStartValue(member, location) {
             ? null : location + ": Start value out of range for " + member.data_type;
     }
     if (kind === "real" || kind === "lreal") {
-        const decimal = /^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/;
+        const decimal = /^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/;
         return decimal.test(value) && Number.isFinite(Number(value))
             ? null : location + ": Real Start value must be a finite decimal.";
     }
