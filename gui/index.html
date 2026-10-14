@@ -1368,7 +1368,6 @@
                                     After scanning, the total appears below.
                                 </span>
                             </div>
-                        </section>
                         <p id="tia-hmi-scan-summary" class="hmi-scan-result"
                            aria-live="polite">
                             Not scanned yet. Select the HMI, languages and ViewPath root, then click Scan HMI / Count texts.
@@ -1386,202 +1385,13 @@
                                 <div id="tia-hmi-text-lists-catalog" class="hmi-text-lists-catalog"></div>
                             </div>
                         </details>
-                        <section class="hmi-workflow-step hmi-scope-step">
-                            <h5 class="hmi-step-heading">Step 2 — Batch settings (selected text types)</h5>
-                            <p class="hint">One batch size and one total for all checked scopes.
-                                The count combines unique missing Project texts (XLSX) with
-                                eligible entries in Text lists (XML). These are different units:
-                                XML entries are not deduplicated across lists. Maximum 50 per
-                                batch. XML has both manual review and separately confirmed automatic import modes.</p>
-                        <div class="form-grid hmi-translation-grid">
-                            <div class="field-group">
-                                <label for="tia-hmi-batch-size">Batch size (texts per batch)</label>
-                                <input id="tia-hmi-batch-size" type="number"
-                                       min="1" max="50" step="1" value="5">
-                                <p class="hint">1–50 translations per batch across the checked scopes. Each XML list is prepared and imported independently; use manual review or separately confirmed XML automation.</p>
-                            </div>
-                            <div class="field-group">
-                                <label for="tia-hmi-total-to-translate">Total to translate (selected scopes)</label>
-                                <input id="tia-hmi-total-to-translate" type="number"
-                                       min="1" max="100000" step="1"
-                                       placeholder="Scan HMI to see total">
-                                <p class="hint">The combined count is calculated from the checked scopes.
-                                   Leave blank to process all eligible texts. Existing translations
-                                   and unsupported XML entries are excluded.</p>
-                                <button id="tia-hmi-use-scan-total"
-                                        class="secondary-button" type="button" disabled>
-                                    Use scanned total
-                                </button>
-                            </div>
-                        </div>
-                        <p id="tia-hmi-batch-plan" class="hmi-batch-plan"
-                           aria-live="polite">
-                            Scan the selected text types to calculate the combined batch plan.
-                        </p>
-                        </section>
-
-                    </div>
-
-                    <section class="hmi-workflow-step hmi-manual-step">
-                        <h5 class="hmi-step-heading">Step 3 — Prepare and review selected texts</h5>
-                        <p class="hint">
-                            Prepare one batch from the checked scopes, review the results, and then
-                            approve the import. XML manual mode reviews one list at a time; automatic XML mode is configured separately below.
-                        </p>
-                    <div class="action-row hmi-translation-actions">
-
-                        <button
-                            id="tia-hmi-translate-button"
-                            type="button"
-                            class="primary-button"
-                            disabled
-                        >
-                            Prepare selected batch (review)
-                        </button>
-
-                        <button
-                            id="tia-hmi-import-reviewed-button"
-                            type="button"
-                            class="primary-button"
-                            disabled
-                        >
-                            Import reviewed batch
-                        </button>
-
-                    </div>
-                    <p id="tia-hmi-translation-status"
-                       class="status-box hmi-action-status"
-                       role="status" aria-live="polite" aria-atomic="true">
-                        Select source slot and target language.
-                    </p>
-                    <div id="tia-hmi-text-list-workflow" class="hidden" data-hmi-scope="text_lists">
-                        <p id="tia-hmi-text-list-status" class="status-box hmi-action-status"
-                           role="status" aria-live="polite"></p>
-                        <section id="tia-hmi-text-list-review" class="hidden">
-                            <h5>XML review — selected Text list</h5>
-                            <p class="hint">Only missing target values are proposed. Imports use XML
-                                for one list at a time and are verified by re-export.</p>
-                            <div class="table-wrapper hmi-text-table-wrapper">
-                                <table class="hmi-text-table">
-                                    <thead><tr>
-                                        <th>Source text</th><th>Current target</th>
-                                        <th>Proposed target (editable)</th>
-                                    </tr></thead>
-                                    <tbody id="tia-hmi-text-list-review-rows"></tbody>
-                                </table>
-                            </div>
-                        </section>
-                    </div>
-                    </section>
-
-                    <section class="hmi-batch-panel hmi-workflow-step"
-                             data-hmi-scope="text_lists" id="tia-hmi-xml-auto-section">
-                        <h5 class="hmi-step-heading">Step 4 — Automatic Text lists (XML) import</h5>
-                        <p class="hint">
-                            Automatic XML mode: process eligible plain-text entries in
-                            consecutive batches (max. 50), one Text list at a time.
-                            Every list is freshly exported, validated, imported and
-                            verified by re-export before the next one starts.
-                            Unsupported/unsafe proposals are skipped.
-                            This mode does NOT show an individual manual review:
-                            use Step 3 instead if you want to edit translations.
-                            Back up the project before starting; no automatic retries
-                            after a failed or uncertain import.
-                        </p>
-                        <div class="action-row hmi-translation-actions">
-                            <button id="tia-hmi-xml-auto-start" type="button"
-                                    class="primary-button" disabled>
-                                Start automatic XML batches
-                            </button>
-                            <button id="tia-hmi-xml-auto-pause" type="button"
-                                    class="secondary-button" disabled>
-                                Pause after current XML batch
-                            </button>
-                        </div>
-                        <p id="tia-hmi-xml-auto-status" class="status-box"
-                           role="status" aria-live="polite">
-                            Scan Text lists to enable automatic XML imports.
-                        </p>
-                        <p id="tia-hmi-xml-auto-progress" class="hint">
-                            Verified in TIA: 0
-                        </p>
-                    </section>
-
-                    <section class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project">
-                        <h5 class="hmi-step-heading">Step 5 — Automatic Project texts (XLSX) import</h5>
-                        <p class="hint">
-                            XLSX only: Ollama translates one batch, then TIA imports
-                            and verifies it before the next batch begins.
-                            Unlike the manual review workflow above, individual
-                            translations are not approved before import.
-                            Use only after a successful pilot and project backup.
-                        </p>
-
-                        <label class="hmi-batch-repeat-label" for="tia-hmi-batch-auto-repeat">
-                            <input type="checkbox" id="tia-hmi-batch-auto-repeat" checked>
-                            Continue automatically with the next batch until
-                            Total to translate is reached
-                        </label>
-                        <div class="hmi-batch-start-row">
-                            <div class="action-row hmi-translation-actions">
-                                <button id="tia-hmi-batch-start" type="button"
-                                        class="primary-button" disabled>
-                                    Start batch import
-                                </button>
-                                <button id="tia-hmi-batch-resume" type="button"
-                                        class="secondary-button" disabled>
-                                    Resume saved job
-                                </button>
-                                <button id="tia-hmi-batch-pause" type="button"
-                                        class="secondary-button" disabled>
-                                    Pause after this batch
-                                </button>
-                            </div>
-                            <div class="hmi-batch-progress" role="group"
-                                 aria-label="Verified TIA import progress">
-                                <div class="hmi-batch-progress-caption">
-                                    <strong>Verified in TIA</strong>
-                                    <span id="tia-hmi-batch-progress-text">0 / —</span>
-                                </div>
-                                <progress id="tia-hmi-batch-progress" max="100"
-                                          value="0"></progress>
-                                <p class="hint">Progress advances after TIA import
-                                   and verification, not after Ollama alone.</p>
-                            </div>
-                        </div>
-                        <p id="tia-hmi-batch-readiness" class="hint"
-                           role="status" aria-live="polite">
-                            Choose an HMI and run Scan HMI / Count texts to enable batch import.
-                        </p>
-                        <p id="tia-hmi-batch-status" class="status-box"
-                           aria-live="polite">
-                            No automatic batch import started.
-                        </p>
-                        <button type="button" id="tia-hmi-quality-report"
-                                class="secondary-button" disabled>
-                            Download batch quality XLSX
-                        </button>
-                        <div class="hmi-skipped-manager">
-                            <button type="button" id="tia-hmi-skipped-open"
-                                    class="secondary-button" disabled>
-                                Skipped translations (0)
-                            </button>
-                            <section id="tia-hmi-skipped-panel" class="hidden"
-                                     aria-label="Skipped HMI translations">
-                                <h4>Skipped translations</h4>
-                                <p class="hint">View every skipped text, correct the proposal
-                                    or retry it individually with Ollama. Prepare does not
-                                    import into TIA. Confirm each import explicitly; the
-                                    result must pass validation and re-export verification.</p>
-                                <p id="tia-hmi-skipped-status" class="status-box"
-                                   role="status" aria-live="polite">
-                                    Load a completed batch job to view skips.
-                                </p>
-                                <div id="tia-hmi-skipped-list" class="hmi-skipped-list"></div>
-                            </section>
-                        </div>
-                    </section>
-
+                        <details id="tia-hmi-project-texts-details"
+                                 class="hmi-text-lists-details hmi-project-texts-details"
+                                 data-hmi-scope="project">
+                            <summary id="tia-hmi-dedicated-project-texts" aria-live="polite">
+                                Project texts — not scanned · Details
+                            </summary>
+                            <div class="hmi-text-lists-detail-body">
                     <div id="tia-hmi-preview-results" class="hidden" data-hmi-scope="project">
                         <p id="tia-hmi-preview-summary" class="hint"></p>
                         <div class="hmi-preview-toolbar">
@@ -1649,6 +1459,96 @@
                         </section>
                     </div>
 
+
+                            </div>
+                        </details>
+                        </section>
+                        <section class="hmi-workflow-step hmi-scope-step">
+                            <h5 class="hmi-step-heading">Step 2 — Batch settings (selected text types)</h5>
+                            <p class="hint">One batch size and one total for all checked scopes.
+                                The count combines unique missing Project texts (XLSX) with
+                                eligible entries in Text lists (XML). These are different units:
+                                XML entries are not deduplicated across lists. Maximum 50 per
+                                batch. XML has both manual review and separately confirmed automatic import modes.</p>
+                        <div class="form-grid hmi-translation-grid">
+                            <div class="field-group">
+                                <label for="tia-hmi-batch-size">Batch size (texts per batch)</label>
+                                <input id="tia-hmi-batch-size" type="number"
+                                       min="1" max="50" step="1" value="5">
+                                <p class="hint">1–50 translations per batch across the checked scopes. Each XML list is prepared and imported independently; use manual review or separately confirmed XML automation.</p>
+                            </div>
+                            <div class="field-group">
+                                <label for="tia-hmi-total-to-translate">Total to translate (selected scopes)</label>
+                                <input id="tia-hmi-total-to-translate" type="number"
+                                       min="1" max="100000" step="1"
+                                       placeholder="Scan HMI to see total">
+                                <p class="hint">The combined count is calculated from the checked scopes.
+                                   Leave blank to process all eligible texts. Existing translations
+                                   and unsupported XML entries are excluded.</p>
+                                <button id="tia-hmi-use-scan-total"
+                                        class="secondary-button" type="button" disabled>
+                                    Use scanned total
+                                </button>
+                            </div>
+                        </div>
+                        <p id="tia-hmi-batch-plan" class="hmi-batch-plan"
+                           aria-live="polite">
+                            Scan the selected text types to calculate the combined batch plan.
+                        </p>
+                        </section>
+
+                    </div>
+
+                    <section class="hmi-workflow-step hmi-manual-step">
+                        <h5 class="hmi-step-heading">Step 3 — Prepare and review selected texts</h5>
+                        <p class="hint">
+                            Prepare one batch from the checked scopes, review the results, and then
+                            approve the import. XML manual mode reviews one list at a time; automatic XML mode is available under Automatic import in this same step.
+                        </p>
+                    <div class="action-row hmi-translation-actions">
+
+                        <button
+                            id="tia-hmi-translate-button"
+                            type="button"
+                            class="primary-button"
+                            disabled
+                        >
+                            Prepare selected batch (review)
+                        </button>
+
+                        <button
+                            id="tia-hmi-import-reviewed-button"
+                            type="button"
+                            class="primary-button"
+                            disabled
+                        >
+                            Import reviewed batch
+                        </button>
+
+                    </div>
+                    <p id="tia-hmi-translation-status"
+                       class="status-box hmi-action-status"
+                       role="status" aria-live="polite" aria-atomic="true">
+                        Select source slot and target language.
+                    </p>
+                    <div id="tia-hmi-text-list-workflow" class="hidden" data-hmi-scope="text_lists">
+                        <p id="tia-hmi-text-list-status" class="status-box hmi-action-status"
+                           role="status" aria-live="polite"></p>
+                        <section id="tia-hmi-text-list-review" class="hidden">
+                            <h5>XML review — selected Text list</h5>
+                            <p class="hint">Only missing target values are proposed. Imports use XML
+                                for one list at a time and are verified by re-export.</p>
+                            <div class="table-wrapper hmi-text-table-wrapper">
+                                <table class="hmi-text-table">
+                                    <thead><tr>
+                                        <th>Source text</th><th>Current target</th>
+                                        <th>Proposed target (editable)</th>
+                                    </tr></thead>
+                                    <tbody id="tia-hmi-text-list-review-rows"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
                     <div id="tia-hmi-review-results" class="hidden" data-hmi-scope="project">
                         <h4>Prepared translations — review before importing</h4>
                         <p id="tia-hmi-review-summary" class="hint"></p>
@@ -1682,6 +1582,125 @@
                     </div>
 
 
+
+
+                    <div class="hmi-automation-controls">
+                        <h5 class="hmi-automation-title">Automatic import (optional)</h5>
+                        <p class="hint">
+                            The selected checkboxes decide which automatic actions appear.
+                            XML and XLSX use their own verified import pipelines;
+                            start only the desired type. Manual edits are available
+                            through the review buttons above. Always use a project copy.
+                        </p>
+                    <div class="hmi-automatic-scope"
+                         data-hmi-scope="text_lists" id="tia-hmi-xml-auto-section">
+                        <strong class="hmi-automatic-scope-title">Text lists (XML)</strong>
+                        <p class="hint">
+                            Automatic XML mode: process eligible plain-text entries in
+                            consecutive batches (max. 50), one Text list at a time.
+                            Every list is freshly exported, validated, imported and
+                            verified by re-export before the next one starts.
+                            Unsupported/unsafe proposals are skipped.
+                            This mode does NOT show an individual manual review:
+                            use Step 3 instead if you want to edit translations.
+                            Back up the project before starting; no automatic retries
+                            after a failed or uncertain import.
+                        </p>
+                        <div class="action-row hmi-translation-actions">
+                            <button id="tia-hmi-xml-auto-start" type="button"
+                                    class="primary-button" disabled>
+                                Start automatic XML batches
+                            </button>
+                            <button id="tia-hmi-xml-auto-pause" type="button"
+                                    class="secondary-button" disabled>
+                                Pause after current XML batch
+                            </button>
+                        </div>
+                        <p id="tia-hmi-xml-auto-status" class="status-box"
+                           role="status" aria-live="polite">
+                            Scan Text lists to enable automatic XML imports.
+                        </p>
+                        <p id="tia-hmi-xml-auto-progress" class="hint">
+                            Verified in TIA: 0
+                        </p>
+                    </div>
+
+                    <div class="hmi-automatic-scope" data-hmi-scope="project">
+                        <strong class="hmi-automatic-scope-title">Project texts (XLSX)</strong>
+                        <p class="hint">
+                            XLSX only: Ollama translates one batch, then TIA imports
+                            and verifies it before the next batch begins.
+                            Unlike the manual review workflow above, individual
+                            translations are not approved before import.
+                            Use only after a successful pilot and project backup.
+                        </p>
+
+                        <label class="hmi-batch-repeat-label" for="tia-hmi-batch-auto-repeat">
+                            <input type="checkbox" id="tia-hmi-batch-auto-repeat" checked>
+                            Continue automatically with the next batch until
+                            Total to translate is reached
+                        </label>
+                        <div class="hmi-batch-start-row">
+                            <div class="action-row hmi-translation-actions">
+                                <button id="tia-hmi-batch-start" type="button"
+                                        class="primary-button" disabled>
+                                    Start batch import
+                                </button>
+                                <button id="tia-hmi-batch-resume" type="button"
+                                        class="secondary-button" disabled>
+                                    Resume saved job
+                                </button>
+                                <button id="tia-hmi-batch-pause" type="button"
+                                        class="secondary-button" disabled>
+                                    Pause after this batch
+                                </button>
+                            </div>
+                            <div class="hmi-batch-progress" role="group"
+                                 aria-label="Verified TIA import progress">
+                                <div class="hmi-batch-progress-caption">
+                                    <strong>Verified in TIA</strong>
+                                    <span id="tia-hmi-batch-progress-text">0 / —</span>
+                                </div>
+                                <progress id="tia-hmi-batch-progress" max="100"
+                                          value="0"></progress>
+                                <p class="hint">Progress advances after TIA import
+                                   and verification, not after Ollama alone.</p>
+                            </div>
+                        </div>
+                        <p id="tia-hmi-batch-readiness" class="hint"
+                           role="status" aria-live="polite">
+                            Choose an HMI and run Scan HMI / Count texts to enable batch import.
+                        </p>
+                        <p id="tia-hmi-batch-status" class="status-box"
+                           aria-live="polite">
+                            No automatic XLSX batch import started.
+                        </p>
+                        <button type="button" id="tia-hmi-quality-report"
+                                class="secondary-button" disabled>
+                            Download batch quality XLSX
+                        </button>
+                        <div class="hmi-skipped-manager">
+                            <button type="button" id="tia-hmi-skipped-open"
+                                    class="secondary-button" disabled>
+                                Skipped translations (0)
+                            </button>
+                            <section id="tia-hmi-skipped-panel" class="hidden"
+                                     aria-label="Skipped HMI translations">
+                                <h4>Skipped translations</h4>
+                                <p class="hint">View every skipped text, correct the proposal
+                                    or retry it individually with Ollama. Prepare does not
+                                    import into TIA. Confirm each import explicitly; the
+                                    result must pass validation and re-export verification.</p>
+                                <p id="tia-hmi-skipped-status" class="status-box"
+                                   role="status" aria-live="polite">
+                                    Load a completed batch job to view skips.
+                                </p>
+                                <div id="tia-hmi-skipped-list" class="hmi-skipped-list"></div>
+                            </section>
+                        </div>
+                    </div>
+                    </div>
+                    </section>
 
                 </div>
 
