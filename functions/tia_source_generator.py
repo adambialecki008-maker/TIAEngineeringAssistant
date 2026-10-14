@@ -76,9 +76,13 @@ def generate_db_source(
         f'DATA_BLOCK "{name}"',
         "{ S7_Optimized_Access := 'TRUE' }",
         "VERSION : 0.1",
-        "RETAIN" if retain else "NON_RETAIN",
-        "VAR",
     ]
+    # RETAIN belongs to the DB variable declaration in SCL.  A standalone
+    # RETAIN directive is rejected by TIA during GenerateBlocksFromSource.
+    if retain:
+        lines.append("VAR RETAIN")
+    else:
+        lines.extend(("NON_RETAIN", "VAR"))
 
     for member in members:
         lines.extend(

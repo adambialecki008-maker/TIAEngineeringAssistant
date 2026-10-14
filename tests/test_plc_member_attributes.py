@@ -61,7 +61,8 @@ def test_guarded_import_uses_same_member_attributes_and_db_retain():
     assert (udt, db) == ("UDT_Motor", "DB_Motors")
     assert "EXTERNALVISIBLE" in udt_source
     assert " := TRUE;" in udt_source
-    assert "\nRETAIN\nVAR\n" in db_source
+    assert "\nVAR RETAIN\n" in db_source
+    assert "\nRETAIN\nVAR\n" not in db_source
     assert "NON_RETAIN" not in db_source
 
 
@@ -122,7 +123,7 @@ def test_preview_api_preserves_explicit_attributes():
     source = response.json()["source"]
     assert "EXTERNALACCESSIBLE := 'TRUE'" in source
     assert "Speed : Real := 12.5;" in source
-    assert "\nRETAIN\n" in source
+    assert "\nVAR RETAIN\n" in source
 
 
 def test_variable_options_exist_in_shared_editors_and_persist_with_config():
@@ -135,10 +136,10 @@ def test_variable_options_exist_in_shared_editors_and_persist_with_config():
         assert option + ": optionalBooleanValue" in member
     assert "saveProjectConfig()" in db
     assert 'db.retain = retainInput.checked' in db
-    assert '"RETAIN" if retain else "NON_RETAIN"' in (
-        (Path(__file__).resolve().parents[1] / "functions"
-         / "tia_source_generator.py").read_text(encoding="utf-8")
-    )
+    generator = (Path(__file__).resolve().parents[1] / "functions"
+                 / "tia_source_generator.py").read_text(encoding="utf-8")
+    assert 'lines.append("VAR RETAIN")' in generator
+    assert 'lines.extend(("NON_RETAIN", "VAR"))' in generator
 
 
 def test_no_unsafe_scl_injection_in_preview():
