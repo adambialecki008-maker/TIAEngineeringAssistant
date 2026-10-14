@@ -1,5 +1,6 @@
 """One batch UI for HMI XLSX and XML, with separate safe import endpoints."""
 from pathlib import Path
+from html.parser import HTMLParser
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / "gui" / "index.html").read_text(encoding="utf-8")
@@ -129,3 +130,64 @@ def test_auto_actions_and_both_manual_reviews_reside_in_step_three():
     assert 'hmi-batch-panel hmi-workflow-step' not in section
     assert 'hmiScopeEnabled(element.dataset.hmiScope)' in JS
     assert 'hmiAutomationControls?.classList.toggle("hidden", !scope)' in JS
+
+
+class _ContainerScanner(HTMLParser):
+    """Record the CSS ancestry of UI controls in the actual HTML tree."""
+
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.parents_by_id = {}
+
+    def handle_starttag(self, tag, attrs):
+        data = dict(attrs)
+        classes = set((data.get("class") or "").split())
+        marker = (tag, classes)
+        self.stack.append(marker)
+        if data.get("id"):
+            self.parents_by_id[data["id"]] = set().union(
+                *(entry[1] for entry in self.stack)
+            )
+
+    def handle_endtag(self, tag):
+        if self.stack:
+            expected, _ = self.stack.pop()
+            assert expected == tag, (
+                f"Malformed HTML: closed {tag} while inside {expected}"
+            )
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+
+def test_scan_disclosures_and_review_actions_belong_to_exactly_three_steps():
+    parser = _ContainerScanner()
+    parser.feed(HTML)
+    parents = parser.parents_by_id
+
+    for key in (
+        "tia-hmi-scan-summary",
+        "tia-hmi-text-lists-details",
+        "tia-hmi-project-texts-details",
+        "tia-hmi-preview-results",
+    ):
+        assert "hmi-scan-help" in parents[key], key
+
+    for key in (
+        "tia-hmi-batch-size",
+        "tia-hmi-total-to-translate",
+    ):
+        assert "hmi-scope-step" in parents[key], key
+
+    for key in (
+        "tia-hmi-translate-button",
+        "tia-hmi-import-reviewed-button",
+        "tia-hmi-review-results",
+        "tia-hmi-text-list-review",
+        "tia-hmi-xml-auto-start",
+        "tia-hmi-batch-start",
+    ):
+        assert "hmi-manual-step" in parents[key], key
+
