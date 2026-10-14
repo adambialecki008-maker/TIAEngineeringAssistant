@@ -271,6 +271,27 @@ def test_semantic_fingerprint_rejects_real_text_list_changes(
     assert not mock_tia["imported"]
 
 
+def test_review_queue_skips_rejected_indices_without_losing_later_xml_entries(
+    mock_tia,
+):
+    request = {**BASE, "max_rows": 1, "exclude_entry_indices": [0, 1]}
+    prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=request)
+    assert prepared.status_code == 200, prepared.text
+    body = prepared.json()
+    assert body["candidate_count"] == 1
+    assert body["approved_count"] == 1
+    assert body["rows"][0]["entry_index"] == 3
+    assert body["rows"][0]["source"] == "Ready"
+    assert mock_tia["imported"] == []
+
+
+def test_negative_review_queue_xml_exclusion_is_rejected_before_import(mock_tia):
+    request = {**BASE, "exclude_entry_indices": [-1]}
+    response = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=request)
+    assert response.status_code == 422
+    assert not mock_tia["imported"]
+
+
 def test_unsafe_manual_approval_is_blocked_before_any_import(mock_tia):
     prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE).json()
     proposals = [
