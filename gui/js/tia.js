@@ -1540,8 +1540,11 @@ export function initTiaUi(
                 : listsSelected ? xmlNote
                 : "Select at least one text type to populate the queue.";
         }
-        // One shared action pair; internal XML list is selected automatically.
-        if (hmiTextListSelect) {
+        // Keep a prepared XML review bound to its ORIGINAL Text list.
+        // Selecting a new eligible list during a state refresh invalidates the
+        // review token/identity and silently disables Approve & import.
+        if (hmiTextListSelect && !hmiTextListReviewToken
+            && !hmiTextListBusy && !hmiReviewQueuePending) {
             hmiTextListSelect.value = nextEligibleTextList()?.name || "";
         }
         const hasTranslationEngine = Boolean(selection?.ollama_model);
@@ -2168,8 +2171,11 @@ export function initTiaUi(
         if (hmiReviewQueueActive) {
             hmiReviewQueuePaused = true;
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
-                "Review queue pause requested. Finish the current approved batch; "
-                + "the next batch will not prepare until resumed.";
+                hmiReviewQueuePending
+                    ? "Current batch still awaits approval in Step 2. "
+                        + "After you approve or skip it, the queue will pause."
+                    : "Pause requested. The next batch will not prepare "
+                        + "until resumed.";
             updateHmiTranslateButtonState();
             return;
         }
@@ -2287,6 +2293,7 @@ export function initTiaUi(
             + "Use a BACKUP/COPY of the TIA project."
         )) return;
         hmiReviewQueueActive = true;
+        setHmiTranslationStatus("", "normal");
         hmiReviewQueuePending = false;
         hmiReviewQueuePaused = false;
         hmiReviewQueueQuota = quota;
@@ -2308,7 +2315,8 @@ export function initTiaUi(
         if (!hmiReviewQueueActive || hmiReviewQueuePending) return;
         if (hmiReviewQueuePaused) {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
-                "Queue paused. Press Resume review queue to prepare the next batch.";
+                "Queue paused between batches. Click Resume review queue "
+                + "to prepare the next batch.";
             updateHmiTranslateButtonState();
             return;
         }
@@ -2802,6 +2810,7 @@ export function initTiaUi(
             }
             if (result.review_id) {
                 hmiTextListReview?.classList.remove("hidden");
+                setHmiTranslationStatus("", "normal");
             }
             return Boolean(result.review_id && result.approved_count);
         } catch (error) {
@@ -3267,9 +3276,10 @@ export function initTiaUi(
                 hmiBatchTotalInput.placeholder =
                     "Eligible selected scopes: " + combinedMissingCount();
             renderHmiBatchPlan();
-            setHmiTranslationStatus(
-                "Text lists scanned. Use Prepare for manual review or choose automatic XML batches after backing up the project.", "success"
-            );
+            // Scan status belongs to Step 1. The Step 2 editor is hidden
+            // until a real review is prepared; do not show obsolete hints
+            // about separate manual and automatic XML workflows.
+            setHmiTranslationStatus("", "normal");
             return true;
         } catch (error) {
             if (hmiScanSummary) {
