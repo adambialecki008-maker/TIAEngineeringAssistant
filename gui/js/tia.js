@@ -553,6 +553,7 @@ export function initTiaUi(
     let hmiReviewQueueTypes = {project: false, text_lists: false};
     let hmiReviewQueueCurrentScope = null;
     let hmiReviewQueueProjectExhausted = false;
+    const hmiReviewQueueExcludedProject = new Set();
     let hmiReviewQueuePendingSkippedList = null;
     const hmiReviewQueueBlockedLists = new Set();
     const hmiReviewQueueExcludedXml = new Map();
@@ -2232,6 +2233,7 @@ export function initTiaUi(
         hmiReviewQueueStartApproved = hmiCombinedApprovedCount;
         hmiReviewQueueTypes = {project: useProject, text_lists: useXml};
         hmiReviewQueueProjectExhausted = false;
+        hmiReviewQueueExcludedProject.clear();
         hmiReviewQueuePendingSkippedList = null;
         hmiReviewQueueBlockedLists.clear();
         hmiReviewQueueExcludedXml.clear();
@@ -2352,9 +2354,11 @@ export function initTiaUi(
                 appendHmiRunIssue("XLSX", name, element.dataset.sourceText,
                     element.value, "Reviewer skipped this prepared batch");
             }
-            // Project prepare always selects the first remaining candidate
-            // set. Do not loop on the same intentionally skipped targets.
-            hmiReviewQueueProjectExhausted = true;
+            // Skip just the current candidate sources; proceed to later
+            // eligible XLSX texts in following batches.
+            for (const element of editors) {
+                hmiReviewQueueExcludedProject.add(element.dataset.sourceText);
+            }
             discardHmiReview();
         } else {
             for (const element of hmiTextListReviewRows?.querySelectorAll(
@@ -3856,6 +3860,8 @@ export function initTiaUi(
                 {
                     ...selection,
                     max_rows: prepareCount,
+                    exclude_source_texts: hmiReviewQueueActive
+                        ? [...hmiReviewQueueExcludedProject] : [],
                     progress_id: progressId,
                 }
             );
@@ -3868,6 +3874,7 @@ export function initTiaUi(
                 for (const item of result.skipped || []) {
                     appendHmiRunIssue("XLSX", "Project texts",
                         item.source_text, item.proposed_target, item.reason);
+                    hmiReviewQueueExcludedProject.add(item.source_text);
                 }
             }
             renderPreparedHmiReview(result, key);
