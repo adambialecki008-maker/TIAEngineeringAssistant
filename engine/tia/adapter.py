@@ -42,7 +42,9 @@ def adapter_error_status(
 
 
     if (
-        normalized.startswith("DEVICE_NAME_EXISTS|")
+        normalized.startswith("PLC_STRUCTURE_NAME_EXISTS|")
+        or normalized.startswith("PROJECT_CHANGED|")
+        or normalized.startswith("DEVICE_NAME_EXISTS|")
         or normalized.startswith("TAG_NAME_EXISTS|")
         or normalized.startswith("TAG_ADDRESS_EXISTS|")
         or normalized.startswith("PLC_NAME_EXISTS|")
@@ -53,7 +55,8 @@ def adapter_error_status(
 
 
     if (
-        normalized.startswith("Unsupported PLC family:")
+        normalized.startswith("INVALID_PLC_STRUCTURE_IMPORT")
+        or normalized.startswith("Unsupported PLC family:")
         or normalized.startswith("NO_TAGS_TO_CREATE")
         or normalized.startswith("TAG_TABLE_NAME_REQUIRED")
         or normalized.startswith("PROGRAM_BLOCK_EXPORT_ARGUMENT_REQUIRED")
