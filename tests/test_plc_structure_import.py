@@ -112,7 +112,9 @@ def test_plan_is_read_only_and_lists_sources(monkeypatch):
     result = preflight(request_data())
     assert result.status_code == 200, result.text
     data = result.json()
-    assert data["counts"] == {"create": 2, "identical": 0, "conflict": 0}
+    assert data["counts"] == {
+        "create": 2, "identical": 0, "conflict": 0, "blocked": 0
+    }
     assert data["will_create"] == ["UDT_Motor", "DB_Motors"]
     assert data["can_apply"] is True
     assert len(data["token"]) == 64
@@ -147,7 +149,9 @@ def test_same_existing_structure_is_skipped_and_missing_db_is_created(monkeypatc
     plan = preflight(payload)
     assert plan.status_code == 200, plan.text
     data = plan.json()
-    assert data["counts"] == {"create": 1, "identical": 1, "conflict": 0}
+    assert data["counts"] == {
+        "create": 1, "identical": 1, "conflict": 0, "blocked": 0
+    }
     assert data["will_create"] == ["DB_Motors"]
     applied = apply(payload, data)
     assert applied.status_code == 200, applied.text
@@ -181,7 +185,9 @@ def test_different_existing_structure_blocks_whole_job(monkeypatch):
     )
     monkeypatch.setattr(facade, "_run_adapter", adapter)
     data = preflight(request_data()).json()
-    assert data["counts"] == {"create": 1, "identical": 0, "conflict": 1}
+    assert data["counts"] == {
+        "create": 0, "identical": 0, "conflict": 1, "blocked": 1
+    }
     assert "UDT_Motor" in [x["name"] for x in data["items"]
                             if x["status"] == "conflict"]
     assert data["can_apply"] is False
