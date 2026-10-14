@@ -1361,7 +1361,7 @@
                             </p>
                             <div class="action-row">
                                 <button id="tia-hmi-scan-button"
-                                        type="button" class="secondary-button">
+                                        type="button" class="primary-button">
                                     Scan selected texts
                                 </button>
                                 <span id="tia-hmi-scan-instruction" class="hint">
@@ -1472,7 +1472,9 @@
                                 <label for="tia-hmi-batch-size">Batch size (texts per batch)</label>
                                 <input id="tia-hmi-batch-size" type="number"
                                        min="1" max="50" step="1" value="5">
-                                <p class="hint">1–50 texts in each batch. Applies to all checked types.</p>
+                                <p class="hint">1–50 texts per translation batch across checked types.
+                                    For Text lists, TIA imports one complete XML list at a time,
+                                    even when only a subset of entries is translated.</p>
                             </div>
                             <div class="field-group">
                                 <label for="tia-hmi-total-to-translate">Total to translate (selected scopes)</label>
@@ -1493,10 +1495,11 @@
                             Scan the selected text types to calculate the combined batch plan.
                         </p>
                         <h5 class="hmi-queue-title">Combined translation queue <span class="hmi-queue-subtitle">(selected types)</span></h5>
-                        <p class="hint">One ordered queue for all checked types.
-                            Project texts are one work group; each XML Text list is
-                            an additional group. Counts are from the read-only scan.
-                            The backend still validates and verifies each format separately.</p>
+                        <p class="hint" id="tia-hmi-queue-scope-note">
+                            Project texts (XLSX): one Project texts work item, translated in batches.
+                            Text lists (XML): one complete Text list is imported at a time,
+                            with its untouched entries preserved. Only the checked types are processed.
+                        </p>
                         <div class="table-wrapper hmi-translation-queue-wrapper">
                             <table class="hmi-text-table hmi-translation-queue-table">
                                 <thead><tr><th>#</th><th>Type</th><th>Queue item</th>
@@ -1504,7 +1507,7 @@
                                 <tbody id="tia-hmi-translation-queue"></tbody>
                             </table>
                         </div>
-                        <details id="tia-hmi-edit-details" class="hmi-edit-details">
+                        <details id="tia-hmi-edit-details" class="hmi-edit-details hidden">
                             <summary><span class="hmi-section-icon">✎</span> Translation preview &amp; edit
                                 <span id="tia-hmi-edit-caption" class="hmi-queue-subtitle">Prepare a batch to review translations</span>
                             </summary>
