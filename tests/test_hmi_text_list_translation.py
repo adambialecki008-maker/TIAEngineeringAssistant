@@ -292,6 +292,31 @@ def test_negative_review_queue_xml_exclusion_is_rejected_before_import(mock_tia)
     assert not mock_tia["imported"]
 
 
+def test_unsafe_xml_manual_edit_can_be_corrected_without_losing_review(mock_tia):
+    prepared = CLIENT.post(
+        "/api/v1/tia/hmis/text-lists/prepare", json=BASE,
+    ).json()
+    proposals = [
+        {"entry_index": row["entry_index"], "proposal": row["proposal"]}
+        for row in prepared["rows"]
+    ]
+    proposals[0]["proposal"] = "({Injected})"
+    rejected = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"], "proposals": proposals,
+    })
+    assert rejected.status_code == 422
+    assert "TEXT_LIST_REVIEW_EDIT_INVALID:" in rejected.json()["detail"]
+    assert mock_tia["imported"] == []
+    # Same review token may be edited again only because no TIA write started.
+    proposals[0]["proposal"] = prepared["rows"][0]["proposal"]
+    accepted = CLIENT.post("/api/v1/tia/hmis/text-lists/import", json={
+        "review_id": prepared["review_id"], "proposals": proposals,
+    })
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["status"] == "verified"
+    assert len(mock_tia["imported"]) == 1
+
+
 def test_unsafe_manual_approval_is_blocked_before_any_import(mock_tia):
     prepared = CLIENT.post("/api/v1/tia/hmis/text-lists/prepare", json=BASE).json()
     proposals = [
