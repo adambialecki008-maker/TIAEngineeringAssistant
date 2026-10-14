@@ -133,6 +133,21 @@ def _preview_text(node):
     return "".join(node.itertext()).strip()[:500]
 
 
+def _read_only_language_preview(entry):
+    """Fallback for unknown XML layouts; never marks an entry importable."""
+    preview = {}
+    for node in entry.iter():
+        tag = _local(node.tag)
+        if tag == "Value" and node.attrib.get("lang"):
+            preview.setdefault(node.attrib["lang"].casefold(), _preview_text(node))
+        elif tag == "MultilingualTextItem":
+            culture = _node_text(_attribute(node, "Culture"))
+            text = _attribute(node, "Text")
+            if culture and text is not None:
+                preview.setdefault(culture.casefold(), _preview_text(text))
+    return preview
+
+
 def _extract_entries(root, entries, source_culture: str, target_culture: str):
     result = []
     for i, node in enumerate(entries):
@@ -149,7 +164,11 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
                 preview = _preview_text(item)
                 if parsed is None:
                     complex_text = True
-                    reasons.append("Value has formatted or linked XML")
+                    tags = ", ".join(dict.fromkeys(
+                        _local(child.tag) for child in item.iter()
+                        if child is not item
+                    ))[:120]
+                    reasons.append("Value has formatted or linked XML: " + tags)
             else:
                 culture_node = _attribute(item, "Culture")
                 text = _attribute(item, "Text")
@@ -159,7 +178,11 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
                 preview = _preview_text(text)
                 if parsed is None:
                     complex_text = True
-                    reasons.append("Text contains structured XML")
+                    tags = ", ".join(dict.fromkeys(
+                        _local(child.tag) for child in text.iter()
+                        if child is not text
+                    ))[:120] if text is not None else "(missing Text)"
+                    reasons.append("Text contains structured XML: " + tags)
             if not culture:
                 complex_text = True
                 reasons.append("Missing language Culture/lang attribute")
@@ -172,6 +195,11 @@ def _extract_entries(root, entries, source_culture: str, target_culture: str):
             previews[key] = preview
             if text_node is not None:
                 languages[key] = (item, text_node, value)
+        if parent is None:
+            # Reveal human-readable strings inside unfamiliar exports without
+            # treating those entries as eligible for import.
+            for culture, text in _read_only_language_preview(node).items():
+                previews.setdefault(culture, text)
         source = languages.get(source_culture.casefold())
         target = languages.get(target_culture.casefold())
         reason = None
