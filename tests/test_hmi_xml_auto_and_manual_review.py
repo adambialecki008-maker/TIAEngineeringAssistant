@@ -98,6 +98,48 @@ def test_manual_project_texts_require_exact_source_set(monkeypatch):
         hmi_review._REVIEWS.pop(token, None)
 
 
+def test_manual_project_edit_is_applied_to_validated_review_before_import(
+    monkeypatch,
+):
+    token, pending = _pending_review()
+
+    class WriteReached(Exception):
+        pass
+
+    adapter_calls = []
+    monkeypatch.setattr(
+        hmi_review, "validate_hmi_translation_quality",
+        lambda *args: None,
+    )
+    monkeypatch.setattr(
+        hmi_review, "normalize_hmi_translation",
+        lambda source, proposal: proposal,
+    )
+
+    def fake_adapter(*args):
+        adapter_calls.append(args)
+        raise WriteReached()
+
+    monkeypatch.setattr(hmi_review, "run_adapter", fake_adapter)
+    try:
+        # Deliberately halt at the FIRST possible adapter call, without TIA.
+        import pytest
+        with pytest.raises(WriteReached):
+            hmi_review._import_reviewed_hmi_translations(
+                hmi_review.ImportReviewRequest(
+                    review_id=token,
+                    proposals=[hmi_review.ReviewedTextProposal(
+                        source_text="Start",
+                        proposal="Manual user text",
+                    )],
+                )
+            )
+        assert pending["rows"][0]["proposal"] == "Manual user text"
+        assert adapter_calls[0][0] == "add-project-language"
+    finally:
+        hmi_review._REVIEWS.pop(token, None)
+
+
 def test_manual_project_review_is_optional_for_existing_batch_api():
     # Automatic XLSX job calls ImportReviewRequest(review_id=token)
     # and must remain backward compatible.
