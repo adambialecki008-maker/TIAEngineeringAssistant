@@ -1,7 +1,8 @@
-"""Guarded pilot import: one PLC data type and one global data block.
+"""Read-only multi-UDT/DB preflight and guarded create-only TIA import.
 
-The plan endpoint is read-only. The apply endpoint is intentionally restricted
-to a single UDT/DB pair and rechecks the live project before any write.
+All generated objects are compared with the live PLC. Different/uncertain
+existing objects block the entire operation; identical definitions are skipped.
+Import only missing objects after user confirmation and a fresh token recheck.
 """
 from __future__ import annotations
 
@@ -17,13 +18,14 @@ from pydantic import BaseModel, Field
 from engine.project import ProjectSpecification
 from engine.tia.compat import run_adapter
 from engine.tia.project import get_project_context
-from engine.tia.structures import get_plc_structures
+from engine.tia.structures import get_plc_structure, get_plc_structures
 from functions.tia_source_generator import generate_db_source, generate_udt_source
 
 
 router = APIRouter()
 _VALID_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _VALID_TYPE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\[[0-9]+\])?$")
+_ARRAY = re.compile(r"array\s*\[\s*(-?\d+)\s*\.\.\s*(-?\d+)\s*\]\s*of\s*[\"']?([\w]+)[\"']?", re.I)
 
 
 class PlcStructureImportRequest(BaseModel):
@@ -36,116 +38,212 @@ class PlcStructureImportRequest(BaseModel):
 class PlcStructureApplyRequest(PlcStructureImportRequest):
     expected_token: str = Field(pattern=r"^[a-f0-9]{64}$")
     backup_confirmed: bool = False
+    # Explicit acknowledgement of the exact list found during preflight.
+    approved_create: list[str] = Field(default_factory=list)
+
+
+def _members_valid(members):
+    for member in members:
+        if not _VALID_NAME.fullmatch(member.name):
+            raise HTTPException(422, "Invalid SCL member name: " + member.name)
+        kind = member.data_type.casefold()
+        if kind == "struct":
+            _members_valid(member.struct_members or [])
+        else:
+            element = member.array_element_type if kind == "array" else member.data_type
+            if not element or not _VALID_TYPE.fullmatch(element):
+                raise HTTPException(422, "Invalid SCL member data type: " + str(element))
+
+
+def _references(members):
+    for m in members:
+        if m.data_type.casefold() == "struct":
+            yield from _references(m.struct_members or [])
+        else:
+            yield (m.array_element_type if m.data_type.casefold() == "array"
+                   else m.data_type)
+
+
+def _definitions(spec: ProjectSpecification) -> list[dict]:
+    if not spec.udts and not spec.dbs:
+        raise HTTPException(422, "Select at least one UDT or DB.")
+    names: set[str] = set()
+    for item in [*spec.udts, *spec.dbs]:
+        if not _VALID_NAME.fullmatch(item.name):
+            raise HTTPException(422, "Invalid PLC object name: " + item.name)
+        if item.name.casefold() in names:
+            raise HTTPException(422, "Duplicate UDT/DB name: " + item.name)
+        names.add(item.name.casefold())
+        _members_valid(item.fields if hasattr(item, "fields") else item.members)
+
+    # Topological order: a new UDT can depend on any other newly defined UDT,
+    # but recursive/circular references cannot be generated safely.
+    by_name = {u.name.casefold(): u for u in spec.udts}
+    ordered, visiting, visited = [], set(), set()
+
+    def visit(udt):
+        key = udt.name.casefold()
+        if key in visiting:
+            raise HTTPException(422, "Circular UDT dependency: " + udt.name)
+        if key in visited:
+            return
+        visiting.add(key)
+        for ref in _references(udt.fields):
+            child = by_name.get(ref.casefold())
+            if child is not None:
+                visit(child)
+        visiting.remove(key)
+        visited.add(key)
+        ordered.append(udt)
+
+    for udt in spec.udts:
+        visit(udt)
+    mapping = {udt.name.casefold(): udt.name for udt in spec.udts}
+    definitions = []
+    for kind, items in (("udt", ordered), ("db", spec.dbs)):
+        for item in items:
+            source = (generate_udt_source(item.name, item.fields, mapping)
+                      if kind == "udt"
+                      else generate_db_source(
+                          item.name, item.members, mapping, retain=item.retain))
+            try:
+                source.encode("ascii")
+            except UnicodeEncodeError as exc:
+                raise HTTPException(
+                    422, f"{kind.upper()} {item.name} contains non-ASCII source text."
+                ) from exc
+            definitions.append({"kind": kind, "name": item.name,
+                                "source": source, "spec": item})
+    return definitions
 
 
 def _source_files(spec: ProjectSpecification) -> tuple[str, str, str, str]:
-    if len(spec.udts) != 1 or len(spec.dbs) != 1:
-        raise HTTPException(
-            422, "Pilot import requires exactly one UDT and one DB."
-        )
-    udt, db = spec.udts[0], spec.dbs[0]
-    if any(not _VALID_NAME.fullmatch(value) for value in (udt.name, db.name)):
-        raise HTTPException(
-            422, "UDT and DB names must use ASCII letters, digits and underscores."
-        )
-    if udt.name.casefold() == db.name.casefold():
-        raise HTTPException(422, "UDT and DB names must be different.")
-    # The source generator interpolates member identifiers into SCL. Validate
-    # all nested names and type declarations before the text reaches Openness.
-    def validate_members(members):
-        for member in members:
-            if not _VALID_NAME.fullmatch(member.name):
-                raise HTTPException(422, "Invalid SCL member name: " + member.name)
-            kind = member.data_type.casefold()
-            if kind == "struct":
-                validate_members(member.struct_members or [])
-            else:
-                element = (member.array_element_type if kind == "array"
-                           else member.data_type)
-                if not element or not _VALID_TYPE.fullmatch(element):
-                    raise HTTPException(422, "Invalid SCL member data type: "
-                                        + str(element))
+    """Compatibility helper for the original 1 UDT + 1 DB pilot tests."""
+    definitions = _definitions(spec)
+    if len(definitions) != 2 or [d["kind"] for d in definitions] != ["udt", "db"]:
+        raise HTTPException(422, "This legacy helper requires one UDT and one DB.")
+    return (definitions[0]["name"], definitions[1]["name"],
+            definitions[0]["source"], definitions[1]["source"])
 
-    validate_members(udt.fields)
-    validate_members(db.members)
-    # The pilot does not resolve dependencies between multiple newly generated
-    # UDTs; reject self references before attempting to modify a live project.
-    def uses_type(members, sought):
-        for field in members:
-            if field.data_type.casefold() == "struct":
-                if uses_type(field.struct_members or [], sought):
-                    return True
-            elif (field.array_element_type if field.data_type.casefold()
-                  == "array" else field.data_type).casefold() == sought:
+
+def _canonical_type(value: str) -> str:
+    text = re.sub(r'["\s]', "", value or "").casefold()
+    m = _ARRAY.fullmatch((value or "").strip())
+    if m:
+        return f"array[{int(m.group(1))}..{int(m.group(2))}]of{m.group(3).casefold()}"
+    return text
+
+
+def _expected_members(members, parent=""):
+    result = []
+    for member in members:
+        path = parent + "." + member.name if parent else member.name
+        if member.data_type.casefold() == "array":
+            type_name = (f"Array[{member.array_lower_bound}..{member.array_upper_bound}]"
+                         f" of {member.array_element_type}")
+        else:
+            type_name = member.data_type
+        result.append((path.casefold(), _canonical_type(type_name)))
+        if member.data_type.casefold() == "struct":
+            result.extend(_expected_members(member.struct_members or [], path))
+    return result
+
+
+def _has_unverifiable_attributes(definition: dict) -> bool:
+    """Existing XML detail parser does not expose all initial/HMI/RETAIN values.
+
+    Never falsely label complex objects identical based on names/fields alone.
+    """
+    spec = definition["spec"]
+    if definition["kind"] == "db" and spec.retain:
+        return True
+
+    def special(members):
+        for m in members:
+            if (m.comment or m.start_value is not None
+                or m.hmi_visible is not None or m.hmi_accessible is not None
+                or m.hmi_writable is not None):
+                return True
+            if special(m.struct_members or []):
                 return True
         return False
 
-    if uses_type(udt.fields, udt.name.casefold()):
-        raise HTTPException(422, "Recursive UDT definitions are not supported.")
-    types = {udt.name.casefold(): udt.name}
-    udt_text = generate_udt_source(udt.name, udt.fields, types)
-    db_text = generate_db_source(db.name, db.members, types, retain=db.retain)
-    for label, value in (("UDT", udt_text), ("DB", db_text)):
-        try:
-            value.encode("ascii")
-        except UnicodeEncodeError as exc:
-            raise HTTPException(
-                422, f"{label} source contains non-ASCII characters. "
-                     "TIA external source import pilot requires ASCII; "
-                     "use ASCII comments for this first test."
-            ) from exc
-    return udt.name, db.name, udt_text, db_text
+    return special(spec.fields if definition["kind"] == "udt" else spec.members)
+
+
+def _compare_existing(request, definition: dict, existing) -> tuple[str, str]:
+    if _has_unverifiable_attributes(definition):
+        return "conflict", ("Existing source has attributes/RETAIN/start values "
+                            "that this read-only comparison cannot fully verify; "
+                            "manual TIA review required. No overwrite.")
+    try:
+        detail = get_plc_structure(
+            request.process_id, request.device_name, request.plc_name,
+            definition["kind"], existing.group_path, existing.name
+        )
+        actual = [(m.path.casefold(), _canonical_type(m.data_type))
+                  for m in detail.members]
+        expected = _expected_members(
+            definition["spec"].fields if definition["kind"] == "udt"
+            else definition["spec"].members)
+        if actual == expected and all(not m.comment for m in detail.members):
+            return "identical", "Matching declared field paths/types. Skipped."
+        return "conflict", ("Existing member paths, types or comments differ. "
+                            "No existing object will be overwritten.")
+    except Exception as exc:
+        # No silent acceptance of a failed read-only export.
+        return "conflict", "Existing structure could not be verified: " + str(exc)
 
 
 def _make_plan(request: PlcStructureImportRequest) -> dict:
-    udt_name, db_name, udt_text, db_text = _source_files(request.project)
+    definitions = _definitions(request.project)
     context = get_project_context(request.process_id)
-    targets = [
-        plc for plc in context.plcs
-        if plc.device_name.casefold() == request.device_name.casefold()
-        and plc.plc_name.casefold() == request.plc_name.casefold()
-    ]
+    targets = [plc for plc in context.plcs
+               if plc.device_name.casefold() == request.device_name.casefold()
+               and plc.plc_name.casefold() == request.plc_name.casefold()]
     if len(targets) != 1:
-        raise HTTPException(404, "The selected PLC is not in the open TIA project.")
+        raise HTTPException(404, "Selected PLC is not in the open TIA project.")
     structures = get_plc_structures(
-        request.process_id, request.device_name, request.plc_name
-    )
-    existing = sorted(
-        [("udt", item.name.casefold()) for item in structures.udts]
-        + [("db", item.name.casefold()) for item in structures.data_blocks]
-    )
-    collisions = [
-        name for name in (udt_name, db_name)
-        if any(existing_name == name.casefold() for _, existing_name in existing)
-    ]
-    if collisions:
-        raise HTTPException(
-            409, "Existing PLC objects will not be overwritten: "
-            + ", ".join(collisions)
-        )
-    fingerprint = {
-        "process_id": request.process_id,
-        "device_name": request.device_name,
-        "plc_name": request.plc_name,
-        "project_name": context.project_name,
-        "existing": existing,
-        "udt_name": udt_name,
-        "db_name": db_name,
-        "udt_source": udt_text,
-        "db_source": db_text,
+        request.process_id, request.device_name, request.plc_name)
+    existing = {}
+    for item in structures.udts:
+        existing.setdefault(item.name.casefold(), []).append(("udt", item))
+    for item in structures.data_blocks:
+        existing.setdefault(item.name.casefold(), []).append(("db", item))
+    report = []
+    for definition in definitions:
+        collisions = existing.get(definition["name"].casefold(), [])
+        if not collisions:
+            state, reason = "create", "Not present in TIA; safe to create after confirmation."
+        elif len(collisions) != 1 or collisions[0][0] != definition["kind"]:
+            state, reason = "conflict", "Name collision with another PLC object/type."
+        else:
+            state, reason = _compare_existing(request, definition, collisions[0][1])
+        report.append({
+            "kind": definition["kind"], "name": definition["name"],
+            "status": state, "reason": reason,
+            "source": definition["source"],
+        })
+    snapshot = {
+        "process_id": request.process_id, "device": request.device_name,
+        "plc": request.plc_name, "project": context.project_name,
+        "existing": sorted((k, kind, getattr(item, "group_path", ""))
+                           for k, values in existing.items()
+                           for kind, item in values),
+        "rows": report,
     }
-    token = hashlib.sha256(
-        json.dumps(fingerprint, sort_keys=True, ensure_ascii=True).encode()
-    ).hexdigest()
+    token = hashlib.sha256(json.dumps(
+        snapshot, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+    create = [row["name"] for row in report if row["status"] == "create"]
+    conflicts = [row["name"] for row in report if row["status"] == "conflict"]
     return {
-        "token": token,
-        "project_name": context.project_name,
-        "device_name": request.device_name,
-        "plc_name": request.plc_name,
-        "udt_name": udt_name,
-        "db_name": db_name,
-        "udt_source": udt_text,
-        "db_source": db_text,
+        "token": token, "project_name": context.project_name,
+        "device_name": request.device_name, "plc_name": request.plc_name,
+        "items": report,
+        "counts": {status: sum(x["status"] == status for x in report)
+                   for status in ("create", "identical", "conflict")},
+        "can_apply": bool(create) and not conflicts,
+        "will_create": create,
     }
 
 
@@ -157,63 +255,57 @@ def plan_plc_structure_import(request: PlcStructureImportRequest) -> dict:
 @router.post("/plc-structure-import/apply")
 def apply_plc_structure_import(request: PlcStructureApplyRequest) -> dict:
     if not request.backup_confirmed:
-        raise HTTPException(
-            422, "Confirm that the TIA project is a backup/test copy."
-        )
+        raise HTTPException(422, "Confirm that the TIA project is a test/backup copy.")
     current = _make_plan(request)
     if current["token"] != request.expected_token:
         raise HTTPException(
-            409, "The TIA project or generated source changed since preview. "
-                 "Re-run the import plan before confirming."
-        )
-
-    with tempfile.TemporaryDirectory(prefix="tia_structures_") as folder:
-        udt_path = Path(folder) / "generated.udt"
-        db_path = Path(folder) / "generated.db"
-        udt_path.write_text(current["udt_source"] + "\n", encoding="ascii")
-        db_path.write_text(current["db_source"] + "\n", encoding="ascii")
-        try:
-            lines = run_adapter(
-                "import-plc-structures",
-                str(request.process_id),
-                request.device_name,
-                request.plc_name,
-                current["project_name"],
-                current["udt_name"],
-                current["db_name"],
-                str(udt_path),
-                str(db_path),
-            )
-        except HTTPException as exc:
-            # A failed second source may leave an unsaved UDT in the open
-            # TIA project. Never misreport the operation as atomic.
-            raise HTTPException(
-                exc.status_code,
-                "Import failed. Inspect the OPEN TIA project for partial "
-                "changes before retrying. " + str(exc.detail),
-            ) from exc
-
-    confirmed = {line for line in lines if line.startswith("STRUCTURE_IMPORTED|")}
-    for kind, name in (("UDT", current["udt_name"]), ("DB", current["db_name"])):
-        if f"STRUCTURE_IMPORTED|{kind}|{name}" not in confirmed:
-            raise HTTPException(
-                502, f"Adapter did not confirm {kind} {name}. Inspect TIA project."
-            )
-    saved = next(
-        (line.split("|", 1)[1] for line in lines
-         if line.startswith("PROJECT_SAVED|")), None
-    )
-    if saved != current["project_name"]:
+            409, "TIA project or generated data changed since preflight. "
+                 "Re-run the report before importing.")
+    if not current["can_apply"]:
+        raise HTTPException(409, "No safe import: existing differences or nothing to create.")
+    if request.approved_create != current["will_create"]:
         raise HTTPException(
-            502, "Objects were reported as generated but TIA project SAVE was "
-                 "not confirmed. Inspect the open project before retrying."
-        )
+            422, "The explicitly approved list differs from the current preflight. "
+                 "Review and confirm the exact missing objects.")
+    with tempfile.TemporaryDirectory(prefix="tia_structures_") as folder:
+        manifest = Path(folder) / "manifest.txt"
+        lines = []
+        for n, row in enumerate(current["items"]):
+            if row["status"] != "create":
+                continue
+            extension = ".udt" if row["kind"] == "udt" else ".db"
+            output = Path(folder) / f"structure_{n}{extension}"
+            output.write_text(row["source"] + "\n", encoding="ascii")
+            lines.append("|".join((row["kind"].upper(), row["name"], str(output))))
+        manifest.write_text("\n".join(lines), encoding="utf-8")
+        try:
+            result = run_adapter(
+                "import-plc-structure-batch", str(request.process_id),
+                request.device_name, request.plc_name,
+                current["project_name"], str(manifest))
+        except HTTPException as exc:
+            raise HTTPException(
+                exc.status_code, "TIA import failed. Open project may contain "
+                "partial UNSAVED changes. Inspect it before retrying. "
+                + str(exc.detail)) from exc
+
+    confirmed = set(line for line in result if line.startswith("STRUCTURE_IMPORTED|"))
+    for row in current["items"]:
+        if row["status"] == "create":
+            entry = f"STRUCTURE_IMPORTED|{row['kind'].upper()}|{row['name']}"
+            if entry not in confirmed:
+                raise HTTPException(
+                    502, "Missing TIA creation confirmation: " + entry
+                    + ". Inspect the open project before retrying.")
+    saved = next((line.split("|", 1)[1] for line in result
+                  if line.startswith("PROJECT_SAVED|")), None)
+    if saved != current["project_name"]:
+        raise HTTPException(502, "TIA project SAVE was not confirmed. "
+                            "Inspect the open project before retrying.")
     return {
-        "status": "imported",
-        "project_name": current["project_name"],
-        "device_name": request.device_name,
-        "plc_name": request.plc_name,
-        "udt_name": current["udt_name"],
-        "db_name": current["db_name"],
+        "status": "imported", "project_name": current["project_name"],
+        "created": current["will_create"],
+        "skipped_identical": [x["name"] for x in current["items"]
+                              if x["status"] == "identical"],
         "project_saved": saved,
     }
