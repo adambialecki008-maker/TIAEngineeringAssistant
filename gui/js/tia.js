@@ -4308,78 +4308,95 @@ export function initTiaUi(
             "Importing approved texts into TIA, then verifying by re-export..."
         );
 
-        // A review can be imported once. On any failure a fresh review is required.
+        // Keep backend-confirmed writes separate from optional UI re-scans.
+        // This review token is single-use once a write may have started.
         preparedHmiReview = null;
-        let refreshVerified = false;
         try {
-            const result = await postJson(
-                "/api/v1/tia/hmis/import-reviewed-translations",
-                { review_id: review.reviewId, proposals }
-            );
-            const count = result.verified_rows || 0;
-            // Count unique approved texts, not repeated matching XLSX rows.
-            hmiCombinedApprovedCount += review.rowCount;
-            setHmiTranslationStatus(
-                "TIA import " + result.import_state + ". Verified "
-                + count + " of " + result.imported_rows
-                + " translated row(s) by exporting from TIA again."
-                + (result.import_log ? " Log: " + result.import_log : ""),
-                count === result.imported_rows ? "success" : "error"
-            );
-            await refreshProjectLanguages();
-            const restored = restoreHmiTranslationAfterImport(
-                selectionBeforeImport
-            );
-            if (restored) {
-                // A completed import changes the XLSX values. Re-preview the
-                // updated TIA project before preparing the remaining texts.
-                // This preserves the verified HMI root and target language.
-                const previewUpdated = await previewSelectedHmi(true);
-                if (previewUpdated) {
-                    refreshVerified = true;
+            let result;
+            try {
+                result = await postJson(
+                    "/api/v1/tia/hmis/import-reviewed-translations",
+                    {review_id: review.reviewId, proposals}
+                );
+            } catch (error) {
+                if (error.message?.includes("PROJECT_TEXT_REVIEW_EDIT_INVALID:")) {
+                    // Backend confirmed a prewrite QA rejection: token can be reused.
+                    preparedHmiReview = review;
                     setHmiTranslationStatus(
-                        "TIA import verified: " + count + " row(s). "
-                        + "Selection restored and project texts refreshed. "
-                        + "Choose All matched texts (if desired), then Prepare translations. "
-                        + (result.import_log ? "Log: " + result.import_log : ""),
-                        "success"
-                    );
-                } else {
-                    setHmiTranslationStatus(
-                        "TIA import verified: " + count + " row(s). "
-                        + "Automatic scan did not complete; click Scan HMI / Count texts "
-                        + "again before preparing further translations.",
+                        "Project text edit rejected BEFORE import: "
+                        + error.message + ". Correct the text and approve again.",
                         "error"
                     );
+                    return "edit_invalid";
                 }
-            } else {
-                invalidateHmiPreview();
+                const reason = String(error.message || error);
                 setHmiTranslationStatus(
-                    "TIA import verified: " + count + " row(s), but the HMI "
-                    + "selection changed. Reselect the source/target language "
-                    + "and click Scan HMI / Count texts before continuing.",
-                    "success"
+                    "XLSX/TIA import not confirmed: " + reason
+                    + ". Inspect TIA and do not retry automatically.", "error"
                 );
+                return {state: "uncertain", detail: reason};
             }
-            return refreshVerified;
-        } catch (error) {
-            if (error.message?.includes("PROJECT_TEXT_REVIEW_EDIT_INVALID:")) {
-                // Server explicitly rejected a manual edit BEFORE any TIA
-                // write; it retains the review token and all draft values.
-                preparedHmiReview = review;
-                setHmiTranslationStatus(
-                    "Manual Project text edit rejected: " + error.message
-                    + " Correct the text and click Import reviewed batch again.",
-                    "error"
-                );
-                return "edit_invalid";
-            } else {
-                setHmiTranslationStatus(
-                    error.message + " The write status may be uncertain: "
-                    + "inspect TIA and rescan before retrying.", "error"
-                );
+
+            // The backend verifies each changed XLSX cell via an independent
+            // TIA export. UI refresh status is NOT a second import verification.
+            const count = Number(result?.verified_rows);
+            const imported = Number(result?.imported_rows);
+            if (result?.status !== "verified"
+                || !Number.isInteger(count) || count <= 0
+                || count !== imported || count !== review.rowCount) {
+                const reason = "Unexpected XLSX/TIA backend verification: "
+                    + JSON.stringify({status: result?.status,
+                        verified_rows: result?.verified_rows,
+                        imported_rows: result?.imported_rows,
+                        prepared_unique: review.rowCount});
+                setHmiTranslationStatus(reason + ". Inspect TIA.", "error");
+                return {state: "uncertain", detail: reason};
             }
-            return false;
+
+            // Count unique, verified translations once and preserve the quota
+            // even if the later UI scan cannot refresh project languages.
+            hmiCombinedApprovedCount += review.rowCount;
+            const verifiedText = "TIA VERIFIED " + count
+                + " Project text(s) (XLSX).";
+            setHmiTranslationStatus(
+                verifiedText + (result.import_log
+                    ? " Import log: " + result.import_log : ""),
+                "success"
+            );
+
+            try {
+                await refreshProjectLanguages();
+                const restored = restoreHmiTranslationAfterImport(
+                    selectionBeforeImport
+                );
+                if (!restored) {
+                    invalidateHmiPreview(false);
+                    const detail = verifiedText
+                        + " HMI selection could not be restored; fresh Scan "
+                        + "is required before any further batch.";
+                    setHmiTranslationStatus(detail, "error");
+                    return {state: "verified_refresh_failed", detail};
+                }
+                const refreshed = await previewSelectedHmi(true);
+                if (!refreshed) {
+                    const detail = verifiedText
+                        + " Follow-up read-only scan failed. "
+                        + "Do not import the next batch until a fresh Scan succeeds.";
+                    setHmiTranslationStatus(detail, "error");
+                    return {state: "verified_refresh_failed", detail};
+                }
+            } catch (error) {
+                const detail = verifiedText
+                    + " Post-import UI refresh failed: "
+                    + String(error.message || error)
+                    + ". Scan again before continuing; do not reimport.";
+                setHmiTranslationStatus(detail, "error");
+                return {state: "verified_refresh_failed", detail};
+            }
+            setHmiTranslationStatus(
+                verifiedText + " Follow-up project texts scan completed.", "success"
+            );
+            return true;
         } finally {
             hmiReviewInProgress = false;
             updateHmiTranslateButtonState();
