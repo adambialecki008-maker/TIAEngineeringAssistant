@@ -4283,11 +4283,10 @@ export function initTiaUi(
         const key = hmiTranslationKey(selectionBeforeImport);
         if (!hmiScopeEnabled("project") || !review || review.selectionKey !== key
             || hmiScanKey(selectionBeforeImport) !== verifiedHmiScanKey) {
-            setHmiTranslationStatus(
-                "Translations must be prepared and reviewed for this HMI first.",
-                "error"
-            );
-            return;
+            const reason = "XLSX review is missing or does not match the "
+                + "selected HMI/project scan. No TIA import was attempted.";
+            setHmiTranslationStatus(reason, "error");
+            return {state: "prewrite_rejected", detail: reason};
         }
 
         const proposals = [...(hmiReviewRows?.querySelectorAll(
@@ -4297,11 +4296,11 @@ export function initTiaUi(
                 proposal: element.value,
             }));
         if (proposals.length !== review.rowCount) {
-            setHmiTranslationStatus(
-                "Not all prepared Project texts are visible/editable. "
-                + "Prepare the review again before importing.", "error"
-            );
-            return;
+            const reason = "Not all prepared XLSX Project texts are "
+                + "visible/editable. No TIA import was attempted; prepare "
+                + "the review again.";
+            setHmiTranslationStatus(reason, "error");
+            return {state: "prewrite_rejected", detail: reason};
         }
         if (proposals.some(item => !item.proposal.trim())) {
             setHmiTranslationStatus(
