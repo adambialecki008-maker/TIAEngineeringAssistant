@@ -2957,6 +2957,13 @@ export function initTiaUi(
             }
             : null;
 
+        // A skipped-text repair refreshes the entire review; preserve any
+        // manually edited SAFE proposals already entered in its textareas.
+        const draftEdits = new Map(
+            [...(hmiReviewRows?.querySelectorAll(
+                "textarea.hmi-project-review-editor[data-source-text]") || [])]
+                .map(input => [input.dataset.sourceText, input.value])
+        );
         hmiReviewRows?.replaceChildren();
         for (const item of result.examples || []) {
             const row = document.createElement("tr");
@@ -2967,7 +2974,9 @@ export function initTiaUi(
             editor.className = "hmi-project-review-editor";
             editor.rows = 2;
             editor.maxLength = 50000;
-            editor.value = item.proposed_target || "";
+            editor.value = draftEdits.has(item.source_text)
+                ? draftEdits.get(item.source_text)
+                : item.proposed_target || "";
             // Source identity is unique within the 1–50-text review.
             // The backend revalidates every edited proposal before TIA writes.
             editor.dataset.sourceText = item.source_text;
