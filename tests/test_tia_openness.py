@@ -83,6 +83,7 @@ def test_tia_project_context_is_parsed(
                 "HMI_1"
             ),
             "HMI_NETWORK|Panel_1|HMI_1|192.168.1.3",
+            "HMI_MODEL|Panel_1|HMI_1|TP1500 Comfort",
         ]
 
     monkeypatch.setattr(
@@ -198,6 +199,9 @@ def test_tia_project_context_is_parsed(
 
                 "hmi_name":
                     "HMI_1",
+
+                "model_name":
+                    "TP1500 Comfort",
 
                 "device_type_identifier":
                     "",
