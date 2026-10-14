@@ -312,3 +312,102 @@ def test_instance_db_name_collision_must_not_be_treated_as_identical(
     assert match["status"] == "conflict"
     assert "not confirmed as a global" in match["reason"]
     assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+def test_generate_preview_and_import_can_select_only_udts(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = add_structures(request_data())
+    payload["selected_udts"] = ["UDT_Valve"]
+    payload["selected_dbs"] = []
+    preview = client.post("/api/v1/tia/plc-structure-import/preview", json={
+        "project": payload["project"],
+        "selected_udts": ["UDT_Valve"], "selected_dbs": [],
+    })
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["items"] == [{"kind": "udt", "name": "UDT_Valve"}]
+    assert 'TYPE "UDT_Valve"' in preview.json()["source"]
+    assert "DB_Valves" not in preview.json()["source"]
+    planned = preflight(payload)
+    assert planned.status_code == 200, planned.text
+    assert planned.json()["will_create"] == ["UDT_Valve"]
+    assert planned.json()["counts"] == {
+        "create": 1, "identical": 0, "conflict": 0, "blocked": 0
+    }
+    imported = apply(payload, planned.json())
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["created"] == ["UDT_Valve"]
+
+
+def test_mixed_conflict_imports_only_independent_structures(monkeypatch):
+    calls = []
+    adapter = mock_adapter(
+        calls, existing=["PLC_UDT||UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static">'
+                            '<Member Name="Wrong" Datatype="Bool"/>'
+                            '</Section></Document>'},
+    )
+    monkeypatch.setattr(facade, "_run_adapter", adapter)
+    payload = add_structures(request_data())
+    planned = preflight(payload)
+    assert planned.status_code == 200, planned.text
+    report = planned.json()
+    statuses = {row["name"]: row["status"] for row in report["items"]}
+    assert statuses == {
+        "UDT_Motor": "conflict",
+        "UDT_Valve": "create",
+        "DB_Motors": "blocked",
+        "DB_Valves": "create",
+    }
+    assert report["counts"] == {
+        "create": 2, "identical": 0, "conflict": 1, "blocked": 1
+    }
+    assert report["can_apply"] is True
+    assert report["will_create"] == ["UDT_Valve", "DB_Valves"]
+    applied = apply(payload, report)
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["created"] == ["UDT_Valve", "DB_Valves"]
+    assert applied.json()["skipped_conflicts"] == ["UDT_Motor", "DB_Motors"]
+
+
+def test_unchecked_udt_missing_from_tia_blocks_only_its_dependent_db(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = add_structures(request_data())
+    payload["selected_udts"] = ["UDT_Valve"]
+    payload["selected_dbs"] = ["DB_Motors", "DB_Valves"]
+    plan = preflight(payload)
+    assert plan.status_code == 200, plan.text
+    data = plan.json()
+    assert data["will_create"] == ["UDT_Valve", "DB_Valves"]
+    statuses = {x["name"]: x["status"] for x in data["items"]}
+    assert statuses == {
+        "UDT_Valve": "create", "DB_Motors": "blocked",
+        "DB_Valves": "create",
+    }
+    assert "UDT_Motor" in next(x["reason"] for x in data["items"]
+                               if x["name"] == "DB_Motors")
+
+
+def test_empty_and_unknown_selection_are_rejected_before_tia(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = request_data()
+    payload["selected_udts"] = []
+    payload["selected_dbs"] = []
+    assert preflight(payload).status_code == 422
+    payload["selected_udts"] = ["DOES_NOT_EXIST"]
+    assert preflight(payload).status_code == 422
+    assert not calls
+
+
+def test_selection_changes_invalidate_apply_token(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
+    payload = add_structures(request_data())
+    payload["selected_udts"] = ["UDT_Valve"]
+    payload["selected_dbs"] = []
+    plan = preflight(payload).json()
+    modified = {**payload, "selected_udts": ["UDT_Motor"]}
+    assert apply(modified, plan).status_code == 409
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
