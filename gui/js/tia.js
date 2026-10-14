@@ -552,6 +552,7 @@ export function initTiaUi(
     let hmiReviewQueueTypes = {project: false, text_lists: false};
     let hmiReviewQueueCurrentScope = null;
     let hmiReviewQueueProjectExhausted = false;
+    let hmiReviewQueuePendingSkippedList = null;
     const hmiReviewQueueBlockedLists = new Set();
     let hmiRunReport = [];
     let hmiRunStartedAt = null;
@@ -2192,6 +2193,7 @@ export function initTiaUi(
         hmiReviewQueuePaused = false;
         hmiReviewQueuePending = false;
         hmiReviewQueueCurrentScope = null;
+        hmiReviewQueuePendingSkippedList = null;
         showHmiRunReport();
         if (hmiUnifiedStatus) {
             hmiUnifiedStatus.textContent = message;
@@ -2216,6 +2218,7 @@ export function initTiaUi(
         hmiReviewQueueStartApproved = hmiCombinedApprovedCount;
         hmiReviewQueueTypes = {project: useProject, text_lists: useXml};
         hmiReviewQueueProjectExhausted = false;
+        hmiReviewQueuePendingSkippedList = null;
         hmiReviewQueueBlockedLists.clear();
         startHmiRunReport();
         if (hmiEditDetails) hmiEditDetails.open = true;
@@ -2306,6 +2309,10 @@ export function initTiaUi(
             return;
         }
         hmiReviewQueuePending = false;
+        if (hmiReviewQueuePendingSkippedList) {
+            hmiReviewQueueBlockedLists.add(hmiReviewQueuePendingSkippedList);
+            hmiReviewQueuePendingSkippedList = null;
+        }
         renderHmiBatchProgress(
             hmiCombinedApprovedCount - hmiReviewQueueStartApproved,
             hmiReviewQueueQuota
@@ -2612,7 +2619,8 @@ export function initTiaUi(
                         item.source, item.proposal, item.reason);
                 }
                 if (result.skipped?.length) {
-                    hmiReviewQueueBlockedLists.add(hmiTextListSelect.value);
+                    // Do not change list selection before this review is imported.
+                    hmiReviewQueuePendingSkippedList = hmiTextListSelect.value;
                 }
             }
             if (hmiTextListReviewRows) {
