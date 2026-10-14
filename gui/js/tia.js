@@ -1463,7 +1463,7 @@ export function initTiaUi(
             const cannotStart = busy || !projectSelected || !isVerified
                 || !selection?.view_path_root || !hasTranslationEngine
                 || !missingUnique || !validBatchSize
-                || (total !== null && total < 1);
+                || (total !== null && total <= hmiCombinedApprovedCount);
             hmiBatchStartButton.disabled = cannotStart;
             if (hmiBatchReadiness) {
                 let hint = "";
@@ -1801,7 +1801,12 @@ export function initTiaUi(
             return;
         }
         const xlsxLimit = total === null ? null
-            : Math.min(total, latestHmiScan?.missingUnique || 0);
+            : Math.min(Math.max(0, total - hmiCombinedApprovedCount),
+                latestHmiScan?.missingUnique || 0);
+        if (xlsxLimit === 0) {
+            setHmiBatchStatus("Shared Total to translate has already been reached.", true);
+            return;
+        }
         if (!confirm(
             "START AUTOMATIC XLSX-ONLY TIA IMPORT?\n\n"
             + "Translation via selected Ollama model: "
