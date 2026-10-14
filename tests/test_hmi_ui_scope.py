@@ -24,7 +24,7 @@ def test_checkbox_scope_supports_zero_one_or_both():
     assert 'return "both";' in JS
     assert 'if (scanProject) projectOk = await scanProjectHmiTexts();' in JS
     assert 'if (scanLists) listsOk = await scanHmiTextLists();' in JS
-    assert 'hmiScanButton.disabled = busy || !scope || !selection;' in JS
+    assert 'hmiScanButton.disabled = busy || hmiReviewQueueActive || !scope || !selection;' in JS
 
 
 def test_each_scan_uses_only_its_dedicated_endpoint():
