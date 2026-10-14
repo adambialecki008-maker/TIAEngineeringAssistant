@@ -33,6 +33,10 @@ class PlcStructureImportRequest(BaseModel):
     device_name: str = Field(min_length=1, max_length=128)
     plc_name: str = Field(min_length=1, max_length=128)
     project: ProjectSpecification
+    # None maintains the legacy API behavior: all configured items.
+    # Explicit [] selects no objects of that kind.
+    selected_udts: list[str] | None = None
+    selected_dbs: list[str] | None = None
 
 
 class PlcStructureApplyRequest(PlcStructureImportRequest):
@@ -208,8 +212,40 @@ def _compare_existing(request, definition: dict, existing) -> tuple[str, str]:
         return "conflict", "Existing structure could not be verified: " + str(exc)
 
 
+_BUILTIN_TYPES = {
+    "bool", "byte", "word", "dword", "lword", "sint", "usint", "int",
+    "uint", "dint", "udint", "lint", "ulint", "real", "lreal",
+    "char", "wchar", "string", "wstring", "date", "time", "ltime",
+    "tod", "time_of_day", "ltod", "date_and_time", "dt", "dtl",
+    "s5time", "s5_time", "timer", "counter",
+}
+
+
+def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecification:
+    def pick(items, selected, label):
+        if selected is None:
+            return list(items)
+        available = {x.name.casefold(): x for x in items}
+        keys = [name.casefold() for name in selected]
+        if len(keys) != len(set(keys)):
+            raise HTTPException(422, "Duplicate selected " + label + " name.")
+        unknown = [name for name in selected if name.casefold() not in available]
+        if unknown:
+            raise HTTPException(422, "Unknown selected " + label + ": "
+                                + ", ".join(unknown))
+        return [x for x in items if x.name.casefold() in set(keys)]
+
+    udts = pick(request.project.udts, request.selected_udts, "UDT")
+    dbs = pick(request.project.dbs, request.selected_dbs, "DB")
+    if not udts and not dbs:
+        raise HTTPException(422, "Select at least one UDT or DB.")
+    return ProjectSpecification(
+        plc_family=request.project.plc_family, udts=udts, dbs=dbs,
+    )
+
+
 def _make_plan(request: PlcStructureImportRequest) -> dict:
-    definitions = _definitions(request.project)
+    selected = _selected_project(request)
     context = get_project_context(request.process_id)
     targets = [plc for plc in context.plcs
                if plc.device_name.casefold() == request.device_name.casefold()
@@ -218,33 +254,78 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
         raise HTTPException(404, "Selected PLC is not in the open TIA project.")
     structures = get_plc_structures(
         request.process_id, request.device_name, request.plc_name)
-    # A DB may refer to a type already present in TIA but not recreated here.
-    # Source declarations must quote those UDT names exactly like newly
-    # generated UDT references.
     definitions = _definitions(
-        request.project, known_udts=[u.name for u in structures.udts])
+        selected, known_udts=[u.name for u in structures.udts])
     existing = {}
     for item in structures.udts:
         existing.setdefault(item.name.casefold(), []).append(("udt", item))
     for item in structures.data_blocks:
         existing.setdefault(item.name.casefold(), []).append(("db", item))
+
     report = []
     for definition in definitions:
         collisions = existing.get(definition["name"].casefold(), [])
         if not collisions:
-            state, reason = "create", "Not present in TIA; safe to create after confirmation."
+            state, reason = "create", "Not present in TIA; can create after approval."
         elif len(collisions) != 1 or collisions[0][0] != definition["kind"]:
             state, reason = "conflict", "Name collision with another PLC object/type."
         else:
             state, reason = _compare_existing(request, definition, collisions[0][1])
         report.append({
             "kind": definition["kind"], "name": definition["name"],
-            "status": state, "reason": reason,
-            "source": definition["source"],
+            "status": state, "reason": reason, "source": definition["source"],
         })
+
+    # Independent objects may be imported even when other selected objects
+    # conflict. Dependents of a blocked/conflicting UDT cannot be imported.
+    selected_state = {item["name"].casefold(): item for item in report
+                      if item["kind"] == "udt"}
+    all_configured = {u.name.casefold(): u for u in request.project.udts}
+    live_types = {u.name.casefold(): u for u in structures.udts}
+    verified_external = {}
+
+    for definition, row in zip(definitions, report):
+        if row["status"] != "create":
+            continue
+        members = (definition["spec"].fields if definition["kind"] == "udt"
+                   else definition["spec"].members)
+        blockers = []
+        for reference in _references(members):
+            key = reference.casefold().strip().strip('"')
+            if key in _BUILTIN_TYPES:
+                continue
+            selected_ref = selected_state.get(key)
+            if selected_ref is not None:
+                if selected_ref["status"] in {"conflict", "blocked"}:
+                    blockers.append(reference + " (conflict/blocked)")
+                continue
+            live_ref = live_types.get(key)
+            if live_ref is None:
+                blockers.append(reference + " (UDT missing in TIA and selection)")
+                continue
+            # Configured, but unchecked UDT: verify its live definition before
+            # allowing a dependent DB to use it. No automatic dependency import.
+            configured = all_configured.get(key)
+            if configured is not None:
+                if key not in verified_external:
+                    state, detail = _compare_existing(
+                        request, {"kind": "udt", "spec": configured}, live_ref
+                    )
+                    verified_external[key] = (state, detail)
+                if verified_external[key][0] != "identical":
+                    blockers.append(reference + " (unchecked UDT not verified)")
+        if blockers:
+            row["status"] = "blocked"
+            row["reason"] = ("Dependency unavailable or mismatched: "
+                             + ", ".join(sorted(set(blockers)))
+                             + ". No import for this object.")
+
     snapshot = {
         "process_id": request.process_id, "device": request.device_name,
         "plc": request.plc_name, "project": context.project_name,
+        "selection": {
+            "udts": request.selected_udts, "dbs": request.selected_dbs,
+        },
         "existing": sorted((k, kind, getattr(item, "group_path", ""))
                            for k, values in existing.items()
                            for kind, item in values),
@@ -253,14 +334,13 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
     token = hashlib.sha256(json.dumps(
         snapshot, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
     create = [row["name"] for row in report if row["status"] == "create"]
-    conflicts = [row["name"] for row in report if row["status"] == "conflict"]
     return {
         "token": token, "project_name": context.project_name,
         "device_name": request.device_name, "plc_name": request.plc_name,
         "items": report,
         "counts": {status: sum(x["status"] == status for x in report)
-                   for status in ("create", "identical", "conflict")},
-        "can_apply": bool(create) and not conflicts,
+                   for status in ("create", "identical", "conflict", "blocked")},
+        "can_apply": bool(create),
         "will_create": create,
     }
 
@@ -280,7 +360,7 @@ def apply_plc_structure_import(request: PlcStructureApplyRequest) -> dict:
             409, "TIA project or generated data changed since preflight. "
                  "Re-run the report before importing.")
     if not current["can_apply"]:
-        raise HTTPException(409, "No safe import: existing differences or nothing to create.")
+        raise HTTPException(409, "No eligible objects to create. See preflight report.")
     if request.approved_create != current["will_create"]:
         raise HTTPException(
             422, "The explicitly approved list differs from the current preflight. "
@@ -325,5 +405,7 @@ def apply_plc_structure_import(request: PlcStructureApplyRequest) -> dict:
         "created": current["will_create"],
         "skipped_identical": [x["name"] for x in current["items"]
                               if x["status"] == "identical"],
+        "skipped_conflicts": [x["name"] for x in current["items"]
+                              if x["status"] in {"conflict", "blocked"}],
         "project_saved": saved,
     }
