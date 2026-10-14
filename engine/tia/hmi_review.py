@@ -137,8 +137,16 @@ class RepairPreparedTranslationRequest(BaseModel):
     proposal: str = Field(min_length=1, max_length=50000)
 
 
+class ReviewedTextProposal(BaseModel):
+    source_text: str = Field(min_length=1, max_length=50000)
+    proposal: str = Field(min_length=1, max_length=50000)
+
+
 class ImportReviewRequest(BaseModel):
     review_id: str = Field(min_length=32, max_length=64)
+    # Optional, so unattended XLSX batch jobs preserve their existing API.
+    # Manual review supplies every approved unique source with its edited text.
+    proposals: list[ReviewedTextProposal] | None = Field(default=None, max_length=50)
 
 
 class ImportReviewResponse(BaseModel):
@@ -610,6 +618,26 @@ def _import_reviewed_hmi_translations(
         )
     if review and not review["rows"]:
         raise HTTPException(409, "No validated HMI translations to import.")
+    # Validate ALL manually edited proposals while the review is still present.
+    # No Openness write or review-token consumption occurs on validation error.
+    if review and request.proposals is not None:
+        if review.get("skip_origin"):
+            raise HTTPException(409, "Batch-skipped proposals require job approval.")
+        provided = {item.source_text: item.proposal for item in request.proposals}
+        current = {item["source"]: item for item in review["rows"]}
+        if len(provided) != len(request.proposals) or set(provided) != set(current):
+            raise HTTPException(
+                409, "Submitted Project texts must match every validated review row."
+            )
+        validated = {}
+        for source, proposal in provided.items():
+            candidate = normalize_hmi_translation(source, proposal)
+            validate_hmi_translation_quality(
+                source, candidate, review["request"]["target_culture"]
+            )
+            validated[source] = candidate
+        for source, candidate in validated.items():
+            current[source]["proposal"] = candidate
     review = _REVIEWS.pop(request.review_id, None)
     if review is None:
         raise HTTPException(
