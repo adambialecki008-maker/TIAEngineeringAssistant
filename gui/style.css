@@ -1636,6 +1636,43 @@ td {
     max-height: 210px;
     overflow-y: auto;
 }
+.hmi-text-list-catalog-item {
+    border: 1px solid #334a58;
+    background: #14202a;
+    border-radius: 6px;
+    margin: 8px 0;
+    overflow: hidden;
+}
+.hmi-text-list-catalog-item > summary {
+    cursor: pointer;
+    padding: 10px 12px;
+    font-weight: 600;
+    color: #d4e8f5;
+}
+.hmi-text-list-catalog-item > summary:hover {
+    background: #203341;
+}
+.hmi-text-list-catalog-item table {
+    width: 100%;
+    table-layout: fixed;
+    overflow-wrap: anywhere;
+}
+.hmi-text-list-catalog-item th,
+.hmi-text-list-catalog-item td {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 12px;
+    vertical-align: top;
+}
+.hmi-text-list-catalog-item th:first-child { width: 8%; }
+.hmi-text-list-catalog-item th:nth-child(2) { width: 34%; }
+.hmi-text-list-catalog-item th:nth-child(3) { width: 27%; }
+.hmi-text-list-catalog-item th:nth-child(4) { width: 31%; }
+.hmi-text-list-catalog-item p { padding: 6px 12px; }
+.hmi-text-lists-catalog {
+    max-height: 460px;
+    overflow-y: auto;
+}
 .hmi-text-lists-catalog ul {
     margin: 6px 0;
     padding-left: 22px;
