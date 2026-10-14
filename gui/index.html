@@ -1375,10 +1375,11 @@
                             <div class="field-group">
                                 <label for="tia-hmi-batch-size">Batch size (unique texts)</label>
                                 <input id="tia-hmi-batch-size" type="number"
-                                       min="1" max="200" step="1" value="5">
-                                <p class="hint">Prepare translates one batch of at most this
-                                   many unique texts (maximum 50 for manual review).
-                                   Automatic import uses the same batch size.</p>
+                                       min="1" max="50" step="1" value="5">
+                                <p class="hint">1–50 unique texts per batch, for both
+                                   manual Prepare/Review and automatic TIA import.
+                                   Total to translate may exceed 50 and is processed
+                                   across multiple batches.</p>
                             </div>
                             <div class="field-group">
                                 <label for="tia-hmi-total-to-translate">Total to translate (unique texts)</label>
