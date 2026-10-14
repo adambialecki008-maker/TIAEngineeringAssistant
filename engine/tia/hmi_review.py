@@ -632,9 +632,16 @@ def _import_reviewed_hmi_translations(
         validated = {}
         for source, proposal in provided.items():
             candidate = normalize_hmi_translation(source, proposal)
-            validate_hmi_translation_quality(
-                source, candidate, review["request"]["target_culture"]
-            )
+            try:
+                validate_hmi_translation_quality(
+                    source, candidate, review["request"]["target_culture"]
+                )
+            except HTTPException as exc:
+                # Unlike a write failure, this is safe to correct and retry:
+                # the token remains unconsumed and no adapter call has run.
+                raise HTTPException(
+                    422, "PROJECT_TEXT_REVIEW_EDIT_INVALID: " + str(exc.detail)
+                ) from exc
             validated[source] = candidate
         for source, candidate in validated.items():
             current[source]["proposal"] = candidate
