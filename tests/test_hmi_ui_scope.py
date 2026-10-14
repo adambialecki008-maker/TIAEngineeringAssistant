@@ -29,7 +29,7 @@ def test_checkbox_scope_supports_zero_one_or_both():
 
 def test_each_scan_uses_only_its_dedicated_endpoint():
     xml = _function('async function scanHmiTextLists()', 
-                    'async function previewSelectedHmi()')
+                    'async function previewSelectedHmi(preserveQuota = false)')
     xlsx = _function('async function scanProjectHmiTexts()',
                      'function populateHmiTranslationLanguages()')
     assert '"/api/v1/tia/hmis/inspect-text-lists"' in xml
@@ -45,8 +45,8 @@ def test_only_selected_scope_shows_related_translation_sections():
     for marker in (
         'id="tia-hmi-text-lists-details"',
         'data-hmi-scope="text_lists"',
-        'class="hmi-workflow-step hmi-scope-step" data-hmi-scope="project"',
-        'class="hmi-workflow-step hmi-manual-step" data-hmi-scope="project"',
+        'class="hmi-workflow-step hmi-scope-step"',
+        'class="hmi-workflow-step hmi-manual-step"',
         'class="hmi-batch-panel hmi-workflow-step" data-hmi-scope="project"',
         'id="tia-hmi-preview-results" class="hidden" data-hmi-scope="project"',
         'id="tia-hmi-review-results" class="hidden" data-hmi-scope="project"',
@@ -55,15 +55,17 @@ def test_only_selected_scope_shows_related_translation_sections():
     assert '!hmiScopeEnabled(element.dataset.hmiScope)' in JS
     assert 'hmiScopeEnabled("text_lists")' in JS
     assert '!hmiScopeEnabled("project")' in JS
-    assert 'hmiTextListPrepare.disabled = busy || !listsSelected' in JS
+    assert 'const activeManualScope = nextHmiManualScope();' in JS
     assert 'hmiBatchResumeButton.disabled = busy || !projectSelected' in JS
 
 
 def test_text_list_preview_and_import_are_separate_from_project_workflow():
-    assert 'id="tia-hmi-text-list-preview-rows"' in HTML
+    assert 'id="tia-hmi-text-lists-catalog"' in HTML
     assert 'id="tia-hmi-text-list-review-rows"' in HTML
     assert 'async function renderSelectedTextListPreview()' not in JS
     assert 'function renderSelectedTextListPreview()' in JS
+    assert 'async function prepareSelectedHmiBatch()' in JS
+    assert 'async function importSelectedHmiBatch()' in JS
     assert '"/api/v1/tia/hmis/text-lists/prepare"' in JS
     assert '"/api/v1/tia/hmis/text-lists/import"' in JS
     assert '"/api/v1/tia/hmis/import-reviewed-translations"' in JS
