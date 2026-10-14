@@ -17,6 +17,9 @@ import { createHmiSkippedManager } from "./hmi_skipped_manager.js";
 const MANUAL_SELECTION =
     "__manual__";
 
+// Same Project texts transaction limit for manual and automatic workflows.
+const HMI_PROJECT_BATCH_MAX = 50;
+
 
 export function initTiaUi(
     getPlcFamily
@@ -1328,7 +1331,7 @@ export function initTiaUi(
         const size = Number(hmiBatchSizeInput?.value);
         const totalRaw = hmiBatchTotalInput?.value?.trim() || "";
         const total = totalRaw ? Number(totalRaw) : null;
-        if (!Number.isInteger(size) || size < 1 || size > 200
+        if (!Number.isInteger(size) || size < 1 || size > HMI_PROJECT_BATCH_MAX
             || (total !== null &&
                 (!Number.isInteger(total) || total < 1 || total > 100000))) {
             return null;
@@ -1441,7 +1444,7 @@ export function initTiaUi(
         const totalRaw = hmiBatchTotalInput?.value?.trim() || "";
         const total = totalRaw ? Number(totalRaw) : null;
         const validBatchSize = Number.isInteger(batchSize)
-            && batchSize >= 1 && batchSize <= 200;
+            && batchSize >= 1 && batchSize <= HMI_PROJECT_BATCH_MAX;
         const validTotal = total === null || (Number.isInteger(total)
             && total >= 1 && total <= 100000
             && (!isVerified || total <= missingUnique));
@@ -1453,12 +1456,11 @@ export function initTiaUi(
                 : "Prepare one batch (review)";
             hmiTranslateButton.disabled =
                 busy || !projectSelected || !isVerified || !hasTranslationEngine
-                || !missingUnique || !validTotal || !count || count > 50;
-            hmiTranslateButton.title = count > 50
-                ? "Manual review allows at most 50 unique texts. "
-                    + "Reduce Batch size or Total to translate."
-                : "Translate up to " + (count || 0)
-                    + " unique source texts without importing into TIA.";
+                || !missingUnique || !validBatchSize || !validTotal || !count;
+            hmiTranslateButton.title = validBatchSize
+                ? "Translate up to " + (count || 0)
+                    + " unique source texts without importing into TIA."
+                : "Batch size must be between 1 and 50.";
         }
         if (hmiScanButton) {
             hmiScanButton.disabled = busy || !scope || !selection;
@@ -1506,7 +1508,7 @@ export function initTiaUi(
                 } else if (!hasTranslationEngine) {
                     hint = "Select an installed Ollama model above.";
                 } else if (!validBatchSize) {
-                    hint = "Batch size must be between 1 and 200.";
+                    hint = "Batch size must be between 1 and 50.";
                 } else if (!validTotal) {
                     hint = "Total to translate must be blank or between 1 and "
                         + Math.min(100000, missingUnique) + ".";
@@ -1660,11 +1662,11 @@ export function initTiaUi(
         const raw = hmiBatchTotalInput?.value?.trim() || "";
         const specified = raw ? Number(raw) : null;
         const scanned = latestHmiScan?.missingUnique ?? null;
-        if (!Number.isInteger(batch) || batch < 1 || batch > 200
+        if (!Number.isInteger(batch) || batch < 1 || batch > HMI_PROJECT_BATCH_MAX
             || (specified !== null && (!Number.isInteger(specified)
                 || specified < 1 || specified > 100000))) {
             hmiBatchPlan.textContent =
-                "Batch size must be 1–200; total must be positive or blank.";
+                "Batch size must be 1–50; total must be positive or blank.";
             return;
         }
         if (specified !== null && scanned !== null && specified > scanned) {
@@ -1820,13 +1822,13 @@ export function initTiaUi(
         const size = Number(hmiBatchSizeInput?.value);
         const totalString = hmiBatchTotalInput?.value?.trim() || "";
         const total = totalString ? Number(totalString) : null;
-        if (!Number.isInteger(size) || size < 1 || size > 200
+        if (!Number.isInteger(size) || size < 1 || size > HMI_PROJECT_BATCH_MAX
             || (total !== null &&
                 (!Number.isInteger(total) || total < 1 || total > 100000))
             || (latestHmiScan && total !== null
                 && total > latestHmiScan.missingUnique)) {
             setHmiBatchStatus(
-                "Batch size must be 1–200; total must be empty or "
+                "Batch size must be 1–50; total must be empty or "
                 + "between 1 and the missing-target unique-text count from the scan.",
                 true
             );
