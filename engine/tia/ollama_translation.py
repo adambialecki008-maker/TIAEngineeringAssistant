@@ -19,6 +19,7 @@ load_dotenv()
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_TIMEOUT = 300
+DEFAULT_TRANSLATION_MODEL = "qwen2.5:3b"
 
 
 def ollama_base_url() -> str:
@@ -91,6 +92,7 @@ def resolve_ollama_model(requested: str | None = None,
             "No Ollama models installed. Run 'ollama list' or 'ollama pull <model>'.",
         )
 
+    # Explicit selection and configured environment override the default.
     preferred = (requested or "").strip()
     if not preferred:
         preferred = os.getenv("OLLAMA_TRANSLATION_MODEL", "").strip()
@@ -102,6 +104,8 @@ def resolve_ollama_model(requested: str | None = None,
                 + "' is not installed. Available: " + ", ".join(names),
             )
         return preferred
+    if DEFAULT_TRANSLATION_MODEL in names:
+        return DEFAULT_TRANSLATION_MODEL
     if len(names) == 1:
         return names[0]
     raise HTTPException(
