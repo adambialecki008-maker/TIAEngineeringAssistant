@@ -1,6 +1,6 @@
 # Resume: existing UDT reuse and HMI Text List import
 
-Status: investigation; implementation not yet changed.
+Status: UDT/DB functional fix completed and targeted checks passed; HMI XML fix pending.
 Branch: codex/fix-udt-reuse-text-list-import
 Repository: https://github.com/adambialecki008-maker/TIAEngineeringAssistant
 Base commit: c025b1c
@@ -17,19 +17,24 @@ Open this repository and this branch, read this file, and continue the requested
 - Keep create-only/no-overwrite guards, backup acknowledgement, fresh preflight token, explicit selected-object approval, selected PLC/HMI scope, and XML/XLSX safety checks.
 - User requested commit and full tests/.NET build in the attached specification. Earlier requests authorize Git push; this task specifically requests durable browser continuation.
 
-## Findings so far
-- engine/tia/source_import.py:_compare_existing returns conflict before live structure export if local definition has comments/start values/HMI attributes/DB retain. This conflates unknown metadata with proven structural mismatch.
-- Existing configured but unchecked UDT references are also blocked unless comparison returns identical.
-- engine/tia/source_import.py:_include_required_udts skips already-existing references; transitive existing UDT compatibility and stable preflight snapshots need review.
-- openness_adapter/TiaStructureImport.cs creates only manifest entries, rechecks name collisions under ExclusiveAccess, verifies presence, but has no explicit post-generation compiler check.
-- HMI XML import/progress is not investigated yet. Relevant files: engine/tia/hmi_text_list_translation.py, openness_adapter/TiaService.cs, gui/js/tia.js, and tests/test_hmi_text_list_translation.py.
+## Completed functional fix 1: existing UDT reuse
+- source_import.py reads the actual selected PLC type structure before classification. Compatible ordered declarations are reused, with separate metadata warnings; unavailable structure is unknown rather than conflict. Exact member/type/order mismatch remains conflict.
+- Required configured UDTs are compared transitively even if unchecked/already existing. Referenced live types without local member definitions are exported and checked for consistency. Apply token includes semantic observed structure; a changed reused type invalidates approval.
+- xml_parser.py reads explicit start/HMI/remanence/AT metadata and avoids treating array element start values as declarations or inherited child comments as parent comments. UDT/array informative expansions do not cause extra-member conflicts.
+- C# batch import still generates only missing manifest objects under no-overwrite guards. Each created DB is located in the selected PLC and compiled through ICompilable; Python requires both creation and compile confirmations.
+- UI separates compatible/reuse, unknown/manual review, conflict and blocked; explicitly reports retained existing UDT metadata.
+- Verification: targeted pytest tests/test_plc_structure_import.py tests/test_generate_structure_selection_ui.py tests/test_tia_openness.py => 62 passed in 2.20s. node --check gui/js/source_import.js passed. dotnet build openness_adapter/TiaOpennessAdapter.csproj --no-restore => 0 warnings, 0 errors.
+- These are mocked Openness tests plus compilation against locally installed Siemens V21 assemblies. No real TIA write/import was executed. Live verification must confirm DB_Motors2 creation with the existing UDT_Motor and unchanged UDT.
+- Compatibility scope is DB declaration structure. Existing UDT defaults/HMI/retention/comments are retained and reported; they are never claimed identical to requested metadata. Unknown structural layout remains blocked; inspect/export/repair the existing type in TIA and re-run preflight (no unchecked override).
 
 ## Next steps
-1. Read source_import.py, structures.py/xml_parser.py/models.py and existing import tests. Distinguish structural match, mismatch, and unknown metadata; diagnose precise member mismatch and recursively verify required UDT references.
-2. Review official Siemens V21 documentation/local assemblies before changing Openness code. Reuse compatible UDTs without generating their source; verify created DB in the selected PLC and compile it.
-3. Investigate XML Text List import and frontend progress using realistic XML fixtures. Ensure reviewed translations are actually retained after re-export and report progress/failures without false success.
-4. Add meaningful regressions, run targeted tests, full pytest, JS checks, .NET build, and browser mocks where possible.
-5. Update this file with actual changes, exact test results, remaining risks, and the resume command. Commit/push source and docs only. Clearly separate mocks from real TIA verification.
+1. Investigate XML Text List import/progress. Relevant files: engine/tia/hmi_text_list_translation.py, openness_adapter/TiaService.cs, gui/js/tia.js and tests/test_hmi_text_list_translation.py. Existing code verifies all languages after re-export but actual failure cause is not yet established.
+2. Add meaningful XML/UI regressions, use targeted tests, commit the completed HMI fix separately.
+3. Run full pytest once at end, JS checks and final .NET build. Update this file with exact results and remaining real TIA checks, then commit/push source and docs only.
+
+## Siemens references consulted
+- [V21 interface XML declarations and WithDefaults](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/export/import/importing/exporting-data-of-a-plc-device/blocks/xml-structure-of-the-block-interface-section)
+- [V21 compilation services and diagnostics](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/tia-portal-openness-api/functions-for-projects-and-project-data/compiling-a-project)
 
 ## Original user specification
 # ADDITIONAL CRITICAL BUG — EXISTING UDT BLOCKS ALL DEPENDENT DB IMPORTS

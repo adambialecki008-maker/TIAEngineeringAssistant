@@ -1,6 +1,8 @@
 """Read-only multi-structure preflight and guarded create-only import."""
 from pathlib import Path
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 import engine.tia_openness as facade
@@ -89,7 +91,9 @@ def mock_adapter(calls, *, existing=(), xml=None, project="Test_Project_Copy",
             return ([
                 f"STRUCTURE_IMPORTED|{kind}|{name}"
                 for kind, name, _ in rows if name != without_confirm
-            ] + ["PROJECT_SAVED|Test_Project_Copy"])
+            ] + [f"STRUCTURE_COMPILED|DB|{name}"
+                 for kind, name, _ in rows if kind == "DB" and name != without_confirm]
+                + ["PROJECT_SAVED|Test_Project_Copy"])
         raise AssertionError("Unexpected adapter command " + str(args))
     return run
 
@@ -113,7 +117,7 @@ def test_plan_is_read_only_and_lists_sources(monkeypatch):
     assert result.status_code == 200, result.text
     data = result.json()
     assert data["counts"] == {
-        "create": 2, "identical": 0, "conflict": 0, "blocked": 0
+        "create": 2, "identical": 0, "compatible": 0, "unknown": 0, "conflict": 0, "blocked": 0
     }
     assert data["will_create"] == ["UDT_Motor", "DB_Motors"]
     assert data["can_apply"] is True
@@ -150,13 +154,14 @@ def test_same_existing_structure_is_skipped_and_missing_db_is_created(monkeypatc
     assert plan.status_code == 200, plan.text
     data = plan.json()
     assert data["counts"] == {
-        "create": 1, "identical": 1, "conflict": 0, "blocked": 0
+        "create": 1, "identical": 0, "compatible": 1, "unknown": 0, "conflict": 0, "blocked": 0
     }
     assert data["will_create"] == ["DB_Motors"]
     applied = apply(payload, data)
     assert applied.status_code == 200, applied.text
     assert applied.json()["created"] == ["DB_Motors"]
-    assert applied.json()["skipped_identical"] == ["UDT_Motor"]
+    assert applied.json()["reused_udts"] == ["UDT_Motor"]
+    assert applied.json()["skipped_identical"] == []
 
 
 def test_all_identical_means_no_import(monkeypatch):
@@ -168,7 +173,8 @@ def test_all_identical_means_no_import(monkeypatch):
         ]
     ))
     data = preflight(request_data()).json()
-    assert data["counts"]["identical"] == 2
+    assert data["counts"]["identical"] == 1
+    assert data["counts"]["compatible"] == 1
     assert data["can_apply"] is False
     refused = apply(request_data(), data)
     assert refused.status_code == 409
@@ -186,7 +192,7 @@ def test_different_existing_structure_blocks_whole_job(monkeypatch):
     monkeypatch.setattr(facade, "_run_adapter", adapter)
     data = preflight(request_data()).json()
     assert data["counts"] == {
-        "create": 0, "identical": 0, "conflict": 1, "blocked": 1
+        "create": 0, "identical": 0, "compatible": 0, "unknown": 0, "conflict": 1, "blocked": 1
     }
     assert "UDT_Motor" in [x["name"] for x in data["items"]
                             if x["status"] == "conflict"]
@@ -205,7 +211,7 @@ def test_name_collision_with_other_object_type_blocks(monkeypatch):
     assert data["can_apply"] is False
 
 
-def test_attributes_that_cannot_be_verified_must_not_be_skipped_as_identical(
+def test_unknown_nonstructural_metadata_is_reported_and_udt_reused(
         monkeypatch):
     calls = []
     monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
@@ -215,8 +221,12 @@ def test_attributes_that_cannot_be_verified_must_not_be_skipped_as_identical(
     payload["project"]["udts"][0]["fields"][0]["struct_members"][0][
         "hmi_accessible"] = True
     data = preflight(payload).json()
-    assert data["counts"]["conflict"] == 1
-    assert "cannot fully verify" in data["items"][0]["reason"]
+    assert data["counts"]["conflict"] == 0
+    assert data["items"][0]["status"] == "compatible"
+    assert "hmi_accessible not available/explicit" in " ".join(
+        data["items"][0]["metadata_warnings"])
+    assert data["will_create"] == ["DB_Motors"]
+    assert any(c[0] == "export-structure" for c in calls)
 
 
 def test_reject_circular_types_and_duplicate_names_before_tia(monkeypatch):
@@ -379,7 +389,7 @@ def test_generate_preview_and_import_can_select_only_udts(monkeypatch):
     assert planned.status_code == 200, planned.text
     assert planned.json()["will_create"] == ["UDT_Valve"]
     assert planned.json()["counts"] == {
-        "create": 1, "identical": 0, "conflict": 0, "blocked": 0
+        "create": 1, "identical": 0, "compatible": 0, "unknown": 0, "conflict": 0, "blocked": 0
     }
     imported = apply(payload, planned.json())
     assert imported.status_code == 200, imported.text
@@ -407,7 +417,7 @@ def test_mixed_conflict_imports_only_independent_structures(monkeypatch):
         "DB_Valves": "create",
     }
     assert report["counts"] == {
-        "create": 2, "identical": 0, "conflict": 1, "blocked": 1
+        "create": 2, "identical": 0, "compatible": 0, "unknown": 0, "conflict": 1, "blocked": 1
     }
     assert report["can_apply"] is True
     assert report["will_create"] == ["UDT_Valve", "DB_Valves"]
@@ -474,7 +484,7 @@ def test_single_checked_db_uses_existing_matching_udt_without_reimport(monkeypat
     assert data["will_create"] == ["DB_Motors"]
     assert data["auto_dependencies"] == []
     assert data["counts"]["blocked"] == 0
-    assert 'of "UDT_Motor"' in data["items"][0]["source"]
+    assert 'of "UDT_Motor"' in next(x["source"] for x in data["items"] if x["kind"] == "db")
 
 
 def test_single_db_blocks_if_required_existing_udt_differs(monkeypatch):
@@ -494,7 +504,8 @@ def test_single_db_blocks_if_required_existing_udt_differs(monkeypatch):
     assert data["counts"]["blocked"] == 1
     assert data["can_apply"] is False
     assert data["will_create"] == []
-    assert "unchecked UDT not verified" in data["items"][0]["reason"]
+    assert "Member cmd: required declaration missing" in next(
+        x["reason"] for x in data["items"] if x["kind"] == "db")
 
 
 
@@ -520,3 +531,157 @@ def test_selection_changes_invalidate_apply_token(monkeypatch):
     modified = {**payload, "selected_udts": ["UDT_Motor"]}
     assert apply(modified, plan).status_code == 409
     assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+@pytest.mark.parametrize("checked_udt", [True, False])
+def test_motor_metadata_does_not_block_db_or_reimport_type(monkeypatch, checked_udt):
+    calls, imported = [], []
+    xml = {"UDT_Motor": '''<Document><Section Name="Static">
+      <Member Name="Cmd" Datatype="Struct"><Sections><Section Name="None">
+        <Member Name="Start" Datatype="Bool" Remanence="Retain">
+          <AttributeList><BooleanAttribute Name="ExternalAccessible">true</BooleanAttribute></AttributeList>
+          <StartValue>true</StartValue><Comment><Text>Existing motor command</Text></Comment>
+        </Member><Member Name="Stop" Datatype="Bool"/>
+      </Section></Sections></Member></Section></Document>'''}
+    adapter = mock_adapter(calls, existing=["PLC_UDT|Types|UDT_Motor|PlcType|True"], xml=xml)
+
+    def capture(*args):
+        if args[0] == "import-plc-structure-batch":
+            imported.extend(Path(args[5]).read_text("utf-8").splitlines())
+        return adapter(*args)
+
+    monkeypatch.setattr(facade, "_run_adapter", capture)
+    payload = add_structures(request_data())
+    payload["project"]["udts"][0]["fields"][0]["struct_members"][0].update(
+        comment="Required command", start_value="false", hmi_accessible=True)
+    payload["selected_udts"] = ["UDT_Motor"] if checked_udt else []
+    payload["selected_dbs"] = ["DB_Motors"]
+    report = preflight(payload).json()
+    udt = next(x for x in report["items"] if x["name"] == "UDT_Motor")
+    assert udt["status"] == "compatible"
+    assert "start_value differs" in " ".join(udt["metadata_warnings"])
+    assert report["counts"]["conflict"] == report["counts"]["blocked"] == 0
+    assert report["will_create"] == ["DB_Motors"]
+    assert apply(payload, report).status_code == 200
+    assert len(imported) == 1 and imported[0].startswith("DB|DB_Motors|")
+    write_call = next(c for c in calls if c[0] == "import-plc-structure-batch")
+    assert write_call[1:4] == ("3544", "Device_1", "PLC_1")
+    assert "DB_Valves" not in " ".join(imported)
+
+
+@pytest.mark.parametrize("actual_type", ["Int", "Array[0..10] of Bool", '"UDT_Other"'])
+def test_incompatible_member_type_has_exact_diagnostic(monkeypatch, actual_type):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls,
+        existing=["PLC_UDT||UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static">'
+             '<Member Name="Cmd" Datatype="Struct">'
+             '<Member Name="Start" Datatype="' + actual_type.replace('"', '&quot;')
+             + '"/><Member Name="Stop" Datatype="Bool"/>'
+             '</Member></Section></Document>'}))
+    report = preflight(request_data()).json()
+    assert report["items"][0]["status"] == "conflict"
+    assert "cmd.start: required type bool; TIA type" in report["items"][0]["reason"]
+    assert report["items"][1]["status"] == "blocked"
+    assert not report["will_create"]
+
+
+def test_nested_existing_udt_array_expansions_are_not_extra_declarations(monkeypatch):
+    payload = request_data()
+    payload["project"]["udts"] = [
+        {"name": "UDT_Outer", "fields": [{"name": "Items", "data_type": "Array",
+            "array_element_type": "UDT_Inner", "array_lower_bound": 1, "array_upper_bound": 10}]},
+        {"name": "UDT_Inner", "fields": [{"name": "Value", "data_type": "Bool"}]},
+    ]
+    payload["project"]["dbs"][0]["members"] = [{"name": "Data", "data_type": "UDT_Outer"}]
+    payload["selected_udts"], payload["selected_dbs"] = [], ["DB_Motors"]
+    outer = '''<Document><Section Name="Static"><Member Name="Items" Datatype='Array[1..10] of "UDT_Inner"'>
+      <Sections><Section Name="None"><Member Name="Value" Datatype="Bool" Informative="true">
+        <Subelement Path="[1]"><StartValue>true</StartValue></Subelement>
+      </Member></Section></Sections></Member></Section></Document>'''
+    inner = '<Document><Section Name="Static"><Member Name="Value" Datatype="Bool"/></Section></Document>'
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls,
+        existing=["PLC_UDT||UDT_Outer|PlcType|True", "PLC_UDT||UDT_Inner|PlcType|True"],
+        xml={"UDT_Outer": outer, "UDT_Inner": inner}))
+    report = preflight(payload).json()
+    assert report["will_create"] == ["DB_Motors"]
+    assert report["counts"]["compatible"] == 2
+    # A compatible parent must not hide a changed referenced child.
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls,
+        existing=["PLC_UDT||UDT_Outer|PlcType|True", "PLC_UDT||UDT_Inner|PlcType|True"],
+        xml={"UDT_Outer": outer, "UDT_Inner": inner.replace('Datatype="Bool"', 'Datatype="Int"')}))
+    changed = preflight(payload).json()
+    assert not changed["can_apply"]
+    assert changed["counts"]["conflict"] == 1
+    assert next(x for x in changed["items"] if x["name"] == "UDT_Outer")["status"] == "blocked"
+
+
+def test_unavailable_structure_is_unknown_and_independent_db_is_eligible(monkeypatch):
+    calls = []
+    adapter = mock_adapter(calls, existing=["PLC_UDT||UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><ProtectedType/></Document>'})
+    monkeypatch.setattr(facade, "_run_adapter", adapter)
+    report = preflight(add_structures(request_data())).json()
+    assert report["counts"]["unknown"] == 1
+    assert report["counts"]["conflict"] == 0
+    assert report["will_create"] == ["UDT_Valve", "DB_Valves"]
+    assert "No member declarations" in report["items"][0]["reason"]
+
+
+def test_reused_udt_change_invalidates_apply_token(monkeypatch):
+    calls = []
+    payload = request_data()
+    payload["selected_udts"], payload["selected_dbs"] = [], ["DB_Motors"]
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls,
+        existing=["PLC_UDT||UDT_Motor|PlcType|True"]))
+    report = preflight(payload).json()
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls,
+        existing=["PLC_UDT||UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static"><Member Name="Wrong" Datatype="Bool"/></Section></Document>'}))
+    assert apply(payload, report).status_code == 409
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+def test_created_db_requires_compiler_confirmation(monkeypatch):
+    calls = []
+    adapter = mock_adapter(calls)
+    monkeypatch.setattr(facade, "_run_adapter", lambda *args: [
+        line for line in adapter(*args) if not line.startswith("STRUCTURE_COMPILED|")])
+    payload = request_data()
+    report = preflight(payload).json()
+    response = apply(payload, report)
+    assert response.status_code == 502
+    assert "Missing TIA DB compilation confirmation" in response.json()["detail"]
+
+
+def test_existing_db_with_unknown_metadata_is_never_in_manifest(monkeypatch):
+    calls, imported = [], []
+    adapter = mock_adapter(calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"])
+    def capture(*args):
+        if args[0] == "import-plc-structure-batch":
+            imported.extend(Path(args[5]).read_text("utf-8").splitlines())
+        return adapter(*args)
+    monkeypatch.setattr(facade, "_run_adapter", capture)
+    payload = add_structures(request_data())
+    payload["project"]["dbs"][0]["retain"] = True
+    report = preflight(payload).json()
+    assert next(x for x in report["items"] if x["name"] == "DB_Motors")["status"] == "unknown"
+    assert apply(payload, report).status_code == 200
+    assert not any(row.startswith("DB|DB_Motors|") for row in imported)
+
+
+@pytest.mark.parametrize("member", [
+    '<Member Name="Cmd"/>',
+    '<Member Name="Cmd" Datatype="Struct"><AttributeList><StringAttribute Name="At">Shared</StringAttribute></AttributeList></Member>',
+])
+def test_unverifiable_structural_property_stays_blocked(monkeypatch, member):
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter([],
+        existing=["PLC_UDT||UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static">' + member + '</Section></Document>'}))
+    report = preflight(request_data()).json()
+    assert report["counts"]["unknown"] == 1
+    assert report["counts"]["conflict"] == 0
+    assert report["counts"]["blocked"] == 1
+    assert not report["can_apply"]
+    assert "Manual TIA structure review required" in report["items"][0]["reason"]

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 
 using Siemens.Engineering;
+using Siemens.Engineering.Compiler;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Types;
 
@@ -118,6 +119,10 @@ namespace TiaOpennessAdapter
                             "PLC_DB_NOT_CREATED|" + SanitizeOutput(dbName));
                         return 10;
                     }
+                    if (!CompileGeneratedDataBlock(EnumeratePlcBlocks(target.Software)
+                            .OfType<DataBlock>().Single(block => string.Equals(
+                                block.Name, dbName, StringComparison.OrdinalIgnoreCase))))
+                        return 10;
                     Console.WriteLine("STRUCTURE_IMPORTED|DB|"
                         + SanitizeOutput(dbName));
 
@@ -227,6 +232,11 @@ namespace TiaOpennessAdapter
                                 + SanitizeOutput(entry[1]));
                             return 10;
                         }
+                        if (!udt && !CompileGeneratedDataBlock(
+                                EnumeratePlcBlocks(target.Software).OfType<DataBlock>()
+                                    .Single(block => string.Equals(block.Name, entry[1],
+                                        StringComparison.OrdinalIgnoreCase))))
+                            return 10;
                         Console.WriteLine("STRUCTURE_IMPORTED|"
                             + entry[0] + "|" + SanitizeOutput(entry[1]));
                     }
@@ -234,6 +244,42 @@ namespace TiaOpennessAdapter
                 }
             }
             return 0;
+        }
+
+        private static bool CompileGeneratedDataBlock(DataBlock block)
+        {
+            ICompilable compiler = block.GetService<ICompilable>();
+            if (compiler == null)
+            {
+                Console.Error.WriteLine("PLC_DB_COMPILE_UNAVAILABLE|"
+                    + SanitizeOutput(block.Name));
+                return false;
+            }
+            CompilerResult result = compiler.Compile();
+            WriteStructureCompilerMessages(result.Messages);
+            if (result.ErrorCount != 0
+                || (result.State != CompilerResultState.Success
+                    && result.State != CompilerResultState.Warning))
+            {
+                Console.Error.WriteLine("PLC_DB_COMPILE_FAILED|"
+                    + SanitizeOutput(block.Name) + "|" + result.State
+                    + "|" + result.ErrorCount);
+                return false;
+            }
+            Console.WriteLine("STRUCTURE_COMPILED|DB|" + SanitizeOutput(block.Name));
+            return true;
+        }
+
+        private static void WriteStructureCompilerMessages(
+            CompilerResultMessageComposition messages)
+        {
+            foreach (CompilerResultMessage message in messages)
+            {
+                Console.WriteLine("STRUCTURE_COMPILE_MESSAGE|" + message.State
+                    + "|" + SanitizeOutput(message.Path)
+                    + "|" + SanitizeOutput(message.Description));
+                WriteStructureCompilerMessages(message.Messages);
+            }
         }
 
         private static void GenerateSingleStructureSource(

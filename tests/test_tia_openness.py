@@ -734,6 +734,7 @@ def test_plc_program_block_detail_is_parsed(
             "level": 0,
             "offset": "",
             "comment": "",
+            "metadata": {},
         },
         {
             "section": "Output",
@@ -743,6 +744,7 @@ def test_plc_program_block_detail_is_parsed(
             "level": 0,
             "offset": "",
             "comment": "",
+            "metadata": {},
         },
     ]
 
@@ -927,6 +929,7 @@ def test_plc_structure_detail_is_parsed(
                 "level": 0,
                 "offset": "",
                 "comment": "",
+                "metadata": {},
             },
             {
                 "section": "Static",
@@ -936,6 +939,7 @@ def test_plc_structure_detail_is_parsed(
                 "level": 0,
                 "offset": "",
                 "comment": "",
+                "metadata": {},
             },
             {
                 "section": "Static",
@@ -945,6 +949,7 @@ def test_plc_structure_detail_is_parsed(
                 "level": 1,
                 "offset": "",
                 "comment": "",
+                "metadata": {},
             },
         ],
     }

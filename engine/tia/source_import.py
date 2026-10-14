@@ -1,7 +1,8 @@
 """Read-only multi-UDT/DB preflight and guarded create-only TIA import.
 
-All generated objects are compared with the live PLC. Different/uncertain
-existing objects block the entire operation; identical definitions are skipped.
+All selected objects and their required types are compared with the live PLC.
+Compatible existing UDTs are reused; unknown or incompatible types block only
+their dependents. Existing objects are never overwritten.
 Import only missing objects after user confirmation and a fresh token recheck.
 """
 from __future__ import annotations
@@ -184,38 +185,144 @@ def _has_unverifiable_attributes(definition: dict) -> bool:
     return special(spec.fields if definition["kind"] == "udt" else spec.members)
 
 
-def _compare_existing(request, definition: dict, existing) -> tuple[str, str]:
-    if definition["kind"] == "db" and (
+def _declared_members(detail):
+    """UDT/array XML may expand referenced types or include element start values.
+
+    Compare declarations, not TIA's informative expansion of another UDT.
+    Inline Struct children remain part of the declared structure.
+    """
+    result, opaque = [], []
+    for member in detail.members:
+        key = member.path.casefold()
+        if any(key.startswith(parent + ".") for parent in opaque):
+            continue
+        result.append(member)
+        if _canonical_type(member.data_type) != "struct":
+            opaque.append(key)
+    return result
+
+
+def _structure_mismatch(actual, expected):
+    actual_by_path = dict(actual)
+    expected_by_path = dict(expected)
+    for path, expected_type in expected:
+        if path not in actual_by_path:
+            return f"Member {path}: required declaration missing in TIA."
+        if actual_by_path[path] != expected_type:
+            return (f"Member {path}: required type {expected_type}; "
+                    f"TIA type {actual_by_path[path]}.")
+    for path, actual_type in actual:
+        if path not in expected_by_path:
+            return f"Member {path}: unexpected TIA declaration ({actual_type})."
+    if actual != expected:
+        return "Member declaration order differs from the required structure."
+    return None
+
+
+def _udt_metadata_notes(spec, members):
+    actual = {m.path.casefold(): m for m in members}
+    notes = []
+
+    def inspect(fields, parent=""):
+        for field in fields:
+            path = parent + "." + field.name if parent else field.name
+            member = actual.get(path.casefold())
+            if member is None:
+                continue
+            if field.comment != member.comment:
+                notes.append(path + ": comments differ; existing comment retained.")
+            for key in ("start_value", "hmi_visible", "hmi_accessible", "hmi_writable"):
+                required = getattr(field, key)
+                observed = member.metadata.get(key)
+                if required is not None:
+                    if observed is None:
+                        notes.append(path + ": " + key + " not available/explicit "
+                                     "in export; existing metadata retained.")
+                    elif str(required).casefold() != observed.casefold():
+                        notes.append(path + ": " + key + " differs; existing value "
+                                     + observed + " retained.")
+                elif key == "start_value" and observed is not None:
+                    notes.append(path + ": existing start value " + observed + " retained.")
+            if member.metadata.get("remanence"):
+                notes.append(path + ": existing remanence "
+                             + member.metadata["remanence"] + " retained.")
+            inspect(field.struct_members or [], path)
+
+    if spec is not None:
+        inspect(spec.fields)
+    return notes
+
+
+def _compare_existing(request, definition: dict, existing) -> dict:
+    kind = definition["kind"]
+    if kind == "db" and (
         getattr(existing, "block_kind", "").casefold() not in
         {"globaldb", "global data block", "global"}
     ):
-        return "conflict", ("Existing DB is not confirmed as a global data "
-                            "block. Never overwrite an instance DB.")
-    if _has_unverifiable_attributes(definition):
-        return "conflict", ("Existing source has attributes/RETAIN/start values "
-                            "that this read-only comparison cannot fully verify; "
-                            "manual TIA review required. No overwrite.")
+        return {"status": "conflict", "reason":
+                "Existing DB is not confirmed as a global data block. "
+                "Never overwrite an instance DB."}
     try:
         detail = get_plc_structure(
             request.process_id, request.device_name, request.plc_name,
-            definition["kind"], existing.group_path, existing.name
+            kind, existing.group_path, existing.name
         )
-        actual = [(m.path.casefold(), _canonical_type(m.data_type))
-                  for m in detail.members]
-        expected = _expected_members(
-            definition["spec"].fields if definition["kind"] == "udt"
-            else definition["spec"].members)
-        if actual == expected and all(not m.comment for m in detail.members):
-            return "identical", (
-                "Declared field paths/types and comments match. No import. "
-                "TIA metadata beyond these declarations is not independently "
-                "verified; inspect retain/HMI/optimization settings if relevant."
-            )
-        return "conflict", ("Existing member paths, types or comments differ. "
-                            "No existing object will be overwritten.")
+        members = _declared_members(detail)
+        snapshot = [m.model_dump(exclude={"offset"}) for m in members]
+        observed = hashlib.sha256(json.dumps(
+            snapshot, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+        result = {"structure_fingerprint": observed, "metadata_warnings": [],
+                  "required_types": [m.data_type for m in members
+                                     if _canonical_type(m.data_type) != "struct"]}
+        unknown = []
+        if not members:
+            unknown.append("No member declarations were exported")
+        if not existing.is_consistent:
+            unknown.append("TIA reports this existing type/block as inconsistent")
+        for member in members:
+            if not member.data_type:
+                unknown.append(member.path + ": data type unavailable")
+            if member.metadata.get("at"):
+                unknown.append(member.path + ": overlaid AT declaration cannot be compared")
+        if unknown:
+            return {**result, "status": "unknown", "reason":
+                    "; ".join(unknown) + ". Manual TIA structure review required; "
+                    "dependent imports remain blocked. Export/repair the type "
+                    "in TIA and run preflight again."}
+        actual = [(m.path.casefold(), _canonical_type(m.data_type)) for m in members]
+        spec = definition.get("spec")
+        if spec is not None:
+            expected = _expected_members(spec.fields if kind == "udt" else spec.members)
+            mismatch = _structure_mismatch(actual, expected)
+            if mismatch:
+                return {**result, "status": "conflict", "reason":
+                        mismatch + " No existing object will be overwritten."}
+        if kind == "udt":
+            result["metadata_warnings"] = _udt_metadata_notes(spec, members)
+            return {**result, "status": "compatible", "reason":
+                    "Existing compatible UDT — reuse, no import required. "
+                    + ("Ordered member paths, types, array bounds and nested type "
+                       "references match. " if spec is not None else
+                       "No local member definition requested; DB uses the verified "
+                       "live type by name. ")
+                    + "Existing defaults, comments and HMI/retain settings are retained."}
+        if _has_unverifiable_attributes(definition):
+            return {**result, "status": "unknown", "reason":
+                    "DB structure matches, but requested RETAIN/start values/HMI "
+                    "metadata are not fully compared. Review the existing DB in "
+                    "TIA; no import or overwrite."}
+        if any(m.comment or m.metadata.get("start_value") for m in members):
+            return {**result, "status": "unknown", "reason":
+                    "DB structure matches; existing comments/start values require "
+                    "manual review. No import or overwrite."}
+        return {**result, "status": "identical", "reason":
+                "Declared DB structure matches. No import or overwrite. "
+                "Review DB retention/optimization in TIA if relevant."}
     except Exception as exc:
-        # No silent acceptance of a failed read-only export.
-        return "conflict", "Existing structure could not be verified: " + str(exc)
+        return {"status": "unknown", "metadata_warnings": [], "reason":
+                "Existing structure export unavailable: " + str(exc)
+                + ". Manual TIA review required; dependent imports remain blocked. "
+                "Export/repair the type in TIA and run preflight again."}
 
 
 _BUILTIN_TYPES = {
@@ -251,6 +358,9 @@ def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecificatio
 
 
 def _reference_type(value: str) -> str:
+    array = _ARRAY.fullmatch((value or "").strip())
+    if array:
+        value = array.group(3)
     name = (value or "").strip().strip('"').casefold()
     if re.fullmatch(r"(w?string)\[\d+\]", name):
         return name.split("[", 1)[0]
@@ -263,7 +373,7 @@ def _include_required_udts(
     existing_udts: set[str],
     existing_db_names: set[str] | None = None,
 ) -> tuple[ProjectSpecification, set[str]]:
-    """Add configured UDTs required by checked DBs and UDTs when TIA lacks them.
+    """Include required configured UDTs for creation or live compatibility checks.
 
     Transitive dependencies are resolved before generating sources. Objects not
     present in local definitions are left to the preflight blocker logic.
@@ -277,7 +387,7 @@ def _include_required_udts(
     def inspect(members):
         for reference in _references(members):
             key = _reference_type(reference)
-            if key in _BUILTIN_TYPES or key in existing_udts:
+            if key in _BUILTIN_TYPES:
                 continue
             udt = configured_udts.get(key)
             if udt is None:
@@ -341,61 +451,76 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
     for definition in definitions:
         collisions = existing.get(definition["name"].casefold(), [])
         if not collisions:
-            state, reason = "create", "Not present in TIA; can create after approval."
+            comparison = {"status": "create", "reason":
+                          "Not present in TIA; can create after approval."}
         elif len(collisions) != 1 or collisions[0][0] != definition["kind"]:
-            state, reason = "conflict", "Name collision with another PLC object/type."
+            comparison = {"status": "conflict", "reason":
+                          "Name collision with another PLC object/type."}
         else:
-            state, reason = _compare_existing(request, definition, collisions[0][1])
+            comparison = _compare_existing(request, definition, collisions[0][1])
         report.append({
             "kind": definition["kind"], "name": definition["name"],
-            "status": state, "reason": reason, "source": definition["source"],
+            **comparison, "source": definition["source"],
             "auto_dependency": definition["kind"] == "udt"
                 and definition["name"].casefold() in auto_udts,
         })
 
-    # Independent objects may be imported even when other selected objects
-    # conflict. Dependents of a blocked/conflicting UDT cannot be imported.
+    # Resolve transitively, including already-existing nested UDTs. A compatible
+    # parent cannot hide an incompatible configured child or an unavailable type.
     selected_state = {item["name"].casefold(): item for item in report
                       if item["kind"] == "udt"}
-    all_configured = {u.name.casefold(): u for u in request.project.udts}
+    definitions_by_name = {d["name"].casefold(): d for d in definitions}
     live_types = {u.name.casefold(): u for u in structures.udts}
     verified_external = {}
+    resolving, resolved = set(), set()
 
-    for definition, row in zip(definitions, report):
-        if row["status"] != "create":
-            continue
-        members = (definition["spec"].fields if definition["kind"] == "udt"
-                   else definition["spec"].members)
+    def resolve(row, references):
+        key = row["name"].casefold()
+        if key in resolved or row["status"] not in {"create", "compatible"}:
+            return
+        if key in resolving:
+            row.update(status="unknown", reason="Circular live UDT dependency. "
+                       "Manual TIA review required; no dependent import.")
+            return
+        resolving.add(key)
         blockers = []
-        for reference in _references(members):
-            key = _reference_type(reference)
-            if key in _BUILTIN_TYPES:
+        for reference in references:
+            ref_key = _reference_type(reference)
+            if ref_key in _BUILTIN_TYPES:
                 continue
-            selected_ref = selected_state.get(key)
-            if selected_ref is not None:
-                if selected_ref["status"] in {"conflict", "blocked"}:
-                    blockers.append(reference + " (conflict/blocked)")
-                continue
-            live_ref = live_types.get(key)
-            if live_ref is None:
-                blockers.append(reference + " (UDT missing in TIA and selection)")
-                continue
-            # Configured but not selected UDT already present in TIA: verify
-            # its current definition before importing any dependent DB.
-            configured = all_configured.get(key)
-            if configured is not None:
-                if key not in verified_external:
-                    state, detail = _compare_existing(
-                        request, {"kind": "udt", "spec": configured}, live_ref
-                    )
-                    verified_external[key] = (state, detail)
-                if verified_external[key][0] != "identical":
-                    blockers.append(reference + " (unchecked UDT not verified)")
+            dependency = selected_state.get(ref_key)
+            if dependency is not None:
+                definition = definitions_by_name[ref_key]
+                resolve(dependency, _references(definition["spec"].fields))
+            else:
+                live_ref = live_types.get(ref_key)
+                if live_ref is None:
+                    blockers.append(reference + " (UDT missing in TIA and selection)")
+                    continue
+                if ref_key not in verified_external:
+                    verified_external[ref_key] = {
+                        "kind": "udt", "name": live_ref.name, "source": "",
+                        "auto_dependency": True,
+                        **_compare_existing(request, {"kind": "udt"}, live_ref),
+                    }
+                dependency = verified_external[ref_key]
+                resolve(dependency, dependency.get("required_types", []))
+            if dependency["status"] not in {"create", "compatible", "identical"}:
+                blockers.append(reference + " (" + dependency["status"] + "): "
+                                + dependency["reason"])
+        resolving.remove(key)
+        resolved.add(key)
         if blockers:
             row["status"] = "blocked"
             row["reason"] = ("Dependency unavailable or mismatched: "
-                             + ", ".join(sorted(set(blockers)))
+                             + "; ".join(sorted(set(blockers)))
                              + ". No import for this object.")
+
+    for definition, row in zip(definitions, report):
+        members = (definition["spec"].fields if definition["kind"] == "udt"
+                   else definition["spec"].members)
+        resolve(row, _references(members))
+    report.extend(verified_external.values())
 
     snapshot = {
         "process_id": request.process_id, "device": request.device_name,
@@ -416,7 +541,7 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
         "device_name": request.device_name, "plc_name": request.plc_name,
         "items": report,
         "counts": {status: sum(x["status"] == status for x in report)
-                   for status in ("create", "identical", "conflict", "blocked")},
+                   for status in ("create", "identical", "compatible", "unknown", "conflict", "blocked")},
         "can_apply": bool(create),
         "will_create": create,
         "auto_dependencies": [
@@ -487,6 +612,7 @@ def apply_plc_structure_import(request: PlcStructureApplyRequest) -> dict:
                 + str(exc.detail)) from exc
 
     confirmed = set(line for line in result if line.startswith("STRUCTURE_IMPORTED|"))
+    confirmed_compiles = set(line for line in result if line.startswith("STRUCTURE_COMPILED|"))
     for row in current["items"]:
         if row["status"] == "create":
             entry = f"STRUCTURE_IMPORTED|{row['kind'].upper()}|{row['name']}"
@@ -494,6 +620,12 @@ def apply_plc_structure_import(request: PlcStructureApplyRequest) -> dict:
                 raise HTTPException(
                     502, "Missing TIA creation confirmation: " + entry
                     + ". Inspect the open project before retrying.")
+    for row in current["items"]:
+        if row["status"] == "create" and row["kind"] == "db":
+            entry = f"STRUCTURE_COMPILED|DB|{row['name']}"
+            if entry not in confirmed_compiles:
+                raise HTTPException(502, "Missing TIA DB compilation confirmation: "
+                                    + entry + ". Inspect the open project before retrying.")
     saved = next((line.split("|", 1)[1] for line in result
                   if line.startswith("PROJECT_SAVED|")), None)
     if saved != current["project_name"]:
@@ -502,9 +634,13 @@ def apply_plc_structure_import(request: PlcStructureApplyRequest) -> dict:
     return {
         "status": "imported", "project_name": current["project_name"],
         "created": current["will_create"],
+        "compiled_dbs": [x["name"] for x in current["items"]
+                         if x["status"] == "create" and x["kind"] == "db"],
         "skipped_identical": [x["name"] for x in current["items"]
                               if x["status"] == "identical"],
+        "reused_udts": [x["name"] for x in current["items"]
+                        if x["status"] == "compatible"],
         "skipped_conflicts": [x["name"] for x in current["items"]
-                              if x["status"] in {"conflict", "blocked"}],
+                              if x["status"] in {"conflict", "unknown", "blocked"}],
         "project_saved": saved,
     }

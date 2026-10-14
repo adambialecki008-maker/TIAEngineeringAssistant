@@ -149,6 +149,7 @@ class PlcStructureMemberInfo(BaseModel):
     level: int = 0
     offset: str = ""
     comment: str = ""
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class PlcProgramBlockDetail(PlcProgramBlockInfo):

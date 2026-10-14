@@ -40,38 +40,40 @@ def xml_attribute(
     return ""
 
 
-def xml_comment(
-    member: ET.Element,
-) -> str:
-    preferred_names = {
-        "multilanguagetext",
-        "text",
-        "comment",
-    }
-
-
-    for element in member.iter():
-        if (
-            element is member
-            or xml_local_name(
-                element.tag
-            ).casefold()
-            not in preferred_names
-        ):
+def xml_comment(member: ET.Element) -> str:
+    for comment in member:
+        if xml_local_name(comment.tag).casefold() != "comment":
             continue
-
-
-        text = (
-            element.text
-            or ""
-        ).strip()
-
-
-        if text:
-            return text
-
-
+        for element in comment.iter():
+            text = (element.text or "").strip()
+            if text and xml_local_name(element.tag).casefold() in {
+                "multilanguagetext", "text", "comment",
+            }:
+                return text
     return ""
+
+
+def member_metadata(member: ET.Element) -> dict[str, str]:
+    result = {}
+    for name, key in (("Remanence", "remanence"), ("At", "at")):
+        value = xml_attribute(member, name)
+        if value:
+            result[key] = value
+    attribute_names = {
+        "externalvisible": "hmi_visible", "hmivisible": "hmi_visible",
+        "externalaccessible": "hmi_accessible", "hmiaccessible": "hmi_accessible",
+        "externalwritable": "hmi_writable", "at": "at",
+    }
+    for child in member:
+        tag = xml_local_name(child.tag).casefold()
+        if tag == "startvalue":
+            result["start_value"] = (child.text or "").strip() if not list(child) else "<complex XML>"
+        elif tag == "attributelist":
+            for attribute in child:
+                key = attribute_names.get(xml_attribute(attribute, "Name").casefold())
+                if key:
+                    result[key] = (attribute.text or "").strip()
+    return result
 
 
 def direct_member_children(
@@ -84,6 +86,10 @@ def direct_member_children(
         node: ET.Element,
     ):
         for child in list(node):
+            if xml_local_name(child.tag).casefold() in {
+                "subelement", "startvalue", "attributelist", "comment",
+            }:
+                continue
             if (
                 xml_local_name(
                     child.tag
@@ -177,9 +183,8 @@ def parse_structure_xml(
                     "Offset",
                     "ByteOffset",
                 ),
-                comment=xml_comment(
-                    member
-                ),
+                comment=xml_comment(member),
+                metadata=member_metadata(member),
             )
         )
 
@@ -195,32 +200,18 @@ def parse_structure_xml(
             )
 
 
-    for section in root.iter():
-        if (
-            xml_local_name(
-                section.tag
-            )
-            !=
-            "Section"
-        ):
-            continue
+    def walk_sections(node):
+        # A Section inside a Member is expanded by append_member and must not
+        # be added again as a root declaration (e.g. ARRAY of UDT XML).
+        if xml_local_name(node.tag) == "Member":
+            return
+        if xml_local_name(node.tag) == "Section":
+            section_name = xml_attribute(node, "Name")
+            for member in direct_member_children(node):
+                append_member(member, section_name, "", 0)
+            return
+        for child in node:
+            walk_sections(child)
 
-
-        section_name = xml_attribute(
-            section,
-            "Name",
-        )
-
-
-        for member in direct_member_children(
-            section
-        ):
-            append_member(
-                member,
-                section_name,
-                "",
-                0,
-            )
-
-
+    walk_sections(root)
     return result

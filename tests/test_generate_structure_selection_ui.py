@@ -36,7 +36,7 @@ def test_source_preview_and_import_share_selection():
 
 
 def test_selected_import_allows_independent_items_and_never_overwrites():
-    assert 'for status in ("create", "identical", "conflict", "blocked")' in API
+    assert 'for status in ("create", "identical", "compatible", "unknown", "conflict", "blocked")' in API
     assert 'if row["status"] != "create":' in API
     assert 'request.approved_create != current["will_create"]' in API
     assert '"can_apply": bool(create)' in API

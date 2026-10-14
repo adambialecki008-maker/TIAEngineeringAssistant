@@ -188,15 +188,21 @@ export function initSourceImportUi() {
             appendCell(row, item.name);
             const state = item.status === "create" ? "Create"
                 : item.status === "identical" ? "Identical — skip"
+                : item.status === "compatible" ? "Existing compatible UDT — reuse"
+                : item.status === "unknown" ? "Unverified — manual TIA review"
                 : item.status === "blocked" ? "Blocked dependency — skip"
                 : "Conflict — skip";
             appendCell(row, state);
-            appendCell(row, item.reason);
+            appendCell(row, item.reason
+                + ((item.metadata_warnings || []).length
+                    ? " Metadata: " + item.metadata_warnings.join(" ") : ""));
             reportRows.appendChild(row);
         }
         if (reportCounts) reportCounts.textContent =
             "Missing: " + (result.counts?.create || 0)
             + " · Identical/skipped: " + (result.counts?.identical || 0)
+            + " · Compatible UDTs/reused: " + (result.counts?.compatible || 0)
+            + " · Unverified: " + (result.counts?.unknown || 0)
             + " · Conflicts: " + (result.counts?.conflict || 0)
             + " · Blocked dependencies: " + (result.counts?.blocked || 0)
             + " · Required UDTs added: "
@@ -218,6 +224,7 @@ export function initSourceImportUi() {
             ["Kind", "Name", "Decision", "Explanation"],
             ...(lastReport.items || []).map(x => [
                 x.kind.toUpperCase(), x.name, x.status, x.reason
+                    + " " + (x.metadata_warnings || []).join(" ")
             ]),
         ];
         const csv = "\ufeff" + rows.map(row => row.map(csvCell).join(";"))
@@ -263,11 +270,13 @@ export function initSourceImportUi() {
             if (!items.length) {
                 status.textContent = "Nothing to import. "
                     + (result.counts?.conflict ? "Resolve conflicts in TIA before retrying."
-                        : "All configured structures already exist and match.");
+                        : result.counts?.unknown || result.counts?.blocked
+                            ? "Review unverified structures/dependencies in TIA and rerun preflight."
+                        : "All selected structures already exist or required UDTs are compatible.");
             } else {
                 status.textContent = "READY — " + items.length
                     + " eligible missing object(s): " + items.join(", ")
-                    + ". Identical/conflicting objects and their dependent "
+                    + ". Existing compatible UDTs will be reused. Other existing objects and their dependent "
                     + "blocked structures will be skipped. "
                     + "Review the entire report and confirm only this subset.";
             }
@@ -305,6 +314,8 @@ export function initSourceImportUi() {
             + "\nPLC: " + prepared.device_name + " / " + prepared.plc_name
             + "\nCreate (" + exact.length + "): " + exact.join(", ")
             + "\nIdentical/skipped: " + prepared.counts.identical
+            + "\nCompatible UDTs/reused: " + (prepared.counts.compatible || 0)
+            + "\nUnverified/skipped: " + (prepared.counts.unknown || 0)
             + "\nAutomatically required UDTs to create: "
             + ((prepared.auto_dependencies || []).join(", ") || "none")
             + "\nConflicts (skipped): " + prepared.counts.conflict
@@ -325,11 +336,13 @@ export function initSourceImportUi() {
                     approved_create: exact, backup_confirmed: true}
             );
             status.textContent = "IMPORTED — " + result.created.join(", ")
+                + ". Reused UDTs: " + (result.reused_udts || []).join(", ")
                 + ". Skipped identical: " + result.skipped_identical.length
                 + ". Skipped conflicts/dependencies: "
                 + (result.skipped_conflicts?.length || 0)
                 + ". Project saved: " + (result.project_saved || "unconfirmed")
-                + ". Inspect objects and compile in TIA Portal.";
+                + ". Compiled DBs: " + ((result.compiled_dbs || []).join(", ") || "none")
+                + ". Inspect objects in TIA Portal.";
         } catch (error) {
             status.textContent = "IMPORT FAILED / UNCERTAIN — " + error.message
                 + " Inspect the OPEN TIA project before retrying.";
