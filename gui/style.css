@@ -1426,11 +1426,8 @@ td {
     table-layout: fixed;
     border-collapse: collapse;
 }
-.hmi-text-table thead {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
+/* Column headers are pinned on their cells by the shared rule below.
+   Avoid stacking a second sticky positioning context on <thead>. */
 .hmi-text-table th {
     white-space: normal;
     overflow-wrap: normal;
@@ -2181,4 +2178,19 @@ td {
 
 .member-add-toggle {
     margin: 4px 0 8px;
+}
+
+/* Sticky column descriptions across all engineering tables.
+   Applies to every scrollable inventory/table, including hardware I/O,
+   PLC DB/UDT/program inventory, generated device tags and HMI text lists.
+   Keep positioning on TH cells (not THEAD) for consistent table layout
+   and horizontal scrolling. Existing table-specific header colors win. */
+table > thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #1b2229;
+    background-clip: padding-box;
+    /* Collapsed table borders may disappear while a header is sticky. */
+    box-shadow: inset 0 -1px 0 #36414b;
 }
