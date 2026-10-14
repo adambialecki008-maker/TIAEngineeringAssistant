@@ -118,6 +118,7 @@ export function initTiaUi(
     const hmiUnifiedStatus = document.getElementById("tia-hmi-unified-status");
     const hmiRunReportButton = document.getElementById("tia-hmi-run-report");
     const hmiSkipReviewedButton = document.getElementById("tia-hmi-skip-reviewed");
+    const hmiBatchStopButton = document.getElementById("tia-hmi-batch-stop");
     const hmiRunReportSummary = document.getElementById("tia-hmi-report-summary");
     const hmiReviewEachBatch = document.getElementById("tia-hmi-review-each-batch");
     const hmiModeDescription = document.getElementById("tia-hmi-mode-description");
@@ -549,6 +550,9 @@ export function initTiaUi(
     let hmiReviewQueueActive = false;
     let hmiReviewQueuePending = false;
     let hmiReviewQueuePaused = false;
+    let hmiReviewQueueStopRequested = false;
+    let hmiReviewQueueOperation = null;
+    let hmiUnifiedStopRequested = false;
     let hmiReviewQueueQuota = 0;
     let hmiReviewQueueStartApproved = 0;
     let hmiReviewQueueTypes = {project: false, text_lists: false};
@@ -1661,6 +1665,14 @@ export function initTiaUi(
                 || hmiUnifiedPauseRequested)
                 && (!hmiReviewQueueActive || hmiReviewQueuePaused);
         }
+        if (hmiBatchStopButton) {
+            const activeRun = hmiReviewQueueActive || hmiUnifiedRunning;
+            const stopping = hmiReviewQueueStopRequested || hmiUnifiedStopRequested;
+            hmiBatchStopButton.classList.toggle("hidden", !activeRun);
+            hmiBatchStopButton.disabled = !activeRun || stopping;
+            hmiBatchStopButton.title = "Stop after any in-progress TIA operation "
+                + "has finished and been verified. Then re-enable scope checkboxes.";
+        }
         if (hmiSkipReviewedButton) {
             hmiSkipReviewedButton.classList.toggle("hidden",
                 !hmiReviewQueuePending);
@@ -2103,6 +2115,7 @@ export function initTiaUi(
 
         startHmiRunReport();
         hmiUnifiedRunning = true;
+        hmiUnifiedStopRequested = false;
         hmiUnifiedPauseRequested = false;
         hmiUnifiedQuota = quota;
         hmiUnifiedXlsxVerified = 0;
@@ -2162,7 +2175,12 @@ export function initTiaUi(
         } finally {
             if (useProject && hmiBatchJobId) await collectHmiXlsxRunSkips();
             hmiUnifiedRunning = false;
+            const wasStopped = hmiUnifiedStopRequested;
+            hmiUnifiedStopRequested = false;
             hmiUnifiedPauseRequested = false;
+            if (wasStopped && hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Translation stopped after current safe batch boundary. "
+                + "Change text-type checkboxes and scan again before restarting.";
             showHmiRunReport();
             renderHmiBatchPlan();
             updateHmiTranslateButtonState();
@@ -2274,6 +2292,8 @@ export function initTiaUi(
     function finishReviewedHmiQueue(message, isError = false) {
         hmiReviewQueueActive = false;
         hmiReviewQueuePaused = false;
+        hmiReviewQueueStopRequested = false;
+        hmiReviewQueueOperation = null;
         hmiReviewQueuePending = false;
         hmiReviewQueueCurrentScope = null;
         hmiReviewQueuePendingSkippedList = null;
@@ -2295,6 +2315,8 @@ export function initTiaUi(
             + "Use a BACKUP/COPY of the TIA project."
         )) return;
         hmiReviewQueueActive = true;
+        hmiReviewQueueStopRequested = false;
+        hmiReviewQueueOperation = null;
         setHmiTranslationStatus("", "normal");
         hmiReviewQueuePending = false;
         hmiReviewQueuePaused = false;
