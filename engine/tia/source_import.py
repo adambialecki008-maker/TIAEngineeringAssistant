@@ -358,9 +358,17 @@ def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecificatio
 
 
 def _reference_type(value: str) -> str:
-    array = _ARRAY.fullmatch((value or "").strip())
+    # Live types can contain multidimensional arrays and bounded String/WString
+    # elements even though the local editor only declares one array dimension.
+    # Bounds remain part of structural comparison; only the element is a type
+    # dependency, never the complete Array[...] declaration.
+    array = re.fullmatch(
+        r"array\s*\[\s*-?\d+\s*\.\.\s*-?\d+"
+        r"(?:\s*,\s*-?\d+\s*\.\.\s*-?\d+)*\s*\]\s*of\s*(.+)",
+        (value or "").strip(), re.I,
+    )
     if array:
-        value = array.group(3)
+        value = array.group(1)
     name = (value or "").strip().strip('"').casefold()
     if re.fullmatch(r"(w?string)\[\d+\]", name):
         return name.split("[", 1)[0]

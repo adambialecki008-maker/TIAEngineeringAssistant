@@ -27,6 +27,11 @@ Open this repository and this branch, read this file, and continue the requested
 - These are mocked Openness tests plus compilation against locally installed Siemens V21 assemblies. No real TIA write/import was executed. Live verification must confirm DB_Motors2 creation with the existing UDT_Motor and unchanged UDT.
 - Compatibility scope is DB declaration structure. Existing UDT defaults/HMI/retention/comments are retained and reported; they are never claimed identical to requested metadata. Unknown structural layout remains blocked; inspect/export/repair the existing type in TIA and re-run preflight (no unchecked override).
 
+## Follow-up: live array dependency references
+- Final control found live Array of String[n]/WString[n] and multidimensional arrays could be treated as complete UDT names by the transitive resolver. Dependency parsing now extracts only the element type; complete bounds remain in structural comparison.
+- Three additional mocked regressions passed: tests/test_plc_structure_import.py => 39 passed in 1.91s.
+- First final full suite before this follow-up: 383 passed in 13.45s; .NET build 0 warnings/errors and JS checks passed. Full-suite rerun is needed because this subsequent code change added coverage.
+
 ## Completed functional fix 2: native V21 Text List XML and progress
 - Real read-only exports revealed changing DocumentInfo/Created timestamps, hexadecimal engineering IDs, and ordinary body/p/br line breaks. The old snapshot treated export timestamps as content changes and rejected line-break lists as rich formatting.
 - Fingerprint ignores only DocumentInfo/Created and generated hex IDs on known engineering tags. It still checks list identity, entry order, values, languages, leaf text, structure, references and other metadata.

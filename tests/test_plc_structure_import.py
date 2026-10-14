@@ -685,3 +685,32 @@ def test_unverifiable_structural_property_stays_blocked(monkeypatch, member):
     assert report["counts"]["blocked"] == 1
     assert not report["can_apply"]
     assert "Manual TIA structure review required" in report["items"][0]["reason"]
+
+
+@pytest.mark.parametrize("array_type", ["Array[1..2] of String[20]", "Array[1..2, -1..1] of WString[10]"])
+def test_live_builtin_array_is_not_misclassified_as_udt_dependency(monkeypatch, array_type):
+    payload = request_data()
+    payload["project"]["udts"] = []
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls,
+        existing=["PLC_UDT||UDT_Motor|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static"><Member Name="Labels" Datatype="'
+             + array_type + '"/></Section></Document>'}))
+    report = preflight(payload).json()
+    assert report["will_create"] == ["DB_Motors"]
+    assert report["counts"]["compatible"] == 1 and report["counts"]["blocked"] == 0
+
+
+def test_live_multidimensional_array_resolves_nested_udt(monkeypatch):
+    payload = request_data()
+    payload["project"]["udts"] = []
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls,
+        existing=["PLC_UDT||UDT_Motor|PlcType|True", "PLC_UDT||UDT_Inner|PlcType|True"],
+        xml={"UDT_Motor": '<Document><Section Name="Static"><Member Name="Items" '
+             'Datatype="Array[1..2, -1..1] of &quot;UDT_Inner&quot;"/></Section></Document>',
+             "UDT_Inner": '<Document><Section Name="Static"><Member Name="Value" Datatype="Bool"/></Section></Document>'}))
+    report = preflight(payload).json()
+    assert report["will_create"] == ["DB_Motors"]
+    assert report["counts"]["compatible"] == 2
+    assert {c[6] for c in calls if c[0] == "export-structure"} == {"UDT_Motor", "UDT_Inner"}
