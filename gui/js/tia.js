@@ -2827,6 +2827,13 @@ export function initTiaUi(
                 "/api/v1/tia/hmis/text-lists/import",
                 {review_id: token, proposals: selected}
             );
+            // Only the backend's confirmed re-export is evidence of a TIA write.
+            if (result.status !== "verified"
+                || !Number.isInteger(result.verified_entries)
+                || result.verified_entries !== selected.length) {
+                throw new Error("TIA returned an unexpected XML verification result. "
+                    + "Inspect TIA; no automatic retry.");
+            }
             if (hmiTextListProgressKey !== batchIdentity) {
                 hmiTextListImportedCount = 0;
                 hmiTextListProgressKey = batchIdentity;
@@ -2844,7 +2851,15 @@ export function initTiaUi(
                     + (refreshed
                         ? "XML preview refreshed. Prepare the next reviewed batch if needed."
                         : "Scan Text lists again before preparing another batch.");
-            return Boolean(refreshed);
+            if (!refreshed) {
+                // The backend has ALREADY independently re-exported and verified
+                // this import. Failure of the following GUI catalog scan must
+                // never be mistaken for uncertain write confirmation.
+                return {state: "verified_refresh_failed",
+                    detail: "XML import verified in TIA, but follow-up catalog scan failed. "
+                        + "No further imports until a fresh scan succeeds."};
+            }
+            return true;
         } catch (error) {
             if (error.message?.includes("TEXT_LIST_REVIEW_EDIT_INVALID:")) {
                 if (hmiTextListStatus) hmiTextListStatus.textContent =
@@ -2852,12 +2867,29 @@ export function initTiaUi(
                     + ". Correct the editable proposal and approve again.";
                 return "edit_invalid";
             }
+            const reason = String(error.message || error);
+            // These messages originate before run_adapter(import-hmi-text-list).
+            // They confirm that no TIA write was attempted: safely record and
+            // skip rather than stopping every other list.
+            const safePreflight = [
+                "TextList changed since preparation. Nothing imported.",
+                "No import was attempted.",
+                "Cannot safely replace the list through XML.",
+                "Prepared target was already populated.",
+                "TextList entry changed since review.",
+                "Review proposals do not match prepared TextList rows.",
+            ].some(marker => reason.includes(marker));
             discardHmiTextListReview();
-            if (hmiTextListStatus)
-                hmiTextListStatus.textContent =
-                    "Import rejected or verification uncertain: " + error.message
-                    + ". Inspect TIA before repeating the operation.";
-            return false;
+            if (hmiTextListStatus) {
+                hmiTextListStatus.textContent = (safePreflight
+                    ? "XML not imported (safe preflight rejection): "
+                    : "XML import or verification uncertain: ")
+                    + reason + (safePreflight
+                        ? ". This list can be skipped and reported."
+                        : ". Inspect TIA before retrying.");
+            }
+            return {state: safePreflight ? "prewrite_rejected" : "uncertain",
+                detail: reason};
         } finally {
             hmiTextListBusy = false;
             updateHmiTranslateButtonState();
