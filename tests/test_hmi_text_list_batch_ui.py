@@ -266,3 +266,40 @@ def test_one_csv_report_covers_skipped_xlsx_xml_and_blocks_formulas():
         assert text in JS
     assert 'hmiReviewQueueBlockedLists.add(' in JS
     assert 'hmiReviewQueueProjectExhausted = true;' in JS
+
+
+def test_scan_is_a_visible_primary_action_and_checkboxes_have_project_wide_style():
+    html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
+    css = (ROOT / "gui/style.css").read_text(encoding="utf-8")
+    scan = html.split('id="tia-hmi-scan-button"', 1)[1].split("</button>", 1)[0]
+    assert 'class="primary-button"' in scan
+    assert 'input[type="checkbox"] {' in css
+    assert 'input[type="checkbox"]:checked {' in css
+    assert 'input[type="checkbox"]:focus-visible {' in css
+    assert 'button.primary-button:disabled {' in css
+
+
+def test_edit_panel_is_not_shown_before_prepared_translation_rows():
+    html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    assert 'id="tia-hmi-edit-details" class="hmi-edit-details hidden"' in html
+    assert 'function syncHmiReviewPreview()' in js
+    sync = js.split("function syncHmiReviewPreview()", 1)[1].split(
+        "function updateHmiTranslateButtonState()", 1
+    )[0]
+    assert 'hmiReviewRows?.children.length' in sync
+    assert 'hmiTextListReviewRows?.children.length' in sync
+    assert 'hmiEditDetails.classList.toggle("hidden", !hasReview)' in sync
+    assert 'syncHmiReviewPreview();' in js
+    assert 'id="tia-hmi-review-rows"' in html
+    assert 'id="tia-hmi-text-list-review-rows"' in html
+
+
+def test_queue_descriptions_follow_selected_scope_and_xml_imports_one_list_at_time():
+    html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
+    js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    assert 'id="tia-hmi-queue-scope-note"' in html
+    assert 'const projectNote = "Project texts (XLSX):' in js
+    assert 'const xmlNote = "Text lists (XML):' in js
+    assert 'hmiQueueScopeNote.textContent = projectSelected && listsSelected' in js
+    assert 'Each XML import sends one full Text list at a time.' in js
