@@ -2234,6 +2234,8 @@ export function initTiaUi(
         hmiXmlAutoRunning = true;
         hmiXmlAutoPauseRequested = false;
         hmiXmlAutoVerified = 0;
+        if (hmiXmlAutoProgress)
+            hmiXmlAutoProgress.textContent = "Verified in TIA: 0";
         hmiTextListBusy = true;
         discardHmiTextListReview();
         discardHmiReview();
@@ -3367,11 +3369,21 @@ export function initTiaUi(
                 );
             }
         } catch (error) {
-            setHmiTranslationStatus(
-                error.message + " If validation failed before import, correct "
-                + "the edited values; if TIA write status is uncertain, "
-                + "rescan before retrying.", "error"
-            );
+            if (error.message?.includes("PROJECT_TEXT_REVIEW_EDIT_INVALID:")) {
+                // Server explicitly rejected a manual edit BEFORE any TIA
+                // write; it retains the review token and all draft values.
+                preparedHmiReview = review;
+                setHmiTranslationStatus(
+                    "Manual Project text edit rejected: " + error.message
+                    + " Correct the text and click Import reviewed batch again.",
+                    "error"
+                );
+            } else {
+                setHmiTranslationStatus(
+                    error.message + " The write status may be uncertain: "
+                    + "inspect TIA and rescan before retrying.", "error"
+                );
+            }
         } finally {
             hmiReviewInProgress = false;
             updateHmiTranslateButtonState();
