@@ -572,7 +572,7 @@ function renderHmiBatchProgress(done, total) {
 function discardHmiTextListReview() {}
 function discardHmiReview() {}
 function finishReviewedHmiQueue(message) {stoppedStatus = message;}
-function finishStoppedReviewedHmiQueue()""" + review_stop + """
+function finishStoppedReviewedHmiQueue()""" + review_stop + r"""
 finishStoppedReviewedHmiQueue();
 assert.deepEqual(uiProgress, [[0, 0]]);
 assert.match(stoppedStatus, /5 translation\(s\) already verified in TIA/);
@@ -584,7 +584,7 @@ let hmiUnifiedXlsxVerified = 5, hmiXmlAutoVerified = 0;
 let hmiUnifiedStatus = {textContent: ""};
 const automaticFinalizer = () => {
     const wasStopped = hmiUnifiedStopRequested;
-""" + auto_finally + """
+""" + auto_finally + r"""
 };
 uiProgress.length = 0;
 automaticFinalizer();
