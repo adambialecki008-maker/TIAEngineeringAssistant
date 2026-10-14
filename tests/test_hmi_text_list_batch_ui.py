@@ -60,38 +60,56 @@ def test_combined_count_and_shared_total_across_formats():
     assert 'hmiCombinedApprovedCount += result.verified_entries;' in JS
 
 
-def test_automatic_xlsx_and_xml_imports_are_separate_workflows():
-    # Both automatic mechanisms live in the SAME Step 3 container,
-    # and no standalone Step 4/5 panels exist.
+def test_one_translate_all_action_orchestrates_both_verified_pipelines():
+    # A single automatic Translate all control lives in Step 3.
     assert HTML.count('class="hmi-step-heading">Step ') == 3
-    assert 'Step 1 — Scan the selected HMI' in HTML
-    assert 'Step 2 — Batch settings (selected text types)' in HTML
-    assert 'Step 3 — Prepare and review selected texts' in HTML
     assert 'Step 4 — ' not in HTML
     assert 'Step 5 — ' not in HTML
     assert 'class="hmi-automation-controls"' in HTML
+    assert HTML.count('id="tia-hmi-batch-start"') == 1
+    assert '>Translate all</button>' in HTML
+    assert 'id="tia-hmi-unified-status"' in HTML
+    assert 'id="tia-hmi-batch-progress"' in HTML
     assert 'id="tia-hmi-xml-auto-section"' in HTML
     assert 'class="hmi-automatic-scope" data-hmi-scope="project"' in HTML
-    assert 'id="tia-hmi-xml-auto-start"' in HTML
-    assert 'id="tia-hmi-xml-auto-pause"' in HTML
-    assert 'id="tia-hmi-batch-start"' in HTML
+    # The old separate XML Start/Pause actions must never reappear.
+    assert 'id="tia-hmi-xml-auto-start"' not in HTML
+    assert 'id="tia-hmi-xml-auto-pause"' not in HTML
+    assert 'hmiXmlAutoStart?.addEventListener(' not in JS
+    assert 'hmiBatchStartButton?.addEventListener(' in JS
+    assert 'void translateAllSelectedHmi();' in JS
 
-    xlsx_start = JS.split('async function startHmiBatchImport()', 1)[1]
-    xlsx_start = xlsx_start.split('async function resumeHmiBatchImport()', 1)[0]
-    assert 'START AUTOMATIC XLSX-ONLY TIA IMPORT?' in xlsx_start
-    assert 'Text lists (XML) are EXCLUDED' in xlsx_start
-    assert 'xlsxLimit' in xlsx_start
-    assert '"/api/v1/tia/hmis/text-lists/import"' not in xlsx_start
+    orchestrator = JS.split('async function translateAllSelectedHmi()', 1)[1]
+    orchestrator = orchestrator.split('function pauseUnifiedHmiTranslation()', 1)[0]
+    # Both checkboxes or just one work; project must precede XML.
+    assert 'const useProject = hmiScopeEnabled("project");' in orchestrator
+    assert 'const useXml = hmiScopeEnabled("text_lists");' in orchestrator
+    assert orchestrator.index('await startHmiBatchImport(') < orchestrator.index(
+        'await startAutomaticXmlBatches({confirmed: true})')
+    assert 'if (!job || job.status !== "completed" || hmiUnifiedPauseRequested)' in orchestrator
+    assert 'if (useXml && xmlCount > 0 && quotaLeft > 0)' in orchestrator
+    assert 'if (useProject && !(await scanHmiTextLists()))' in orchestrator
+    assert '{confirmed: true, forceAll: true}' in orchestrator
+    assert 'await startAutomaticXmlBatches({confirmed: true})' in orchestrator
+    assert 'hmiCombinedApprovedCount' in orchestrator
 
-    xml_start = JS.split('async function startAutomaticXmlBatches()', 1)[1]
-    xml_start = xml_start.split('function pauseAutomaticXmlBatches()', 1)[0]
-    assert 'START UNATTENDED XML TEXT LIST IMPORT?' in xml_start
-    assert '"/api/v1/tia/hmis/text-lists/prepare"' in xml_start
-    assert '"/api/v1/tia/hmis/text-lists/import"' in xml_start
-    assert 'result.status !== "verified"' in xml_start
-    assert 'const refreshed = await scanHmiTextLists()' in xml_start
-    assert '"/api/v1/tia/hmis/batch-translations/start"' not in xml_start
-    assert 'hmiXmlAutoPauseRequested' in xml_start
+    xlsx = JS.split('async function startHmiBatchImport({confirmed', 1)[1]
+    xlsx = xlsx.split('async function resumeHmiBatchImport()', 1)[0]
+    xml = JS.split('async function startAutomaticXmlBatches({confirmed', 1)[1]
+    xml = xml.split('function pauseAutomaticXmlBatches()', 1)[0]
+    assert 'START AUTOMATIC XLSX-ONLY TIA IMPORT?' in xlsx
+    assert '"/api/v1/tia/hmis/batch-translations/start"' in xlsx
+    assert '"/api/v1/tia/hmis/text-lists/import"' not in xlsx
+    assert 'hmiCombinedApprovedCount += Number(finished?.completed_unique) || 0;' in xlsx
+    assert 'START UNATTENDED XML TEXT LIST IMPORT?' in xml
+    assert '"/api/v1/tia/hmis/text-lists/prepare"' in xml
+    assert '"/api/v1/tia/hmis/text-lists/import"' in xml
+    assert 'result.status !== "verified"' in xml
+    assert 'const refreshed = await scanHmiTextLists()' in xml
+    assert '"/api/v1/tia/hmis/batch-translations/start"' not in xml
+    assert 'hmiXmlAutoPauseRequested && !hmiUnifiedPauseRequested' in xml
+    assert 'hmiCombinedApprovedCount += result.verified_entries;' in xml
+
 
 
 def test_project_and_xml_scan_details_are_one_level_inside_step_one():
@@ -120,8 +138,8 @@ def test_auto_actions_and_both_manual_reviews_reside_in_step_three():
         'tia-hmi-import-reviewed-button',
         'tia-hmi-text-list-review-rows',
         'tia-hmi-review-rows',
-        'tia-hmi-xml-auto-start',
-        'tia-hmi-xml-auto-pause',
+        'tia-hmi-unified-status',
+        'tia-hmi-xml-auto-status',
         'tia-hmi-batch-start',
         'tia-hmi-batch-resume',
         'tia-hmi-batch-pause',
@@ -194,7 +212,7 @@ def test_scan_disclosures_and_review_actions_belong_to_exactly_three_steps():
         "tia-hmi-import-reviewed-button",
         "tia-hmi-review-results",
         "tia-hmi-text-list-review",
-        "tia-hmi-xml-auto-start",
+        "tia-hmi-unified-status",
         "tia-hmi-batch-start",
     ):
         assert "hmi-manual-step" in parents[key], key
