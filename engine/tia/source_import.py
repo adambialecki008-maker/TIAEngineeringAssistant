@@ -84,7 +84,7 @@ def _source_files(spec: ProjectSpecification) -> tuple[str, str, str, str]:
         raise HTTPException(422, "Recursive UDT definitions are not supported.")
     types = {udt.name.casefold(): udt.name}
     udt_text = generate_udt_source(udt.name, udt.fields, types)
-    db_text = generate_db_source(db.name, db.members, types)
+    db_text = generate_db_source(db.name, db.members, types, retain=db.retain)
     for label, value in (("UDT", udt_text), ("DB", db_text)):
         try:
             value.encode("ascii")
