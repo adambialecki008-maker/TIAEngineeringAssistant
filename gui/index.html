@@ -1494,6 +1494,18 @@
                            aria-live="polite">
                             Scan the selected text types to calculate the combined batch plan.
                         </p>
+                        <h6>Combined translation queue (XLSX → XML)</h6>
+                        <p class="hint">One ordered queue for all checked types.
+                            Project texts are one work group; each XML Text list is
+                            an additional group. Counts are from the read-only scan.
+                            The backend still validates and verifies each format separately.</p>
+                        <div class="table-wrapper hmi-translation-queue-wrapper">
+                            <table class="hmi-text-table hmi-translation-queue-table">
+                                <thead><tr><th>Order</th><th>Queue item</th>
+                                    <th>Eligible missing targets</th></tr></thead>
+                                <tbody id="tia-hmi-translation-queue"></tbody>
+                            </table>
+                        </div>
                         </section>
 
                     </div>
