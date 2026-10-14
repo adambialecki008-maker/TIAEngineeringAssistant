@@ -12,10 +12,116 @@ export function initSourceImportUi() {
     const reportCounts = document.getElementById("source-import-report-counts");
     const reportRows = document.getElementById("source-import-report-rows");
     const reportDownload = document.getElementById("source-import-report-download");
+    const udtList = document.getElementById("source-select-udts");
+    const dbList = document.getElementById("source-select-dbs");
+    const udtCount = document.getElementById("source-select-udt-count");
+    const dbCount = document.getElementById("source-select-db-count");
+    const selectionStatus = document.getElementById("source-selection-status");
+    const selectedUdts = new Set();
+    const selectedDbs = new Set();
+    const knownUdts = new Set();
+    const knownDbs = new Set();
     if (!planButton || !applyButton || !backupCheck || !status) return;
 
     let prepared = null;
+    let lastReport = null;
     let plannedSnapshot = "";
+
+    function selection() {
+        return {
+            selected_udts: projectConfig.udts
+                .filter(item => selectedUdts.has(item.name)).map(item => item.name),
+            selected_dbs: projectConfig.dbs
+                .filter(item => selectedDbs.has(item.name)).map(item => item.name),
+        };
+    }
+
+    function renderObjectGroup(container, counter, items, selected, known, kind) {
+        if (!container) return;
+        const current = new Set(items.map(item => item.name));
+        for (const name of [...selected]) if (!current.has(name)) selected.delete(name);
+        for (const name of [...known]) if (!current.has(name)) known.delete(name);
+        container.replaceChildren();
+        if (!items.length) {
+            const empty = document.createElement("p");
+            empty.className = "hint";
+            empty.textContent = "No " + kind + " definitions configured.";
+            container.appendChild(empty);
+        }
+        for (const item of items) {
+            if (!known.has(item.name)) {
+                selected.add(item.name); // Newly created items are checked by default.
+                known.add(item.name);
+            }
+            const label = document.createElement("label");
+            label.className = "checkbox-label structure-selection-item";
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.checked = selected.has(item.name);
+            input.dataset.structureKind = kind;
+            input.dataset.structureName = item.name;
+            input.addEventListener("change", () => {
+                if (input.checked) selected.add(item.name);
+                else selected.delete(item.name);
+                clearPlan();
+                if (sourcePreview) sourcePreview.textContent = "";
+                showSelectionSummary();
+                counter.textContent = selected.size + "/" + items.length;
+            });
+            const text = document.createElement("span");
+            text.textContent = item.name;
+            label.append(input, text);
+            container.appendChild(label);
+        }
+        if (counter) counter.textContent = selected.size + "/" + items.length;
+    }
+
+    function showSelectionSummary() {
+        const choice = selection();
+        const total = choice.selected_udts.length + choice.selected_dbs.length;
+        if (selectionStatus) {
+            selectionStatus.textContent = total
+                ? "Selected for generation/import: "
+                    + choice.selected_udts.length + " UDT, "
+                    + choice.selected_dbs.length + " DB. "
+                    + "Preflight compares only checked definitions."
+                : "No structures selected. Select at least one UDT or DB.";
+        }
+        planButton.disabled = !total;
+        return total;
+    }
+
+    function refreshSelection() {
+        renderObjectGroup(udtList, udtCount, projectConfig.udts,
+            selectedUdts, knownUdts, "UDT");
+        renderObjectGroup(dbList, dbCount, projectConfig.dbs,
+            selectedDbs, knownDbs, "DB");
+        showSelectionSummary();
+    }
+
+    async function generateSelectionPreview() {
+        const choice = selection();
+        if (!choice.selected_udts.length && !choice.selected_dbs.length) {
+            if (sourcePreview) sourcePreview.textContent =
+                "Select at least one UDT or DB.";
+            return;
+        }
+        if (!projectConfig.plc_family) {
+            if (sourcePreview) sourcePreview.textContent =
+                "Select PLC family first.";
+            return;
+        }
+        try {
+            const response = await postJson(
+                "/api/v1/tia/plc-structure-import/preview",
+                {project: projectConfig, ...choice}
+            );
+            if (sourcePreview) sourcePreview.textContent = response.source;
+        } catch (error) {
+            if (sourcePreview) sourcePreview.textContent =
+                "Source preview failed: " + error.message;
+        }
+    }
 
     function requestPayload() {
         const processId = Number(document.getElementById("tia-process")?.value);
@@ -29,6 +135,7 @@ export function initSourceImportUi() {
             device_name: target.device_name,
             plc_name: target.plc_name,
             project: projectConfig,
+            ...selection(),
         };
     }
 
@@ -47,6 +154,7 @@ export function initSourceImportUi() {
 
     function renderReport(result) {
         if (!report || !reportRows) return;
+        lastReport = result;
         report.classList.remove("hidden");
         reportRows.replaceChildren();
         for (const item of result.items || []) {
@@ -54,7 +162,9 @@ export function initSourceImportUi() {
             appendCell(row, item.kind?.toUpperCase());
             appendCell(row, item.name);
             const state = item.status === "create" ? "Create"
-                : item.status === "identical" ? "Identical — skip" : "Conflict — blocked";
+                : item.status === "identical" ? "Identical — skip"
+                : item.status === "blocked" ? "Blocked dependency — skip"
+                : "Conflict — skip";
             appendCell(row, state);
             appendCell(row, item.reason);
             reportRows.appendChild(row);
@@ -63,9 +173,10 @@ export function initSourceImportUi() {
             "Missing: " + (result.counts?.create || 0)
             + " · Identical/skipped: " + (result.counts?.identical || 0)
             + " · Conflicts: " + (result.counts?.conflict || 0)
+            + " · Blocked dependencies: " + (result.counts?.blocked || 0)
             + ". " + (result.can_apply
-                ? "Only missing objects will be created after confirmation."
-                : "Import blocked or nothing new to create.");
+                ? "Only eligible missing objects will be created after confirmation."
+                : "Nothing eligible for creation.");
     }
 
     function csvCell(value) {
@@ -75,10 +186,10 @@ export function initSourceImportUi() {
     }
 
     reportDownload?.addEventListener("click", () => {
-        if (!prepared) return;
+        if (!lastReport) return;
         const rows = [
             ["Kind", "Name", "Decision", "Explanation"],
-            ...(prepared.items || []).map(x => [
+            ...(lastReport.items || []).map(x => [
                 x.kind.toUpperCase(), x.name, x.status, x.reason
             ]),
         ];
@@ -118,16 +229,12 @@ export function initSourceImportUi() {
                 status.textContent = "Nothing to import. "
                     + (result.counts?.conflict ? "Resolve conflicts in TIA before retrying."
                         : "All configured structures already exist and match.");
-            } else if (!result.can_apply) {
-                status.textContent = "IMPORT BLOCKED — "
-                    + result.counts.conflict
-                    + " difference(s) / unverified existing objects. "
-                    + "No TIA objects were modified; see report.";
             } else {
                 status.textContent = "READY — " + items.length
-                    + " missing object(s): " + items.join(", ")
-                    + ". Identical objects will be skipped. "
-                    + "Review the report and confirm before import.";
+                    + " eligible missing object(s): " + items.join(", ")
+                    + ". Identical/conflicting objects and their dependent "
+                    + "blocked structures will be skipped. "
+                    + "Review the entire report and confirm only this subset.";
             }
             applyButton.disabled = !result.can_apply;
         } catch (error) {
@@ -163,7 +270,9 @@ export function initSourceImportUi() {
             + "\nPLC: " + prepared.device_name + " / " + prepared.plc_name
             + "\nCreate (" + exact.length + "): " + exact.join(", ")
             + "\nIdentical/skipped: " + prepared.counts.identical
-            + "\nConflicts: " + prepared.counts.conflict
+            + "\nConflicts (skipped): " + prepared.counts.conflict
+            + "\nBlocked dependencies (skipped): "
+            + (prepared.counts.blocked || 0)
             + "\n\nExisting structures will never be overwritten. "
             + "Partial UNSAVED changes are possible if an import fails. "
             + "Proceed ONLY on a backup/test project?"
@@ -180,6 +289,8 @@ export function initSourceImportUi() {
             );
             status.textContent = "IMPORTED — " + result.created.join(", ")
                 + ". Skipped identical: " + result.skipped_identical.length
+                + ". Skipped conflicts/dependencies: "
+                + (result.skipped_conflicts?.length || 0)
                 + ". Project saved: " + (result.project_saved || "unconfirmed")
                 + ". Inspect objects and compile in TIA Portal.";
         } catch (error) {
@@ -190,4 +301,7 @@ export function initSourceImportUi() {
             planButton.disabled = false;
         }
     });
+
+    refreshSelection();
+    return {refreshSelection, selection, generateSelectionPreview};
 }
