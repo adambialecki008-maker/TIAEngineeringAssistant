@@ -177,6 +177,7 @@ export function createMemberEditor({
     onAdd = null,
     onSave = null,
     onCancel = null,
+    onDraftChange = null,
 }) {
     const root = document.createElement("div");
     root.className = "member-editor-form";
@@ -256,6 +257,7 @@ export function createMemberEditor({
                     validateOnChange: false,
                     onChange: (next) => {
                         structMembers = next;
+                        onDraftChange?.();
                         renderDraft();
                         return true;
                     },
@@ -355,6 +357,11 @@ export function createMemberTree({
     const root = document.createElement("div");
     root.className = "member-tree";
 
+    // Only one editor is open in each tree. Nested Struct drafts get
+    // their own tree and remain isolated until their parent is saved.
+    let activeClose = null;
+    let savingActive = false;
+
     function apply(next) {
         if (validateOnChange) {
             const error = validateMemberList(next, ownerUdtName);
@@ -362,6 +369,10 @@ export function createMemberTree({
                 alert(error);
                 return false;
             }
+        }
+        // An unrelated add/delete/reorder must not discard an open draft.
+        if (!savingActive && activeClose && !activeClose(true)) {
+            return false;
         }
         return onChange(next) !== false;
     }
@@ -388,31 +399,82 @@ export function createMemberTree({
             const row = document.createElement("tr");
             row.dataset.memberPath = memberKey;
             const nameCell = createTextCell(member.name);
-            let childrenRow = null;
-            if (member.data_type === "Struct") {
-                nameCell.textContent = "";
-                const key = memberKey;
-                const expanded = openPaths === null || openPaths.has(key);
-                const toggle = createButton(expanded ? "−" : "+", () => {
-                    const isOpen = toggle.getAttribute("aria-expanded") === "true";
-                    toggle.setAttribute("aria-expanded", String(!isOpen));
-                    toggle.textContent = isOpen ? "+" : "−";
-                    childrenRow.hidden = isOpen;
-                });
-                toggle.className = "member-tree-toggle";
-                toggle.dataset.memberPath = key;
-                toggle.setAttribute("aria-expanded", String(expanded));
-                toggle.setAttribute("aria-label", "Expand or collapse " + member.name);
-                nameCell.append(toggle, document.createTextNode(member.name));
-                childrenRow = document.createElement("tr");
-                childrenRow.className = "member-tree-children";
-                childrenRow.dataset.memberChildren = key;
-                childrenRow.hidden = !expanded;
-                const childrenCell = document.createElement("td");
-                childrenCell.colSpan = 4;
-                renderList(childrenCell, member.struct_members ?? [], memberPath, member.name);
-                childrenRow.appendChild(childrenCell);
+            const editRow = document.createElement("tr");
+            editRow.className = "member-tree-edit-row";
+            editRow.dataset.memberDetails = memberKey;
+            const editCell = document.createElement("td");
+            editCell.colSpan = 4;
+            editRow.appendChild(editCell);
+
+            let expanded = false;
+            let dirty = false;
+            const toggle = createButton("+", () => {
+                if (expanded) closeEditor(true);
+                else openEditor();
+            });
+            toggle.className = "member-tree-toggle";
+            toggle.dataset.memberPath = memberKey;
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.setAttribute("aria-label", "Expand editor for " + member.name);
+            nameCell.prepend(toggle, document.createTextNode(" "));
+            editCell.addEventListener("input", () => { dirty = true; });
+            editCell.addEventListener("change", () => { dirty = true; });
+
+            function closeEditor(confirmChanges) {
+                if (!expanded) return true;
+                if (confirmChanges && dirty && !confirm(
+                    'Discard unsaved changes to "' + member.name + '"?'
+                )) return false;
+                editRow.remove();
+                editCell.replaceChildren();
+                expanded = false;
+                dirty = false;
+                toggle.textContent = "+";
+                toggle.setAttribute("aria-expanded", "false");
+                toggle.setAttribute("aria-label", "Expand editor for " + member.name);
+                if (activeClose === closeEditor) activeClose = null;
+                return true;
             }
+
+            function openEditor() {
+                if (expanded) return;
+                if (activeClose && !activeClose(true)) return;
+                activeClose = closeEditor;
+                expanded = true;
+                dirty = false;
+                editCell.replaceChildren(createMemberEditor({
+                    prefix: prefix + "-edit-" + memberPath.join("-"),
+                    existingMembers: list,
+                    excludeUdtName: ownerUdtName,
+                    member,
+                    editIndex: index,
+                    onDraftChange: () => { dirty = true; },
+                    onSave: (candidate) => {
+                        // The renderer preserves expanded paths on refresh.
+                        // A successful Save should close this editor instead.
+                        toggle.setAttribute("aria-expanded", "false");
+                        savingActive = true;
+                        let accepted;
+                        try {
+                            accepted = mutate(path, (target) => {
+                                target[index] = candidate;
+                            });
+                        } finally {
+                            savingActive = false;
+                        }
+                        if (!accepted) {
+                            toggle.setAttribute("aria-expanded", "true");
+                        }
+                        return accepted;
+                    },
+                    onCancel: () => closeEditor(false),
+                }));
+                toggle.textContent = "−";
+                toggle.setAttribute("aria-expanded", "true");
+                toggle.setAttribute("aria-label", "Collapse editor for " + member.name);
+                row.after(editRow);
+            }
+
             row.append(
                 nameCell,
                 createTextCell(formatMemberType(member)),
@@ -420,25 +482,6 @@ export function createMemberTree({
             );
             const actions = document.createElement("td");
             actions.className = "member-tree-actions";
-            const editRow = document.createElement("tr");
-            editRow.className = "member-tree-edit-row";
-            const editCell = document.createElement("td");
-            editCell.colSpan = 4;
-            editRow.appendChild(editCell);
-            actions.appendChild(createButton("Edit", () => {
-                editCell.replaceChildren(createMemberEditor({
-                    prefix: prefix + "-edit-" + memberPath.join("-"),
-                    existingMembers: list,
-                    excludeUdtName: ownerUdtName,
-                    member,
-                    editIndex: index,
-                    onSave: (candidate) => mutate(path, (target) => {
-                        target[index] = candidate;
-                    }),
-                    onCancel: () => editRow.remove(),
-                }));
-                row.after(editRow);
-            }));
             actions.appendChild(createButton("Delete", () => {
                 if (!confirm('Delete member "' + member.name + '"?')) return;
                 mutate(path, (target) => target.splice(index, 1));
@@ -457,7 +500,7 @@ export function createMemberTree({
             actions.appendChild(down);
             row.appendChild(actions);
             body.appendChild(row);
-            if (childrenRow) body.appendChild(childrenRow);
+            if (openPaths?.has(memberKey)) openEditor();
         });
         host.appendChild(table);
         const addArea = document.createElement("div");
