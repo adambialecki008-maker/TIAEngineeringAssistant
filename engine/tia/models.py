@@ -43,6 +43,7 @@ class ProjectPlc(BaseModel):
 class ProjectHmi(BaseModel):
     device_name: str
     hmi_name: str
+    model_name: str = ""
     device_type_identifier: str = ""
     hmi_type_identifier: str = ""
     software_type: str = ""
