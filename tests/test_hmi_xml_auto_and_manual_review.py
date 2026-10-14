@@ -152,7 +152,7 @@ def test_auto_xml_pipeline_is_routed_by_translate_all_with_safe_pause():
     js = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
     # One shared entry point replaces the old separate XML/XLSX start buttons.
     assert 'id="tia-hmi-batch-start"' in html
-    assert '>Translate all</button>' in html
+    assert '>Translate</button>' in html
     assert 'id="tia-hmi-batch-pause"' in html
     assert 'id="tia-hmi-xml-auto-section"' in html
     assert 'data-hmi-scope="text_lists"' in html
