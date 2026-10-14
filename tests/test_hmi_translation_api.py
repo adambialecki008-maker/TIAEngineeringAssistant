@@ -71,6 +71,27 @@ def test_one_installed_model_autoselected(monkeypatch):
     assert ollama.resolve_ollama_model(available=["qwen2.5:7b"]) == "qwen2.5:7b"
 
 
+def test_qwen_3b_is_default_when_multiple_models_installed(monkeypatch):
+    monkeypatch.delenv("OLLAMA_TRANSLATION_MODEL", raising=False)
+    available = ["gemma3:4b", "qwen2.5:7b", "qwen2.5:3b"]
+    assert ollama.resolve_ollama_model(available=available) == "qwen2.5:3b"
+
+
+def test_explicit_ollama_model_overrides_qwen_3b_default(monkeypatch):
+    monkeypatch.delenv("OLLAMA_TRANSLATION_MODEL", raising=False)
+    available = ["qwen2.5:3b", "qwen2.5:7b"]
+    assert ollama.resolve_ollama_model(
+        requested="qwen2.5:7b", available=available
+    ) == "qwen2.5:7b"
+
+
+def test_env_configured_model_overrides_qwen_3b_default(monkeypatch):
+    monkeypatch.setenv("OLLAMA_TRANSLATION_MODEL", "gemma3:4b")
+    assert ollama.resolve_ollama_model(
+        available=["qwen2.5:3b", "gemma3:4b"]
+    ) == "gemma3:4b"
+
+
 def test_multiple_models_require_selection(monkeypatch):
     monkeypatch.delenv("OLLAMA_TRANSLATION_MODEL", raising=False)
     with pytest.raises(HTTPException) as err:
