@@ -5,6 +5,9 @@ from pydantic import (
     Field,
     model_validator,
 )
+from decimal import Decimal, InvalidOperation
+import math
+import re
 
 ARRAY_MIN_BOUND = -32768
 ARRAY_MAX_BOUND = 32767
@@ -16,6 +19,12 @@ class TiaMember(BaseModel):
     data_type: str = Field(min_length=1)
 
     comment: str | None = None
+
+    # Optional TIA source attributes. None preserves TIA defaults.
+    start_value: str | None = None
+    hmi_visible: bool | None = None
+    hmi_accessible: bool | None = None
+    hmi_writable: bool | None = None
 
     # ARRAY
     array_element_type: str | None = None
@@ -40,7 +49,53 @@ class TiaMember(BaseModel):
         else:
             self._validate_simple_type()
 
+        self._validate_initial_value()
         return self
+
+    def _validate_initial_value(self) -> None:
+        value = self.start_value
+        if value is None or value == "":
+            self.start_value = None
+            return
+        value = value.strip()
+        kind = self.data_type.casefold()
+        if kind in {"struct", "array"}:
+            raise ValueError("Set initial values on scalar members, not on Struct/Array.")
+        if kind == "bool":
+            if value.casefold() not in {"true", "false", "0", "1"}:
+                raise ValueError("Bool Start value must be TRUE or FALSE.")
+        elif kind in {
+            "sint", "usint", "int", "uint", "dint", "udint", "lint", "ulint"
+        }:
+            limits = {
+                "sint": (-128, 127), "usint": (0, 255),
+                "int": (-32768, 32767), "uint": (0, 65535),
+                "dint": (-2147483648, 2147483647),
+                "udint": (0, 4294967295),
+                "lint": (-9223372036854775808, 9223372036854775807),
+                "ulint": (0, 18446744073709551615),
+            }
+            if not re.fullmatch(r"[+-]?[0-9]+", value):
+                raise ValueError("Integer Start value must be a decimal integer.")
+            number = int(value)
+            low, high = limits[kind]
+            if not low <= number <= high:
+                raise ValueError(f"{self.data_type} Start value out of range.")
+        elif kind in {"real", "lreal"}:
+            if not re.fullmatch(r"[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value):
+                raise ValueError("Real Start value must be a finite decimal.")
+            try:
+                number = float(value)
+            except (ValueError, OverflowError) as exc:
+                raise ValueError("Invalid Real Start value.") from exc
+            if not math.isfinite(number):
+                raise ValueError("Real Start value must be finite.")
+        else:
+            raise ValueError(
+                f"Start values for {self.data_type} are not yet supported "
+                "by the SCL generator."
+            )
+        self.start_value = value
 
     def _validate_array(
         self,
