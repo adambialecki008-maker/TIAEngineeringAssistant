@@ -23,7 +23,7 @@ from functions.tia_source_generator import generate_db_source, generate_udt_sour
 
 router = APIRouter()
 _VALID_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_VALID_TYPE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\\[[0-9]+\\])?$")
+_VALID_TYPE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\[[0-9]+\])?$")
 
 
 class PlcStructureImportRequest(BaseModel):
