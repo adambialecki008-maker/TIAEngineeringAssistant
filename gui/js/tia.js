@@ -546,6 +546,7 @@ export function initTiaUi(
     let hmiUnifiedRunning = false;
     let hmiUnifiedPauseRequested = false;
     let hmiUnifiedQuota = 0;
+    let hmiUnifiedCarryVerified = 0;
     let hmiUnifiedXlsxVerified = 0;
     let hmiReviewQueueActive = false;
     let hmiReviewQueuePending = false;
@@ -1814,7 +1815,8 @@ export function initTiaUi(
 
     function renderUnifiedHmiProgress() {
         if (hmiUnifiedRunning) {
-            renderHmiBatchProgress(hmiUnifiedXlsxVerified + hmiXmlAutoVerified,
+            renderHmiBatchProgress(
+                hmiUnifiedCarryVerified + hmiUnifiedXlsxVerified + hmiXmlAutoVerified,
                 hmiUnifiedQuota);
         }
     }
@@ -2076,6 +2078,8 @@ export function initTiaUi(
         const options = arguments[0] || {};
         const confirmed = options.confirmed === true;
         const preserveRunReport = options.preserveRunReport === true;
+        const carriedVerified = confirmed && preserveRunReport
+            ? Math.max(0, Number(options.carriedVerified) || 0) : 0;
         const selection = hmiTranslationSelection();
         const useProject = hmiScopeEnabled("project");
         const useXml = hmiScopeEnabled("text_lists");
@@ -2134,7 +2138,10 @@ export function initTiaUi(
         hmiUnifiedRunning = true;
         hmiUnifiedStopRequested = false;
         hmiUnifiedPauseRequested = false;
-        hmiUnifiedQuota = quota;
+        // Switching from a reviewed queue keeps the original 10-text goal:
+        // 5 verified + 5 remaining must be displayed as 5/10, not 0/5.
+        hmiUnifiedCarryVerified = carriedVerified;
+        hmiUnifiedQuota = quota + carriedVerified;
         hmiUnifiedXlsxVerified = 0;
         hmiXmlAutoVerified = 0;
         renderUnifiedHmiProgress();
@@ -2182,8 +2189,12 @@ export function initTiaUi(
                 }
             }
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
-                "Finished: " + hmiUnifiedXlsxVerified + " Project texts + "
-                + hmiXmlAutoVerified + " XML entries verified in TIA. "
+                "Finished: " + (hmiUnifiedCarryVerified
+                    + hmiUnifiedXlsxVerified + hmiXmlAutoVerified)
+                + " translations verified in TIA in this run ("
+                + hmiUnifiedCarryVerified + " before automatic continuation, "
+                + hmiUnifiedXlsxVerified + " automatic XLSX, "
+                + hmiXmlAutoVerified + " automatic XML). "
                 + "Skipped entries require manual review.";
         } catch (error) {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
@@ -2198,7 +2209,8 @@ export function initTiaUi(
             if (wasStopped) {
                 // Clear only the finished run's visual progress. Confirmed
                 // writes and the cumulative count remain intact in TIA.
-                const verified = hmiUnifiedXlsxVerified + hmiXmlAutoVerified;
+                const verified = hmiUnifiedCarryVerified
+                    + hmiUnifiedXlsxVerified + hmiXmlAutoVerified;
                 if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                     "Translation stopped after current safe batch boundary. "
                     + verified + " translation(s) already verified in TIA. "
@@ -2653,6 +2665,15 @@ export function initTiaUi(
 
     async function continueReviewedQueueAutomatically() {
         if (!hmiReviewQueueActive || !hmiReviewQueueAutoContinue) return;
+        // Turning review off must not silently cancel a requested Pause.
+        // Resume review queue will reach the automatic path at a safe boundary.
+        if (hmiReviewQueuePaused) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Queue paused at a verified boundary. Resume to continue "
+                + "automatically with the remaining translations.";
+            updateHmiTranslateButtonState();
+            return;
+        }
         const verified = hmiCombinedApprovedCount - hmiReviewQueueStartApproved;
         const quota = hmiReviewQueueQuota;
         hmiReviewQueueActive = false;
@@ -2673,7 +2694,9 @@ export function initTiaUi(
             "Review disabled. Continuing the remaining queue with automatic "
             + "TIA verification after every batch...";
         updateHmiTranslateButtonState();
-        await translateAllSelectedHmi({confirmed: true, preserveRunReport: true});
+        await translateAllSelectedHmi({
+            confirmed: true, preserveRunReport: true, carriedVerified: verified,
+        });
     }
 
     async function skipReviewedHmiQueueBatch() {

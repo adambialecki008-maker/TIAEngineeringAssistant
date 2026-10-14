@@ -274,7 +274,8 @@ def test_review_mode_can_switch_an_active_review_queue_to_automatic():
     continuation = JS.split('async function continueReviewedQueueAutomatically()', 1)[1].split(
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
-    assert 'await translateAllSelectedHmi({confirmed: true, preserveRunReport: true});' in continuation
+    assert 'confirmed: true, preserveRunReport: true, carriedVerified: verified,' in continuation
+    assert 'if (hmiReviewQueuePaused)' in continuation
     assert 'if (!automatic && !confirm(' in JS
 
 
@@ -629,3 +630,43 @@ def test_stop_requires_fresh_hmi_scan_and_completed_csv_keeps_final_count():
     assert "hmiRunReportVerifiedCount" in report
     assert "?? Math.max(0, hmiCombinedApprovedCount - hmiRunReportStartCount)" in report
     assert "hmiRunReportVerifiedCount = null;" in JS
+
+
+def test_review_to_auto_transition_preserves_overall_ten_text_progress():
+    """Do not restart progress at 0/5 after the first five verified reviews."""
+    import shutil
+    import subprocess
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js required for HMI progress transition regression")
+    render = JS.split("function renderUnifiedHmiProgress()", 1)[1].split(
+        "function renderHmiBatchProgress(", 1
+    )[0]
+    script = r"""
+const assert = require("node:assert/strict");
+let hmiUnifiedRunning = true;
+let hmiUnifiedCarryVerified = 5;
+let hmiUnifiedXlsxVerified = 0, hmiXmlAutoVerified = 0;
+let hmiUnifiedQuota = 10;
+let rendered;
+function renderHmiBatchProgress(done, total) {rendered = [done, total];}
+function renderUnifiedHmiProgress()""" + render + r"""
+renderUnifiedHmiProgress();
+assert.deepEqual(rendered, [5, 10]);
+hmiUnifiedXlsxVerified = 5;
+renderUnifiedHmiProgress();
+assert.deepEqual(rendered, [10, 10]);
+"""
+    result = subprocess.run(
+        [node, "-e", script], capture_output=True, text=True, timeout=20
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    auto = JS.split("async function translateAllSelectedHmi()", 1)[1].split(
+        "function finishStoppedReviewedHmiQueue()", 1
+    )[0]
+    assert "hmiUnifiedCarryVerified = carriedVerified;" in auto
+    assert "hmiUnifiedQuota = quota + carriedVerified;" in auto
+    assert "hmiUnifiedCarryVerified + hmiUnifiedXlsxVerified + hmiXmlAutoVerified" in JS
+    assert "hmiUnifiedCarryVerified\n                    + hmiUnifiedXlsxVerified" in auto
