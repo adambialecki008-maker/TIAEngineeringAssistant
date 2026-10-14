@@ -1603,10 +1603,20 @@ td {
 .hmi-text-lists-details > summary {
     padding: 11px 14px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
-    color: #a7d7ff;
+    color: #f0f5f9;
+    background: #182632;
+    list-style-position: inside;
 }
+.hmi-text-lists-details > summary::marker {
+    color: #72bfff;
+}
+.hmi-text-lists-details > summary::-webkit-details-marker {
+    color: #72bfff;
+}
+.hmi-scan-details-name { color: #f0f5f9; }
+.hmi-scan-details-status { color: #86c6fa; font-weight: 500; }
 .hmi-text-lists-details > summary:hover {
     background: #1a2a35;
 }
@@ -1769,9 +1779,8 @@ td {
     overflow-wrap: anywhere;
 }
 
-/* Four consistent stages in the HMI text workflow: scan, scope,
-   manual review, automatic verified import.  Keep styling local so
-   PLC and the other application controls are not affected. */
+/* Three HMI steps: scan/disclosures, batch settings, and a single
+   manual/automatic action area driven by the selected checkboxes. */
 .hmi-translation-batch-controls > h4 {
     font-size: 17px;
     line-height: 1.4;
@@ -2250,3 +2259,40 @@ table > thead > tr > th {
     padding: 4px 8px; font-size: 12px;
 }
 #tia-hmi-xml-auto-progress { margin-top: 8px; }
+
+
+/* No separate XML/XLSX cards: both automatic pipelines live inside Step 3. */
+.hmi-automation-controls {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #405a6d;
+}
+.hmi-automation-title {
+    margin: 0 0 7px;
+    font-size: 15px;
+    color: #f0f5f9;
+    font-weight: 650;
+}
+.hmi-automatic-scope {
+    padding: 10px 0;
+    background: transparent;
+    border: 0;
+}
+.hmi-automatic-scope + .hmi-automatic-scope {
+    border-top: 1px solid #344957;
+}
+.hmi-automatic-scope-title {
+    color: #9fd0f4;
+    font-size: 14px;
+    font-weight: 650;
+}
+.hmi-automatic-scope > .hint {
+    margin: 6px 0;
+    color: #b8c7d3;
+}
+#tia-hmi-project-texts-details #tia-hmi-preview-results {
+    margin-top: 0;
+}
+#tia-hmi-project-texts-details .hmi-text-lists-detail-body {
+    min-width: 0;
+}
