@@ -1276,7 +1276,7 @@ export function initTiaUi(
         updateHmiTranslateButtonState();
     }
 
-    function invalidateHmiPreview() {
+    function invalidateHmiPreview(resetQuota = true) {
         hmiSkippedManager.reset();
         hmiExistingQaResults?.classList.add("hidden");
         hmiExistingQaRows?.replaceChildren();
@@ -1291,7 +1291,7 @@ export function initTiaUi(
         hmiTextListsData = null;
         hmiTextListImportedCount = 0;
         hmiTextListProgressKey = null;
-        hmiCombinedApprovedCount = 0;
+        if (resetQuota) hmiCombinedApprovedCount = 0;
         discardHmiTextListReview();
         if (hmiTextListSelect) {
             hmiTextListSelect.value = "";
@@ -1306,7 +1306,7 @@ export function initTiaUi(
         if (hmiTextListPreview) hmiTextListPreview.open = false;
         hmiTextListPreviewRows?.replaceChildren();
         if (hmiBatchTotalInput) {
-            hmiBatchTotalInput.placeholder = "Scan HMI to see total";
+            hmiBatchTotalInput.placeholder = "Scan selected texts to see combined total";
             renderHmiBatchPlan();
         }
         if (hmiScanInstruction) {
@@ -1328,7 +1328,9 @@ export function initTiaUi(
                 (!Number.isInteger(total) || total < 1 || total > 100000))) {
             return null;
         }
-        return Math.min(size, total ?? size);
+        const remaining = total === null
+            ? size : Math.max(0, total - hmiCombinedApprovedCount);
+        return Math.min(size, remaining);
     }
 
     function eligibleXmlEntries() {
@@ -1626,47 +1628,39 @@ export function initTiaUi(
     }
 
     function renderHmiBatchPlan() {
-        if (!hmiBatchPlan) {
-            return;
-        }
+        if (!hmiBatchPlan) return;
         const batch = Number(hmiBatchSizeInput?.value);
         const raw = hmiBatchTotalInput?.value?.trim() || "";
-        const specified = raw ? Number(raw) : null;
-        const scanned = latestHmiScan?.missingUnique ?? null;
-        if (!Number.isInteger(batch) || batch < 1 || batch > HMI_PROJECT_BATCH_MAX
-            || (specified !== null && (!Number.isInteger(specified)
-                || specified < 1 || specified > 100000))) {
-            hmiBatchPlan.textContent =
-                "Batch size must be 1–50; total must be positive or blank.";
+        const requested = raw ? Number(raw) : null;
+        const eligible = combinedMissingCount();
+        if (!Number.isInteger(batch) || batch < 1 || batch > 50
+            || (requested !== null && (!Number.isInteger(requested)
+                || requested < 1 || requested > 100000))) {
+            hmiBatchPlan.textContent = "Batch size must be 1–50; total positive or blank.";
             return;
         }
-        if (specified !== null && scanned !== null && specified > scanned) {
-            hmiBatchPlan.textContent = "Requested " + specified
-                + " unique texts exceeds " + scanned
-                + " missing/placeholder source texts found in HMI scan.";
+        if (requested !== null && requested > eligible + hmiCombinedApprovedCount
+            && eligible > 0) {
+            hmiBatchPlan.textContent = "Requested total exceeds available readable "
+                + "missing targets in the selected scopes (" + eligible
+                + " remaining). Unsupported XML texts are excluded.";
             return;
         }
-        const total = specified ?? scanned;
-        if (!total) {
-            hmiBatchPlan.textContent =
-                "Scan HMI to determine the missing-target text count, "
-                + "or enter a total manually.";
-            return;
-        }
-        const chunks = Math.ceil(total / batch);
-        const last = total - batch * (chunks - 1);
-        const sequence = chunks === 1
-            ? "1 batch × " + last + " text(s)"
-            : chunks + " batches: " + (chunks - 1) + " × " + batch
-                + " + final × " + last;
-        hmiBatchPlan.textContent =
-            "Plan: " + sequence + " = " + total + " unique texts. "
-            + (hmiBatchAutoRepeat?.checked
-                ? "Auto-continue ON: each batch is imported and verified "
-                    + "in TIA, then the next starts until the limit."
-                : "Auto-continue OFF: import/verify one batch, then stop. "
-                    + "Use Resume saved job to continue.")
-            + " Only missing or placeholder target cells are changed.";
+        const selectedTotal = requested ?? (eligible + hmiCombinedApprovedCount);
+        const remaining = requested === null ? eligible
+            : Math.min(eligible, Math.max(0, requested - hmiCombinedApprovedCount));
+        const project = hmiScopeEnabled("project")
+            && hmiScanKey(hmiTranslationSelection()) === verifiedHmiScanKey
+                ? latestHmiScan?.missingUnique || 0 : 0;
+        const xml = eligibleXmlEntries();
+        hmiBatchPlan.textContent = "Selected scopes: " + project
+            + " remaining XLSX texts + " + xml + " eligible XML entries. "
+            + "Batch size " + batch + "; configured total "
+            + (requested ?? selectedTotal) + "; " + remaining
+            + " remaining under this limit. "
+            + (remaining ? "About " + Math.ceil(remaining / batch)
+                + " preparation(s), plus XML list boundaries." : "No more batches.")
+            + " XML always requires manual import approval.";
     }
 
     function showHmiBatchJob(job) {
@@ -2311,6 +2305,10 @@ export function initTiaUi(
             }
             verifiedHmiTextListsScanKey = scanKey;
             renderSelectedTextListPreview();
+            if (hmiBatchTotalInput)
+                hmiBatchTotalInput.placeholder =
+                    "Eligible selected scopes: " + combinedMissingCount();
+            renderHmiBatchPlan();
             setHmiTranslationStatus(
                 "Text lists scanned. The shared batch automatically chooses the next "
                 + "eligible list for manual review; XML imports are never automatic.", "success"
@@ -2336,11 +2334,11 @@ export function initTiaUi(
     }
 
 
-    async function previewSelectedHmi() {
+    async function previewSelectedHmi(preserveQuota = false) {
         const scanProject = hmiScopeEnabled("project");
         const scanLists = hmiScopeEnabled("text_lists");
         if (!scanProject && !scanLists) return false;
-        invalidateHmiPreview();
+        invalidateHmiPreview(!preserveQuota);
         // Serialize the Openness exports; keep XLSX and XML scan identities separate.
         let projectOk = true;
         let listsOk = true;
@@ -2397,7 +2395,7 @@ export function initTiaUi(
             }
             if (hmiBatchTotalInput) {
                 hmiBatchTotalInput.placeholder =
-                    "Missing target values: " + latestHmiScan.missingUnique;
+                    "Eligible selected scopes: " + combinedMissingCount();
             }
             if (hmiScanInstruction) {
                 hmiScanInstruction.textContent =
@@ -2888,6 +2886,30 @@ export function initTiaUi(
     }
 
 
+    async function prepareSelectedHmiBatch() {
+        if (hmiBatchRunning || hmiTextListBusy || hmiReviewInProgress) return;
+        const scope = nextHmiManualScope();
+        if (scope === "text_lists") {
+            await prepareHmiTextList();
+        } else if (scope === "project") {
+            await translateSelectedHmi();
+        } else {
+            setHmiTranslationStatus(
+                "Scan selected texts. No readable missing-target entries "
+                + "are available for review.", "error"
+            );
+        }
+    }
+
+    async function importSelectedHmiBatch() {
+        if (hmiTextListReviewToken
+            && hmiTextListPreparedKey === textListReviewKey()) {
+            await importReviewedHmiTextList();
+        } else if (preparedHmiReview) {
+            await importReviewedHmiTexts();
+        }
+    }
+
     async function translateSelectedHmi() {
         const selection = hmiTranslationSelection();
         const key = hmiTranslationKey(selection);
@@ -3072,6 +3094,8 @@ export function initTiaUi(
                 { review_id: review.reviewId }
             );
             const count = result.verified_rows || 0;
+            // Count unique approved texts, not repeated matching XLSX rows.
+            hmiCombinedApprovedCount += review.rowCount;
             setHmiTranslationStatus(
                 "TIA import " + result.import_state + ". Verified "
                 + count + " of " + result.imported_rows
@@ -3087,7 +3111,7 @@ export function initTiaUi(
                 // A completed import changes the XLSX values. Re-preview the
                 // updated TIA project before preparing the remaining texts.
                 // This preserves the verified HMI root and target language.
-                const previewUpdated = await previewSelectedHmi();
+                const previewUpdated = await previewSelectedHmi(true);
                 if (previewUpdated) {
                     setHmiTranslationStatus(
                         "TIA import verified: " + count + " row(s). "
@@ -8113,30 +8137,26 @@ export function initTiaUi(
 
 
 
-    if (hmiTranslateButton) {
-        hmiTranslateButton.addEventListener(
-            "click",
-            translateSelectedHmi
-        );
-    }
-
-    if (hmiImportReviewedButton) {
-        hmiImportReviewedButton.addEventListener(
-            "click",
-            importReviewedHmiTexts
-        );
-    }
+    // One Prepare/Import pair routes the checked scopes, without automatic XML writes.
+    hmiTranslateButton?.addEventListener(
+        "click", () => { void prepareSelectedHmiBatch(); }
+    );
+    hmiImportReviewedButton?.addEventListener(
+        "click", () => { void importSelectedHmiBatch(); }
+    );
 
     if (hmiPreviewFilter) {
         hmiPreviewFilter.addEventListener("change", renderHmiPreviewRows);
     }
     hmiBatchSizeInput?.addEventListener("input", () => {
         discardHmiReview();
+        discardHmiTextListReview();
         renderHmiBatchPlan();
         updateHmiTranslateButtonState();
     });
     hmiBatchTotalInput?.addEventListener("input", () => {
         discardHmiReview();
+        discardHmiTextListReview();
         renderHmiBatchPlan();
         updateHmiTranslateButtonState();
     });
@@ -8165,26 +8185,6 @@ export function initTiaUi(
     hmiAuditExistingButton?.addEventListener(
         "click", () => { void auditExistingHmiTranslations(); }
     );
-    hmiTextListSelect?.addEventListener("change", () => {
-        hmiTextListImportedCount = 0;
-        hmiTextListProgressKey = null;
-        if (hmiTextListTotalInput) hmiTextListTotalInput.value = "";
-        if (hmiTextListPreview) hmiTextListPreview.open = false;
-        renderSelectedTextListPreview();
-    });
-    for (const input of [hmiTextListBatchSizeInput, hmiTextListTotalInput]) {
-        input?.addEventListener("input", () => {
-            discardHmiTextListReview();
-            renderHmiTextListBatchPlan();
-            updateHmiTranslateButtonState();
-        });
-    }
-    hmiTextListPrepare?.addEventListener(
-        "click", () => { void prepareHmiTextList(); }
-    );
-    hmiTextListImport?.addEventListener(
-        "click", () => { void importReviewedHmiTextList(); }
-    );
     hmiExistingQaReportButton?.addEventListener(
         "click", () => { void downloadHmiExistingQaReport(); }
     );
@@ -8192,14 +8192,10 @@ export function initTiaUi(
         "click", () => { void downloadHmiBatchQualityReport(); }
     );
     hmiUseScanTotalButton?.addEventListener("click", () => {
-        if (!latestHmiScan || !latestHmiScan.eligible
-            || latestHmiScan.missingUnique > 100000
-            || hmiScanKey(hmiTranslationSelection())
-                !== verifiedHmiScanKey) {
-            return;
-        }
+        const count = combinedMissingCount() + hmiCombinedApprovedCount;
+        if (!count || count > 100000) return;
         if (hmiBatchTotalInput) {
-            hmiBatchTotalInput.value = String(latestHmiScan.missingUnique);
+            hmiBatchTotalInput.value = String(count);
             discardHmiReview();
             renderHmiBatchPlan();
             updateHmiTranslateButtonState();
