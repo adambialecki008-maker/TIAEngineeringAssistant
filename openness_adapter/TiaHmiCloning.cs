@@ -118,6 +118,8 @@ namespace TiaOpennessAdapter
                 // Abort if tag tables cannot be inspected: never promise correct
                 // PLC tag links based only on an existing connection name.
                 List<string> sourceTags = ReadAllHmiTagConnectionNames(sourceSoftware);
+                List<string> sourceTagLinks =
+                    ReadAllHmiTagLinkFingerprints(sourceSoftware);
                 if (sourceTags.Any(x => !sourceConnections.ContainsKey(x)))
                 {
                     Console.Error.WriteLine(
@@ -136,6 +138,10 @@ namespace TiaOpennessAdapter
                             .MasterCopyFolder.MasterCopies.Create(
                                 (IMasterCopySource)source);
                         created = project.Devices.CreateFrom(temporaryMaster);
+                        if (!string.Equals(created.TypeIdentifier,
+                            source.TypeIdentifier, StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException(
+                                "Cloned HMI hardware type differs from the source.");
                         created.Name = targetDeviceName;
 
                         bool ipAssigned = false;
@@ -193,11 +199,16 @@ namespace TiaOpennessAdapter
 
                         List<string> clonedTags =
                             ReadAllHmiTagConnectionNames(clonedSoftware);
-                        if (clonedTags.Count != sourceTags.Count ||
-                            clonedTags.Any(x => !clonedConnections.ContainsKey(x)))
+                        List<string> clonedTagLinks =
+                            ReadAllHmiTagLinkFingerprints(clonedSoftware);
+                        if (clonedTags.Count != sourceTags.Count
+                            || clonedTags.Any(x => !clonedConnections.ContainsKey(x))
+                            || !sourceTagLinks.OrderBy(x => x, StringComparer.Ordinal)
+                                .SequenceEqual(clonedTagLinks.OrderBy(
+                                    x => x, StringComparer.Ordinal)))
                             throw new InvalidOperationException(
-                                "HMI tag connection mapping could not be verified. "
-                                + "HMI clone rolled back.");
+                                "HMI tag names, PLC tag links or connection mapping "
+                                + "changed during clone. Clone rolled back.");
 
                         // Remove the temporary library entry BEFORE saving the
                         // project so the clone leaves no hidden master copy.
@@ -292,6 +303,55 @@ namespace TiaOpennessAdapter
                 if (!string.IsNullOrWhiteSpace(name)) result[name] = partner;
             }
             return result;
+        }
+
+        // Cross-check both the selected HMI connection and the PLC tag link,
+        // not only the number of copied tags.
+        private static List<string> ReadAllHmiTagLinkFingerprints(object software)
+        {
+            var names = new List<string>();
+            object folder = software.GetType()
+                .GetProperty("TagFolder")?.GetValue(software, null);
+            if (folder == null)
+                throw new InvalidOperationException("HMI tag folder unavailable.");
+            CollectHmiTagLinkFingerprints(folder, names, 0);
+            return names;
+        }
+
+        private static void CollectHmiTagLinkFingerprints(
+            object folder, List<string> names, int depth)
+        {
+            if (depth > 20) throw new InvalidOperationException(
+                "HMI tag group nesting is too deep.");
+            object tables = folder.GetType().GetProperty("TagTables")
+                ?.GetValue(folder, null);
+            if (!(tables is IEnumerable collection))
+                throw new InvalidOperationException("HMI tag tables unavailable.");
+            foreach (object table in collection)
+            {
+                object tags = table.GetType().GetProperty("Tags")
+                    ?.GetValue(table, null);
+                if (!(tags is IEnumerable rows)) continue;
+                foreach (object tag in rows)
+                {
+                    Type t = tag.GetType();
+                    string name = Convert.ToString(
+                        t.GetProperty("Name")?.GetValue(tag, null)) ?? "";
+                    string connection = Convert.ToString(
+                        t.GetProperty("Connection")?.GetValue(tag, null)) ?? "";
+                    string plcTag = Convert.ToString(
+                        t.GetProperty("PlcTag")?.GetValue(tag, null)) ?? "";
+                    string plcName = Convert.ToString(
+                        t.GetProperty("PlcName")?.GetValue(tag, null)) ?? "";
+                    names.Add(name + "|" + connection + "|" + plcTag
+                        + "|" + plcName);
+                }
+            }
+            object folders = folder.GetType().GetProperty("Folders")
+                ?.GetValue(folder, null);
+            if (folders is IEnumerable children)
+                foreach (object child in children)
+                    CollectHmiTagLinkFingerprints(child, names, depth + 1);
         }
 
         private static List<string> ReadAllHmiTagConnectionNames(object software)
