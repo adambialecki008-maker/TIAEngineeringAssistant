@@ -50,12 +50,11 @@ def test_gui_uses_50_for_project_manual_and_automatic_batch():
     for block_start, block_end in (
         ("function manualHmiPrepareCount()", "function textListBatchIdentity()"),
         ("function updateHmiTranslateButtonState()", "async function refreshHmiOllamaModels()"),
-        ("function renderHmiBatchPlan()", "function renderHmiBatchPlanSummary()"),
+        ("function renderHmiBatchPlan()", "function showHmiBatchJob(job)"),
         ("async function startHmiBatchImport()", "async function resumeHmiBatchImport()"),
     ):
-        if block_start not in js:
-            # Keep the contract applicable if helper boundaries are refactored.
-            continue
+        assert block_start in js
+        assert block_end in js
         block = js.split(block_start, 1)[1].split(block_end, 1)[0]
         assert "1–200" not in block
         assert "> 200" not in block
