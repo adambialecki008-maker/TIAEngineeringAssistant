@@ -73,6 +73,7 @@ export function addDb(
 
     projectConfig.dbs.push({
         name: name,
+        retain: false,
         members: [],
     });
 
@@ -312,6 +313,27 @@ export function renderDbs(
                 actions
             );
 
+            const retainLabel = document.createElement("label");
+            retainLabel.className = "member-db-retain";
+            const retainInput = document.createElement("input");
+            retainInput.type = "checkbox";
+            retainInput.checked = db.retain === true;
+            retainInput.addEventListener("change", () => {
+                db.retain = retainInput.checked;
+                saveProjectConfig();
+            });
+            retainLabel.append(
+                retainInput,
+                document.createTextNode(" RETAIN entire DB (otherwise NON_RETAIN)")
+            );
+            content.appendChild(retainLabel);
+
+            const retainNote = document.createElement("p");
+            retainNote.className = "hint";
+            retainNote.textContent = "Currently RETAIN applies to the whole DB, "
+                + "not individual array elements. Verify CPU retentive memory "
+                + "and inspect the resulting DB in TIA after import.";
+            content.appendChild(retainNote);
 
             content.appendChild(
                 createMemberTree({
