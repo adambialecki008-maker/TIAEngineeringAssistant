@@ -285,6 +285,9 @@ class TranslateHmiTextsRequest(BaseModel):
     ollama_model: str | None = Field(default=None, max_length=128)
     translation_strategy: Literal["ollama", "copy"] = "ollama"
     progress_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
+    # Review-only skip list, so a failed proposed translation cannot be
+    # repeatedly selected as the first candidate on the next batch.
+    exclude_source_texts: list[str] = Field(default_factory=list, max_length=10000)
     # Safety default: a small pilot import. null explicitly requests full scope.
     max_rows: int | None = Field(default=10, ge=1, le=100000)
     source_culture: str = Field(
