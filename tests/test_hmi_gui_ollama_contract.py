@@ -30,7 +30,8 @@ def test_hmi_scope_changes_recalculate_action_buttons():
             f'{field_id}?.addEventListener("input", () => {{', 1
         )[1].split("});", 1)[0]
         assert "updateHmiTranslateButtonState();" in listener
-    assert "!missingUnique || !validBatchSize || !validTotal" in script
+    assert "const activeManualScope = nextHmiManualScope();" in script
+    assert "|| !hasTranslationEngine || !validBatchSize || !validTotal" in script
 
 
 def test_ollama_model_change_keeps_scan_but_discards_prepared_review():
