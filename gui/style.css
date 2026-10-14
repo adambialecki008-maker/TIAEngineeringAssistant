@@ -2172,6 +2172,31 @@ td {
     min-width: 150px;
 }
 
+/* Variable attributes are edited as a second responsive row in the same
+   expanded member editor, never a separate dialog. */
+.member-options-row {
+    flex-wrap: wrap;
+    align-items: end;
+    margin-top: 10px;
+    gap: 12px;
+}
+.member-options-row .member-field {
+    flex: 1 1 175px;
+    min-width: 165px;
+}
+.member-options-row input:disabled {
+    opacity: 0.55;
+}
+.member-db-retain {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #d9e3ec;
+}
+
 .member-add-area[hidden] {
     display: none;
 }
