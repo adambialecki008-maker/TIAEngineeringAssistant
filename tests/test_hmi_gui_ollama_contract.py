@@ -66,7 +66,8 @@ def test_scan_approval_is_model_independent_but_review_is_not():
     assert "const previewKey = hmiScanKey(selection)" in script
     assert "scanKey !== verifiedHmiScanKey" in script
     assert "review.selectionKey !== key" in script
-    assert "preparedHmiReview.selectionKey !== reviewKey" in script
+    assert "preparedHmiReview?.selectionKey === reviewKey" in script
+    assert "const reviewKey = hmiTranslationKey(selection);" in script
     assert "hmiScanKey(selectionBeforeImport) !== verifiedHmiScanKey" in script
 
 
