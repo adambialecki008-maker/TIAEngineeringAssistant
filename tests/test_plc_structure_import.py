@@ -313,10 +313,31 @@ def test_instance_db_name_collision_must_not_be_treated_as_identical(
     plan = preflight(request_data())
     assert plan.status_code == 200, plan.text
     report = plan.json()
-    assert report["can_apply"] is False
+    # The instance DB collision must remain blocked, but the unrelated,
+    # missing UDT_Motor is eligible for creation (partial import policy).
+    assert report["can_apply"] is True
+    assert report["will_create"] == ["UDT_Motor"]
     match = next(x for x in report["items"] if x["name"] == "DB_Motors")
     assert match["status"] == "conflict"
     assert "not confirmed as a global" in match["reason"]
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+def test_instance_db_only_selection_is_blocked_without_any_create(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB|Nested|DB_Motors|11|InstanceDB|True"]
+    ))
+    payload = request_data()
+    payload["selected_udts"] = []
+    payload["selected_dbs"] = ["DB_Motors"]
+    response = preflight(payload)
+    assert response.status_code == 200, response.text
+    report = response.json()
+    assert report["can_apply"] is False
+    assert report["will_create"] == []
+    assert report["counts"]["conflict"] == 1
+    assert apply(payload, report).status_code == 409
     assert not any(c[0] == "import-plc-structure-batch" for c in calls)
 
 
