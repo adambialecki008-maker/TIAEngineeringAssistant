@@ -1549,6 +1549,7 @@ export function initTiaUi(
             }
         }
         if (hmiBatchResumeButton) {
+            hmiBatchResumeButton.classList.toggle("hidden", !projectSelected);
             hmiBatchResumeButton.disabled = busy || !projectSelected || !savedHmiBatchJobId();
         }
         if (hmiBatchPauseButton) {
@@ -1704,13 +1705,15 @@ export function initTiaUi(
         };
         // The queue always starts with Project texts if checked.
         if (hmiScopeEnabled("project")) {
-            const scanned = hmiScanKey(selection) === verifiedHmiScanKey;
+            const scanned = Boolean(selection && verifiedHmiScanKey
+                && hmiScanKey(selection) === verifiedHmiScanKey);
             append("Project texts (XLSX)",
                 scanned ? (latestHmiScan?.missingUnique ?? 0) : "Scan required");
         }
         if (hmiScopeEnabled("text_lists")) {
-            const scanned = hmiScanKey(selection, "text_lists")
-                === verifiedHmiTextListsScanKey;
+            const scanned = Boolean(selection && verifiedHmiTextListsScanKey
+                && hmiScanKey(selection, "text_lists")
+                    === verifiedHmiTextListsScanKey);
             if (!scanned) {
                 append("Text lists (XML)", "Scan required");
             } else {
@@ -2027,9 +2030,8 @@ export function initTiaUi(
         if (!Number.isInteger(size) || size < 1 || size > HMI_PROJECT_BATCH_MAX
             || (total !== null &&
                 (!Number.isInteger(total) || total < 1 || total > 100000))
-            || (latestHmiScan && total !== null
-                && total > latestHmiScan.missingUnique
-                && !hmiScopeEnabled("text_lists"))) {
+            || (total !== null
+                && total > combinedMissingCount() + hmiCombinedApprovedCount)) {
             setHmiBatchStatus(
                 "Batch size must be 1–50; total must be empty or "
                 + "between 1 and the missing-target unique-text count from the scan.",
