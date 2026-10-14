@@ -2194,9 +2194,16 @@ export function initTiaUi(
             const wasStopped = hmiUnifiedStopRequested;
             hmiUnifiedStopRequested = false;
             hmiUnifiedPauseRequested = false;
-            if (wasStopped && hmiUnifiedStatus) hmiUnifiedStatus.textContent =
-                "Translation stopped after current safe batch boundary. "
-                + "Change text-type checkboxes and scan again before restarting.";
+            if (wasStopped) {
+                // Clear only the finished run's visual progress. Confirmed
+                // writes and the cumulative count remain intact in TIA.
+                const verified = hmiUnifiedXlsxVerified + hmiXmlAutoVerified;
+                if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                    "Translation stopped after current safe batch boundary. "
+                    + verified + " translation(s) already verified in TIA. "
+                    + "Progress cleared; scan again before a new run.";
+                renderHmiBatchProgress(0, 0);
+            }
             showHmiRunReport();
             renderHmiBatchPlan();
             updateHmiTranslateButtonState();
@@ -2204,21 +2211,21 @@ export function initTiaUi(
     }
 
     function finishStoppedReviewedHmiQueue() {
-        // Reflect already verified imports even if Stop was requested during
-        // the last TIA operation; never claim unwritten translations succeeded.
-        renderHmiBatchProgress(
-            hmiCombinedApprovedCount - hmiReviewQueueStartApproved,
-            hmiReviewQueueQuota
-        );
-        // Discard any unimported proposals; the read-only preparation may have
-        // just returned, but it never authorizes an implicit TIA write.
+        // Display the verified count in the final status and run report, not
+        // in the progress bar for a run that has already been stopped.
+        const verified = Math.max(0,
+            hmiCombinedApprovedCount - hmiReviewQueueStartApproved);
+        // Discard unimported proposals; the read-only preparation never
+        // authorizes an implicit TIA write.
         discardHmiTextListReview();
         discardHmiReview();
         finishReviewedHmiQueue(
-            "Translation stopped by user. Unimported proposals discarded; "
-            + "previously verified TIA writes remain unchanged. "
-            + "You may change the checkboxes and scan again."
+            "Translation stopped by user. " + verified
+            + " translation(s) already verified in TIA. "
+            + "Unimported proposals discarded. "
+            + "Progress cleared; scan again before a new run."
         );
+        renderHmiBatchProgress(0, 0);
     }
 
     function stopUnifiedHmiTranslation() {

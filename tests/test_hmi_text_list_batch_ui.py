@@ -539,3 +539,68 @@ async function prepareNextReviewedHmiBatch()""" + queue + """
         [node, "-e", script], capture_output=True, text=True, timeout=20
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_stopping_hmi_run_clears_visual_progress_but_keeps_verified_count():
+    """A finished Stop resets the bar, not confirmed TIA writes or job state."""
+    import shutil
+    import subprocess
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js required for HMI stop-state regression")
+    review_stop = JS.split("function finishStoppedReviewedHmiQueue()", 1)[1].split(
+        "function stopUnifiedHmiTranslation()", 1
+    )[0]
+    automatic = JS.split("async function translateAllSelectedHmi()", 1)[1].split(
+        "function finishStoppedReviewedHmiQueue()", 1
+    )[0]
+    auto_finally = automatic.split(
+        "const wasStopped = hmiUnifiedStopRequested;", 1
+    )[1].split("showHmiRunReport();", 1)[0]
+
+    script = r"""
+const assert = require("node:assert/strict");
+let hmiCombinedApprovedCount = 5;
+let hmiReviewQueueStartApproved = 0;
+const uiProgress = [];
+let stoppedStatus = "";
+function renderHmiBatchProgress(done, total) {
+    uiProgress.push([done, total]);
+}
+function discardHmiTextListReview() {}
+function discardHmiReview() {}
+function finishReviewedHmiQueue(message) {stoppedStatus = message;}
+function finishStoppedReviewedHmiQueue()""" + review_stop + """
+finishStoppedReviewedHmiQueue();
+assert.deepEqual(uiProgress, [[0, 0]]);
+assert.match(stoppedStatus, /5 translation\(s\) already verified in TIA/);
+assert.equal(hmiCombinedApprovedCount, 5);
+
+let hmiUnifiedStopRequested = true;
+let hmiUnifiedPauseRequested = true;
+let hmiUnifiedXlsxVerified = 5, hmiXmlAutoVerified = 0;
+let hmiUnifiedStatus = {textContent: ""};
+const automaticFinalizer = () => {
+    const wasStopped = hmiUnifiedStopRequested;
+""" + auto_finally + """
+};
+uiProgress.length = 0;
+automaticFinalizer();
+assert.deepEqual(uiProgress, [[0, 0]]);
+assert.match(hmiUnifiedStatus.textContent, /5 translation\(s\) already verified in TIA/);
+assert.equal(hmiCombinedApprovedCount, 5);
+assert.equal(hmiUnifiedStopRequested, false);
+assert.equal(hmiUnifiedPauseRequested, false);
+
+// Successful runs should retain their completed-progress display.
+hmiUnifiedStopRequested = false;
+uiProgress.length = 0;
+automaticFinalizer();
+assert.deepEqual(uiProgress, []);
+"""
+    result = subprocess.run(
+        [node, "-e", script], capture_output=True, text=True, timeout=20
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
