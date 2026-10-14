@@ -78,7 +78,7 @@ def test_one_translate_all_action_orchestrates_both_verified_pipelines():
     assert 'Step 5 — ' not in HTML
     assert 'class="hmi-automation-controls"' in HTML
     assert HTML.count('id="tia-hmi-batch-start"') == 1
-    assert '>Translate all</button>' in HTML
+    assert '>Translate</button>' in HTML
     assert 'id="tia-hmi-unified-status"' in HTML
     assert 'id="tia-hmi-batch-progress"' in HTML
     assert 'id="tia-hmi-xml-auto-section"' in HTML
