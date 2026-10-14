@@ -2497,9 +2497,11 @@ export function initTiaUi(
             if (result.review_id) {
                 hmiTextListReview?.classList.remove("hidden");
             }
+            return Boolean(result.review_id && result.approved_count);
         } catch (error) {
             if (hmiTextListStatus)
                 hmiTextListStatus.textContent = "Prepare failed: " + error.message;
+            return false;
         } finally {
             hmiTextListBusy = false;
             updateHmiTranslateButtonState();
@@ -2553,11 +2555,13 @@ export function initTiaUi(
                     + (refreshed
                         ? "XML preview refreshed. Prepare the next reviewed batch if needed."
                         : "Scan Text lists again before preparing another batch.");
+            return Boolean(refreshed);
         } catch (error) {
             if (hmiTextListStatus)
                 hmiTextListStatus.textContent =
                     "Import rejected or verification uncertain: " + error.message
                     + ". Inspect TIA before repeating the operation.";
+            return false;
         } finally {
             hmiTextListBusy = false;
             updateHmiTranslateButtonState();
@@ -3516,9 +3520,9 @@ export function initTiaUi(
         if (hmiBatchRunning || hmiTextListBusy || hmiReviewInProgress) return;
         const scope = nextHmiManualScope();
         if (scope === "text_lists") {
-            await prepareHmiTextList();
+            return await prepareHmiTextList();
         } else if (scope === "project") {
-            await translateSelectedHmi();
+            return await translateSelectedHmi();
         } else {
             setHmiTranslationStatus(
                 "Scan selected texts. No readable missing-target entries "
@@ -3530,10 +3534,11 @@ export function initTiaUi(
     async function importSelectedHmiBatch() {
         if (hmiTextListReviewToken
             && hmiTextListPreparedKey === textListReviewKey()) {
-            await importReviewedHmiTextList();
+            return await importReviewedHmiTextList();
         } else if (preparedHmiReview) {
-            await importReviewedHmiTexts();
+            return await importReviewedHmiTexts();
         }
+        return false;
     }
 
     async function translateSelectedHmi() {
@@ -3627,8 +3632,10 @@ export function initTiaUi(
             }
 
             renderPreparedHmiReview(result, key);
+            return Boolean(preparedHmiReview);
         } catch (error) {
             setHmiTranslationStatus(error.message, "error");
+            return false;
         } finally {
             activeProgress = false;
             window.clearInterval(progressTimer);
@@ -3734,6 +3741,7 @@ export function initTiaUi(
 
         // A review can be imported once. On any failure a fresh review is required.
         preparedHmiReview = null;
+        let refreshVerified = false;
         try {
             const result = await postJson(
                 "/api/v1/tia/hmis/import-reviewed-translations",
@@ -3759,6 +3767,7 @@ export function initTiaUi(
                 // This preserves the verified HMI root and target language.
                 const previewUpdated = await previewSelectedHmi(true);
                 if (previewUpdated) {
+                    refreshVerified = true;
                     setHmiTranslationStatus(
                         "TIA import verified: " + count + " row(s). "
                         + "Selection restored and project texts refreshed. "
@@ -3783,6 +3792,7 @@ export function initTiaUi(
                     "success"
                 );
             }
+            return refreshVerified;
         } catch (error) {
             if (error.message?.includes("PROJECT_TEXT_REVIEW_EDIT_INVALID:")) {
                 // Server explicitly rejected a manual edit BEFORE any TIA
@@ -3799,6 +3809,7 @@ export function initTiaUi(
                     + "inspect TIA and rescan before retrying.", "error"
                 );
             }
+            return false;
         } finally {
             hmiReviewInProgress = false;
             updateHmiTranslateButtonState();
