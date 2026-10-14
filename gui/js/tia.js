@@ -567,6 +567,7 @@ export function initTiaUi(
     let hmiRunStartedAt = null;
     let hmiRunReportSelection = null;
     let hmiRunReportStartCount = 0;
+    let hmiRunReportVerifiedCount = null;
     let hmiRunBatchJobId = null;
     let latestHmiScan = null;
     let hmiBatchRunning = false;
@@ -2203,6 +2204,10 @@ export function initTiaUi(
                     + verified + " translation(s) already verified in TIA. "
                     + "Progress cleared; scan again before a new run.";
                 renderHmiBatchProgress(0, 0);
+                // Cached scans are stale after a stopped write. Require a
+                // fresh read-only scan before starting another run.
+                verifiedHmiScanKey = null;
+                verifiedHmiTextListsScanKey = null;
             }
             showHmiRunReport();
             renderHmiBatchPlan();
@@ -2226,6 +2231,10 @@ export function initTiaUi(
             + "Progress cleared; scan again before a new run."
         );
         renderHmiBatchProgress(0, 0);
+        // A subsequent run must not use counts from a pre-Stop export.
+        verifiedHmiScanKey = null;
+        verifiedHmiTextListsScanKey = null;
+        updateHmiTranslateButtonState();
     }
 
     function stopUnifiedHmiTranslation() {
@@ -2290,6 +2299,7 @@ export function initTiaUi(
     function startHmiRunReport() {
         hmiRunReport = [];
         hmiRunReportStartCount = hmiCombinedApprovedCount;
+        hmiRunReportVerifiedCount = null;
         hmiRunBatchJobId = null;
         hmiRunStartedAt = new Date().toISOString();
         hmiRunReportSelection = hmiTranslationSelection();
@@ -2310,6 +2320,10 @@ export function initTiaUi(
     }
 
     function showHmiRunReport() {
+        // Snapshot the final verified count before a later Scan resets the
+        // session counter. A downloaded report must never become negative.
+        hmiRunReportVerifiedCount = Math.max(0,
+            hmiCombinedApprovedCount - hmiRunReportStartCount);
         if (hmiRunReportButton) {
             hmiRunReportButton.disabled = false;
             hmiRunReportButton.classList.remove("hidden");
@@ -2321,7 +2335,8 @@ export function initTiaUi(
     function downloadHmiRunReport() {
         if (!hmiRunStartedAt) return;
         const selection = hmiRunReportSelection || {};
-        const verified = hmiCombinedApprovedCount - hmiRunReportStartCount;
+        const verified = hmiRunReportVerifiedCount
+            ?? Math.max(0, hmiCombinedApprovedCount - hmiRunReportStartCount);
         const rows = [["Type", "List / batch", "Source text", "Proposed text",
             "Reason", "Result", "HMI", "Started at (UTC)"]];
         rows.push(["SUMMARY", "Full selected XLSX + XML run", "", "",

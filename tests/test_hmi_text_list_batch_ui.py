@@ -604,3 +604,28 @@ assert.deepEqual(uiProgress, []);
         [node, "-e", script], capture_output=True, text=True, timeout=20
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_stop_requires_fresh_hmi_scan_and_completed_csv_keeps_final_count():
+    """No stale total reuse after Stop and no negative count after fresh Scan."""
+    auto = JS.split("async function translateAllSelectedHmi()", 1)[1].split(
+        "function finishStoppedReviewedHmiQueue()", 1
+    )[0]
+    auto_stopped = auto.split("if (wasStopped) {", 1)[1].split(
+        "showHmiRunReport();", 1
+    )[0]
+    reviewed = JS.split("function finishStoppedReviewedHmiQueue()", 1)[1].split(
+        "function stopUnifiedHmiTranslation()", 1
+    )[0]
+    for section in (auto_stopped, reviewed):
+        assert "renderHmiBatchProgress(0, 0);" in section
+        assert "verifiedHmiScanKey = null;" in section
+        assert "verifiedHmiTextListsScanKey = null;" in section
+        assert "hmiCombinedApprovedCount = 0;" not in section
+    assert "hmiRunReportVerifiedCount = Math.max(0," in JS
+    report = JS.split("function downloadHmiRunReport()", 1)[1].split(
+        "async function collectHmiXlsxRunSkips()", 1
+    )[0]
+    assert "hmiRunReportVerifiedCount" in report
+    assert "?? Math.max(0, hmiCombinedApprovedCount - hmiRunReportStartCount)" in report
+    assert "hmiRunReportVerifiedCount = null;" in JS
