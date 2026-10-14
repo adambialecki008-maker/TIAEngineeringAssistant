@@ -341,6 +341,24 @@ def test_instance_db_only_selection_is_blocked_without_any_create(monkeypatch):
     assert not any(c[0] == "import-plc-structure-batch" for c in calls)
 
 
+def test_blocked_instance_db_does_not_auto_create_orphan_udt(monkeypatch):
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB|Nested|DB_Motors|11|InstanceDB|True"]
+    ))
+    payload = request_data()
+    payload["selected_udts"] = []
+    payload["selected_dbs"] = ["DB_Motors"]
+    plan = preflight(payload)
+    assert plan.status_code == 200, plan.text
+    result = plan.json()
+    assert [item["name"] for item in result["items"]] == ["DB_Motors"]
+    assert result["will_create"] == []
+    assert result["counts"]["conflict"] == 1
+    assert result["auto_dependencies"] == []
+    assert not result["can_apply"]
+
+
 def test_generate_preview_and_import_can_select_only_udts(monkeypatch):
     calls = []
     monkeypatch.setattr(facade, "_run_adapter", mock_adapter(calls))
@@ -352,7 +370,9 @@ def test_generate_preview_and_import_can_select_only_udts(monkeypatch):
         "selected_udts": ["UDT_Valve"], "selected_dbs": [],
     })
     assert preview.status_code == 200, preview.text
-    assert preview.json()["items"] == [{"kind": "udt", "name": "UDT_Valve"}]
+    assert preview.json()["items"] == [
+        {"kind": "udt", "name": "UDT_Valve", "auto_dependency": False}
+    ]
     assert 'TYPE "UDT_Valve"' in preview.json()["source"]
     assert "DB_Valves" not in preview.json()["source"]
     planned = preflight(payload)
