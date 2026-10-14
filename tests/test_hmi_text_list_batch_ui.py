@@ -56,7 +56,8 @@ def test_common_actions_route_manual_import_to_correct_format():
         '"/api/v1/tia/hmis/text-lists/prepare"',
         '"/api/v1/tia/hmis/text-lists/import"',
         '"/api/v1/tia/hmis/import-reviewed-translations"',
-        'if (!selected.length || !confirm(',
+        'if (!selected.length) return "edit_invalid";',
+        'if (!confirm(',
     ):
         assert pattern in JS
 
