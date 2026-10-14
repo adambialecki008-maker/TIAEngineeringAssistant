@@ -47,6 +47,9 @@ from engine.tia.cross_references import (
 from engine.tia.structures import (
     router as structures_router,
 )
+from engine.tia.source_import import (
+    router as source_import_router,
+)
 from engine.tia.tags import (
     router as tags_router,
 )
@@ -75,6 +78,7 @@ for subrouter in (
     program_router,
     cross_references_router,
     structures_router,
+    source_import_router,
     tags_router,
     hardware_router,
     plc_management_router,
