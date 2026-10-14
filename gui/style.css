@@ -2321,7 +2321,9 @@ table > thead > tr > th {
 
 /* Unified HMI translation workspace — matches the compact dark application UI. */
 .hmi-queue-title {
-    font: 650 16px/1.4 inherit;
+    font-family: inherit;
+    font-weight: 650;
+    line-height: 1.4;
     font-size: 16px;
     color: #f0f5f9;
     margin: 15px 0 7px;
