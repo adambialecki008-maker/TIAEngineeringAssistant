@@ -3204,6 +3204,27 @@ namespace TiaOpennessAdapter
         }
 
 
+        private static string ReadHmiTypeIdentifier(
+            Device device,
+            DeviceItem softwareItem
+        )
+        {
+            HardwareObject current = softwareItem;
+
+            while (current is DeviceItem item)
+            {
+                if (!string.IsNullOrWhiteSpace(item.TypeIdentifier))
+                {
+                    return item.TypeIdentifier;
+                }
+
+                current = item.Container;
+            }
+
+            return device.TypeIdentifier ?? "";
+        }
+
+
         private static void WriteProjectHmis(
             Project project
         )
@@ -3343,9 +3364,7 @@ namespace TiaOpennessAdapter
                         ) +
                         "|" +
                         SanitizeOutput(
-                            item.TypeIdentifier
-                            ??
-                            ""
+                            ReadHmiTypeIdentifier(device, item)
                         ) +
                         "|" +
                         SanitizeOutput(
