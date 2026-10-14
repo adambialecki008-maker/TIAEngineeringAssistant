@@ -727,3 +727,84 @@ assert.deepEqual(recorded, [[2, 5]]);
     )[0]
     assert 'if (!hmiUnifiedRunning) {' in init
     assert "renderHmiBatchProgress(0, xlsxLimit" in init
+
+
+def test_hmi_diagnostics_json_is_read_only_and_excludes_translation_content():
+    """A support snapshot works during active review without any TIA calls."""
+    import shutil
+    import subprocess
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js required for HMI diagnostic snapshot regression")
+    html = (ROOT / "gui/index.html").read_text(encoding="utf-8")
+    source = (ROOT / "gui/js/tia.js").read_text(encoding="utf-8")
+    assert html.count('id="tia-hmi-diagnostics-download"') == 1
+    assert 'hmiDiagnosticsButton?.addEventListener("click", downloadHmiDiagnostics);' in source
+    builder = source.split("function buildHmiDiagnostics()", 1)[1].split(
+        "function downloadHmiDiagnostics()", 1
+    )[0]
+    script = r"""
+const assert = require("node:assert/strict");
+const currentProjectName = "Test project";
+const hmiBatchSizeInput = {value: "5"};
+const hmiBatchTotalInput = {value: "10"};
+const hmiReviewEachBatch = {checked: false};
+const verifiedHmiScanKey = "current-project";
+const verifiedHmiTextListsScanKey = "current-xml";
+const latestHmiScan = {missingUnique: 20};
+const hmiCombinedApprovedCount = 5;
+const hmiRunReportStartCount = 0;
+const hmiRunReportVerifiedCount = null;
+const hmiRunReport = [];
+const hmiReviewQueueActive = true, hmiReviewQueuePending = true;
+const hmiReviewQueuePaused = false, hmiReviewQueueAutoContinue = true;
+const hmiReviewQueueStopRequested = false, hmiReviewQueueCurrentScope = "project";
+const hmiReviewQueueOperation = "importing / verifying";
+const hmiReviewQueueQuota = 10, hmiReviewQueueStartApproved = 0;
+const hmiUnifiedRunning = false, hmiUnifiedPauseRequested = false;
+const hmiUnifiedStopRequested = false, hmiUnifiedQuota = 0;
+const hmiUnifiedCarryVerified = 0, hmiUnifiedXlsxVerified = 0;
+const hmiXmlAutoVerified = 0;
+const hmiBatchRunning = false, hmiBatchStarting = false;
+const hmiBatchPauseRequested = false, hmiBatchJobId = null;
+const hmiXmlAutoRunning = false, hmiXmlAutoPauseRequested = false;
+const hmiTextListBusy = false, hmiTextListSelect = {value: "List A"};
+const hmiRunStartedAt = "2026-10-14T20:00:00Z";
+function hmiTranslationSelection() {
+    return {hmi_name: "HMI_RT_1", source_culture:"pl-PL",
+        target_culture:"en-US", secret:"should-not-export",
+        source_text:"should-not-export"};
+}
+function hmiScopeEnabled(scope) {return scope === "project";}
+function hmiScanKey(_selection, scope="project") {
+    return scope === "project" ? "current-project" : "current-xml";
+}
+function eligibleXmlEntries() {return 0;}
+function buildHmiDiagnostics()""" + builder + r"""
+const snapshot = buildHmiDiagnostics();
+assert.equal(snapshot.schema_version, 1);
+assert.equal(snapshot.project_name, "Test project");
+assert.equal(snapshot.settings.batch_size, 5);
+assert.equal(snapshot.settings.total_requested, 10);
+assert.equal(snapshot.reviewed_queue.automatic_continuation_requested, true);
+assert.equal(snapshot.reviewed_queue.pending, true);
+assert.equal(snapshot.counters.verified_since_scan, 5);
+assert.equal(snapshot.scan.project_current, true);
+const raw = JSON.stringify(snapshot);
+assert.equal(raw.includes("should-not-export"), false);
+assert.equal(raw.includes("proposal"), false);
+assert.equal(raw.includes("password"), false);
+assert.ok(!("source_text" in snapshot));
+"""
+    result = subprocess.run([node, "-e", script], capture_output=True,
+                            text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+    exporter = source.split("function downloadHmiDiagnostics()", 1)[1].split(
+        "function downloadHmiRunReport()", 1
+    )[0]
+    assert "application/json;charset=utf-8" in exporter
+    assert "URL.createObjectURL(blob)" in exporter
+    assert "anchor.click();" in exporter
+    assert "postJson(" not in exporter and "getJson(" not in exporter

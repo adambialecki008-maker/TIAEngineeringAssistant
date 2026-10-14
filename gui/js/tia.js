@@ -117,6 +117,7 @@ export function initTiaUi(
     const hmiAutomationControls = document.querySelector(".hmi-automation-controls");
     const hmiUnifiedStatus = document.getElementById("tia-hmi-unified-status");
     const hmiRunReportButton = document.getElementById("tia-hmi-run-report");
+    const hmiDiagnosticsButton = document.getElementById("tia-hmi-diagnostics-download");
     const hmiSkipReviewedButton = document.getElementById("tia-hmi-skip-reviewed");
     const hmiBatchStopButton = document.getElementById("tia-hmi-batch-stop");
     const hmiRunReportSummary = document.getElementById("tia-hmi-report-summary");
@@ -2346,6 +2347,95 @@ export function initTiaUi(
         }
         if (hmiRunReportSummary) hmiRunReportSummary.textContent =
             hmiRunReport.length + " skipped/error detail(s). One combined report.";
+    }
+
+
+    // Read-only support snapshot. Intentionally excludes actual source texts,
+    // target strings, review proposals and authentication material.
+    function buildHmiDiagnostics() {
+        const selection = hmiTranslationSelection();
+        const requested = hmiBatchTotalInput?.value?.trim() || "";
+        const runVerified = hmiRunReportVerifiedCount ?? Math.max(0,
+            hmiCombinedApprovedCount - hmiRunReportStartCount);
+        return {
+            schema_version: 1,
+            generated_at_utc: new Date().toISOString(),
+            project_name: currentProjectName || null,
+            hmi_name: selection?.hmi_name || null,
+            source_culture: selection?.source_culture || null,
+            target_culture: selection?.target_culture || null,
+            scopes: {
+                project_texts: hmiScopeEnabled("project"),
+                text_lists: hmiScopeEnabled("text_lists"),
+            },
+            settings: {
+                batch_size: Number(hmiBatchSizeInput?.value) || null,
+                total_requested: requested ? Number(requested) : null,
+                review_each_batch: Boolean(hmiReviewEachBatch?.checked),
+            },
+            scan: {
+                project_current: Boolean(selection && verifiedHmiScanKey
+                    && hmiScanKey(selection) === verifiedHmiScanKey),
+                text_lists_current: Boolean(selection && verifiedHmiTextListsScanKey
+                    && hmiScanKey(selection, "text_lists")
+                        === verifiedHmiTextListsScanKey),
+                project_missing_unique: latestHmiScan?.missingUnique ?? null,
+                text_lists_eligible_missing: eligibleXmlEntries(),
+            },
+            counters: {
+                verified_since_scan: hmiCombinedApprovedCount,
+                current_run_verified: runVerified,
+                current_run_error_count: hmiRunReport.length,
+            },
+            reviewed_queue: {
+                active: hmiReviewQueueActive,
+                pending: hmiReviewQueuePending,
+                paused: hmiReviewQueuePaused,
+                automatic_continuation_requested: hmiReviewQueueAutoContinue,
+                stop_requested: hmiReviewQueueStopRequested,
+                current_scope: hmiReviewQueueCurrentScope,
+                operation: hmiReviewQueueOperation,
+                quota: hmiReviewQueueQuota,
+                verified_at_start: hmiReviewQueueStartApproved,
+            },
+            automatic_run: {
+                running: hmiUnifiedRunning,
+                pause_requested: hmiUnifiedPauseRequested,
+                stop_requested: hmiUnifiedStopRequested,
+                quota: hmiUnifiedQuota,
+                carried_verified: hmiUnifiedCarryVerified,
+                xlsx_verified: hmiUnifiedXlsxVerified,
+                xml_verified: hmiXmlAutoVerified,
+            },
+            xlsx_job: {
+                active: hmiBatchRunning,
+                starting: hmiBatchStarting,
+                paused_requested: hmiBatchPauseRequested,
+                job_id: hmiBatchJobId || null,
+            },
+            xml_import: {
+                active: hmiXmlAutoRunning,
+                pause_requested: hmiXmlAutoPauseRequested,
+                busy: hmiTextListBusy,
+                selected_list_name: hmiTextListSelect?.value || null,
+            },
+            run_report_started_at_utc: hmiRunStartedAt,
+            notice: "GUI state only. No TIA operations or source/target text "
+                + "are included. Verified counters come from prior import confirmations.",
+        };
+    }
+
+    function downloadHmiDiagnostics() {
+        const snapshot = buildHmiDiagnostics();
+        const blob = new Blob([JSON.stringify(snapshot, null, 2) + "\n"],
+            {type: "application/json;charset=utf-8"});
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "TIA_HMI_diagnostics_"
+            + snapshot.generated_at_utc.replace(/[:.]/g, "-") + ".json";
+        anchor.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
 
     function downloadHmiRunReport() {
@@ -9681,6 +9771,7 @@ export function initTiaUi(
     });
 
     hmiRunReportButton?.addEventListener("click", downloadHmiRunReport);
+    hmiDiagnosticsButton?.addEventListener("click", downloadHmiDiagnostics);
     hmiSkipReviewedButton?.addEventListener("click", () => {
         void skipReviewedHmiQueueBatch();
     });
