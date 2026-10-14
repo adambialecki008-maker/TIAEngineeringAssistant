@@ -2836,6 +2836,7 @@ export function initTiaUi(
         discardHmiTextListReview();
         discardHmiReview();
         const blockedLists = new Set();
+        const rejectedIndicesByList = new Map();
         let completedBatches = 0;
         let xmlResult = "completed";
         updateHmiTranslateButtonState();
@@ -2850,7 +2851,8 @@ export function initTiaUi(
                 const list = (hmiTextListsData?.lists || []).find(item =>
                     !blockedLists.has(item.name)
                     && Number.isInteger(item.eligible_missing_entries)
-                    && item.eligible_missing_entries > 0);
+                    && item.eligible_missing_entries >
+                        (rejectedIndicesByList.get(item.name)?.size || 0));
                 if (!list || quota <= 0) break;
                 const count = Math.min(
                     batchSize, quota, list.eligible_missing_entries, 50
@@ -2867,7 +2869,10 @@ export function initTiaUi(
                 try {
                     prepared = await postJson(
                         "/api/v1/tia/hmis/text-lists/prepare",
-                        {...selection, text_list_name: list.name, max_rows: count}
+                        {...selection, text_list_name: list.name, max_rows: count,
+                            exclude_entry_indices: [
+                                ...(rejectedIndicesByList.get(list.name) || [])
+                            ]}
                     );
                 } catch (error) {
                     // Prepare is read-only: an isolated failed list can be
@@ -2878,13 +2883,17 @@ export function initTiaUi(
                     blockedLists.add(list.name);
                     continue;
                 }
+                const excluded = rejectedIndicesByList.get(list.name) || new Set();
                 for (const item of prepared.skipped || []) {
                     appendHmiRunIssue("XML", list.name,
                         item.source, item.proposal, item.reason);
+                    excluded.add(item.entry_index);
                 }
+                rejectedIndicesByList.set(list.name, excluded);
                 if (!prepared.review_id || !prepared.approved_count) {
-                    // Rejected by QA: do not process the same entry forever.
-                    blockedLists.add(list.name);
+                    // Read-only preparation rejected all selected entries.
+                    // Their indices are excluded; other entries remain eligible.
+                    if (!(prepared.skipped || []).length) blockedLists.add(list.name);
                     continue;
                 }
                 const proposals = (prepared.rows || []).map(row => ({
@@ -2926,15 +2935,8 @@ export function initTiaUi(
                     throw new Error("XML re-scan failed after verified import. "
                         + "Inspect TIA before continuing.");
                 }
-                if (prepared.skipped?.length) {
-                    // Do not endlessly revisit a list that still has only
-                    // rejected entries after its safe values are imported.
-                    if ((hmiTextListsData?.lists || []).some(item =>
-                        item.name === list.name && item.eligible_missing_entries > 0)
-                        && prepared.approved_count < count) {
-                        blockedLists.add(list.name);
-                    }
-                }
+                // Individual unsafe XML indices remain excluded; continue
+                // importing other valid entries from this same list.
             }
             if (hmiXmlAutoPauseRequested || hmiUnifiedPauseRequested)
                 xmlResult = "paused";
