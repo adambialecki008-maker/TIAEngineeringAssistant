@@ -10,6 +10,7 @@ using Siemens.Engineering;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.Library;
+using Siemens.Engineering.Library.MasterCopies;
 using Siemens.Engineering.SW;
 
 namespace TiaOpennessAdapter
