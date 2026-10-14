@@ -252,6 +252,11 @@ def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecificatio
 
 def _make_plan(request: PlcStructureImportRequest) -> dict:
     selected = _selected_project(request)
+    # Validate *all* selected definitions before any Openness call. Invalid
+    # identifiers, source encoding, duplicate names or dependency cycles
+    # must fail as HTTP 422 without even reading a live TIA project.
+    # Re-generate below with the names of live UDTs for correct SCL quoting.
+    _definitions(selected)
     context = get_project_context(request.process_id)
     targets = [plc for plc in context.plcs
                if plc.device_name.casefold() == request.device_name.casefold()
