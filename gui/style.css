@@ -2261,7 +2261,29 @@ table > thead > tr > th {
 #tia-hmi-xml-auto-progress { margin-top: 8px; }
 
 
-/* No separate XML/XLSX cards: both automatic pipelines live inside Step 3. */
+/* One ordered work queue displayed under the shared Step 2 batch settings. */
+.hmi-translation-queue-wrapper {
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid #30404d;
+    border-radius: 6px;
+}
+.hmi-translation-queue-table {
+    min-width: 0;
+    width: 100%;
+}
+.hmi-translation-queue-table th:first-child,
+.hmi-translation-queue-table td:first-child {
+    width: 72px;
+    text-align: center;
+}
+.hmi-translation-queue-table th:last-child,
+.hmi-translation-queue-table td:last-child {
+    width: 180px;
+    text-align: right;
+}
+
+/* No separate XML/XLSX Start controls: Step 3 runs one combined job. */
 .hmi-automation-controls {
     margin-top: 16px;
     padding-top: 14px;
