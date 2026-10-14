@@ -41,3 +41,26 @@ def test_selected_import_allows_independent_items_and_never_overwrites():
     assert 'result.counts?.blocked' in SOURCE_UI
     assert 'result.skipped_conflicts?.length' in SOURCE_UI
     assert 'clearPlan();' in SOURCE_UI
+
+
+def test_generate_reads_checked_dom_scope_not_entire_project_specification():
+    assert 'function selection()' in SOURCE_UI
+    assert 'container.querySelectorAll(' in SOURCE_UI
+    assert "input.checked" in SOURCE_UI
+    assert "input.dataset.structureName" in SOURCE_UI
+    assert 'selected_udts: checked(udtList, "UDT"' in SOURCE_UI
+    assert 'selected_dbs: checked(dbList, "DB"' in SOURCE_UI
+    assert '"/api/v1/tia/plc-structure-import/preview"' in SOURCE_UI
+    assert '{project: projectConfig, ...choice}' in SOURCE_UI
+    assert 'generation !== previewGeneration' in SOURCE_UI
+    assert 'item.auto_dependency' in SOURCE_UI
+    assert 'Server generated unselected objects:' in SOURCE_UI
+
+
+def test_preflight_includes_dependency_udts_and_discloses_them_for_confirmation():
+    assert 'def _include_required_udts(' in API
+    assert 'selected, auto_udts = _include_required_udts(' in API
+    assert 'auto_dependencies' in API
+    assert 'request.approved_create != current["will_create"]' in API
+    assert 'Automatically required UDTs to create:' in SOURCE_UI
+    assert 'Required UDTs added:' in SOURCE_UI
