@@ -51,7 +51,7 @@ def test_gui_uses_50_for_project_manual_and_automatic_batch():
         ("function manualHmiPrepareCount()", "function textListBatchIdentity()"),
         ("function updateHmiTranslateButtonState()", "async function refreshHmiOllamaModels()"),
         ("function renderHmiBatchPlan()", "function showHmiBatchJob(job)"),
-        ("async function startHmiBatchImport()", "async function resumeHmiBatchImport()"),
+        ("async function startHmiBatchImport({confirmed = false, forceAll = false} = {})", "async function resumeHmiBatchImport()"),
     ):
         assert block_start in js
         assert block_end in js
