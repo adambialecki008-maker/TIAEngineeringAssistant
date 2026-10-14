@@ -11,7 +11,7 @@ def test_one_batch_form_for_checked_scopes():
     assert HTML.count('id="tia-hmi-batch-size"') == 1
     assert HTML.count('id="tia-hmi-total-to-translate"') == 1
     assert HTML.count('id="tia-hmi-translation-queue"') == 1
-    assert 'Combined translation queue (XLSX → XML)' in HTML
+    assert 'Combined translation queue <span class="hmi-queue-subtitle">' in HTML
     assert 'function renderHmiTranslationQueue()' in JS
     assert 'renderHmiTranslationQueue();' in JS
     queue = JS.split('function renderHmiTranslationQueue()', 1)[1]
@@ -23,7 +23,7 @@ def test_one_batch_form_for_checked_scopes():
     assert HTML.count('id="tia-hmi-translate-button"') == 1
     assert HTML.count('id="tia-hmi-import-reviewed-button"') == 1
     assert 'Step 2 — Batch settings (selected text types)' in HTML
-    assert 'Step 3 — Prepare and review selected texts' in HTML
+    assert 'Step 3 — Translate, review &amp; import' in HTML
     assert 'Step 2 — Text lists' not in HTML
     assert 'Step 3 — Text lists' not in HTML
     for removed in (
@@ -81,7 +81,7 @@ def test_one_translate_all_action_orchestrates_both_verified_pipelines():
     assert 'id="tia-hmi-unified-status"' in HTML
     assert 'id="tia-hmi-batch-progress"' in HTML
     assert 'id="tia-hmi-xml-auto-section"' in HTML
-    assert 'class="hmi-automatic-scope" data-hmi-scope="project"' in HTML
+    assert 'class="hmi-automatic-scope hidden" data-hmi-scope="project"' in HTML
     # The old separate XML Start/Pause actions must never reappear.
     assert 'id="tia-hmi-xml-auto-start"' not in HTML
     assert 'id="tia-hmi-xml-auto-pause"' not in HTML
@@ -139,23 +139,26 @@ def test_project_and_xml_scan_details_are_one_level_inside_step_one():
     assert '"Text lists"' in JS
 
 
-def test_auto_actions_and_both_manual_reviews_reside_in_step_three():
-    start = HTML.index('Step 3 — Prepare and review selected texts')
-    end = HTML.index('data-tab-panel="devices"')
-    section = HTML[start:end]
+def test_editor_in_step_two_and_unified_controls_in_step_three():
+    second = HTML.split('Step 2 — Batch settings (selected text types)', 1)[1]
+    second = second.split('Step 3 — Translate, review &amp; import', 1)[0]
+    third = HTML.split('Step 3 — Translate, review &amp; import', 1)[1]
+    third = third.split('data-tab-panel="devices"', 1)[0]
     for key in (
-        'tia-hmi-translate-button',
-        'tia-hmi-import-reviewed-button',
-        'tia-hmi-text-list-review-rows',
-        'tia-hmi-review-rows',
-        'tia-hmi-unified-status',
-        'tia-hmi-xml-auto-status',
-        'tia-hmi-batch-start',
-        'tia-hmi-batch-resume',
-        'tia-hmi-batch-pause',
+        'tia-hmi-text-list-review-rows', 'tia-hmi-review-rows',
+        'tia-hmi-edit-details',
     ):
-        assert section.count('id="' + key + '"') == 1
-    assert 'hmi-batch-panel hmi-workflow-step' not in section
+        assert second.count('id="' + key + '"') == 1
+        assert 'id="' + key + '"' not in third
+    for key in (
+        'tia-hmi-translate-button', 'tia-hmi-import-reviewed-button',
+        'tia-hmi-unified-status', 'tia-hmi-xml-auto-status',
+        'tia-hmi-batch-start', 'tia-hmi-batch-resume',
+        'tia-hmi-batch-pause', 'tia-hmi-review-each-batch',
+        'tia-hmi-run-report',
+    ):
+        assert third.count('id="' + key + '"') == 1
+    assert 'hmi-batch-panel hmi-workflow-step' not in third
     assert 'hmiScopeEnabled(element.dataset.hmiScope)' in JS
     assert 'hmiAutomationControls?.classList.toggle("hidden", !scope)' in JS
 
@@ -217,13 +220,48 @@ def test_scan_disclosures_and_review_actions_belong_to_exactly_three_steps():
     ):
         assert "hmi-scope-step" in parents[key], key
 
+    for key in ("tia-hmi-review-results", "tia-hmi-text-list-review",
+                "tia-hmi-edit-details"):
+        assert "hmi-scope-step" in parents[key], key
+
     for key in (
         "tia-hmi-translate-button",
         "tia-hmi-import-reviewed-button",
-        "tia-hmi-review-results",
-        "tia-hmi-text-list-review",
         "tia-hmi-unified-status",
-        "tia-hmi-batch-start",
+        "tia-hmi-batch-start", "tia-hmi-review-each-batch",
     ):
         assert "hmi-manual-step" in parents[key], key
 
+
+
+def test_reviewed_mode_waits_for_confirmation_between_batches():
+    assert 'id="tia-hmi-review-each-batch" type="checkbox" checked' in HTML
+    assert 'async function startReviewedHmiQueue(' in JS
+    assert 'async function prepareNextReviewedHmiBatch()' in JS
+    assert 'async function approveReviewedHmiQueueBatch()' in JS
+    pipeline = JS.split('async function prepareNextReviewedHmiBatch()', 1)[1]
+    pipeline = pipeline.split('async function approveReviewedHmiQueueBatch()', 1)[0]
+    assert 'await translateSelectedHmi()' in pipeline
+    assert 'await prepareHmiTextList()' in pipeline
+    assert 'await importSelectedHmiBatch()' not in pipeline
+    assert 'hmiReviewQueuePending = true;' in pipeline
+    approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1]
+    approval = approval.split('async function startHmiBatchImport(', 1)[0]
+    assert approval.index('await importSelectedHmiBatch()') < approval.index(
+        'await prepareNextReviewedHmiBatch()')
+    assert 'hmiCombinedApprovedCount <= before' in approval
+
+
+def test_one_csv_report_covers_skipped_xlsx_xml_and_blocks_formulas():
+    assert 'id="tia-hmi-run-report"' in HTML
+    for text in (
+        'function downloadHmiRunReport()', 'function appendHmiRunIssue(',
+        'async function collectHmiXlsxRunSkips()',
+        'for (const item of result.skipped || [])',
+        'for (const item of prepared.skipped || [])',
+        'hmiRunReportButton?.addEventListener("click", downloadHmiRunReport)',
+        'new Blob(', 'text/csv;charset=utf-8', 'revokeObjectURL',
+    ):
+        assert text in JS
+    assert 'hmiReviewQueueBlockedLists.add(' in JS
+    assert 'hmiReviewQueueProjectExhausted = true;' in JS
