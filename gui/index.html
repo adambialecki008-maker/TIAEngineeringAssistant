@@ -1511,6 +1511,9 @@
                             <div class="hmi-edit-body">
                                 <p class="hint">The current batch uses one shared editor. All manual
                                     changes are validated by the selected import pipeline before TIA writes.</p>
+                                <p id="tia-hmi-translation-status"
+                                   class="status-box hmi-action-status" role="status"
+                                   aria-live="polite" aria-atomic="true"></p>
                     <div id="tia-hmi-text-list-workflow" class="hidden" data-hmi-scope="text_lists">
                         <p id="tia-hmi-text-list-status" class="status-box hmi-action-status"
                            role="status" aria-live="polite"></p>
@@ -1584,27 +1587,8 @@
                                     OFF: automatic verified import (no individual approval).</small>
                             </span>
                         </label>
-                    <div class="action-row hmi-translation-actions">
-
-                        <button id="tia-hmi-translate-button" type="button" class="hidden" disabled>
-                            Prepare selected batch (review)
-                        </button>
-
-                        <button
-                            id="tia-hmi-import-reviewed-button"
-                            type="button"
-                            class="primary-button hidden"
-                            disabled
-                        >
-                            Approve &amp; import reviewed batch
-                        </button>
-
-                    </div>
-                    <p id="tia-hmi-translation-status"
-                       class="status-box hmi-action-status"
-                       role="status" aria-live="polite" aria-atomic="true">
-                        Select source slot and target language.
-                    </p>
+                    <button id="tia-hmi-translate-button" type="button"
+                            class="hidden" disabled>Prepare selected batch</button>
                     <div class="hmi-automation-controls">
                         <h5 class="hmi-automation-title hidden">Automatic translation — selected text types</h5>
                         <p class="hint" id="tia-hmi-run-description">
@@ -1613,6 +1597,10 @@
                         <div class="action-row hmi-translation-actions">
                             <button id="tia-hmi-batch-start" type="button"
                                     class="primary-button" disabled>Translate all</button>
+                            <button id="tia-hmi-import-reviewed-button"
+                                    type="button" class="primary-button hidden" disabled>
+                                ✓ Approve &amp; import reviewed batch
+                            </button>
                             <button id="tia-hmi-batch-pause" type="button"
                                     class="secondary-button" disabled>Pause after current batch</button>
                             <button id="tia-hmi-skip-reviewed" type="button"
