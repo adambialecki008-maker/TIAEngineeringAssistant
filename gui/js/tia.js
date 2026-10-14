@@ -2192,6 +2192,12 @@ export function initTiaUi(
     }
 
     function finishStoppedReviewedHmiQueue() {
+        // Reflect already verified imports even if Stop was requested during
+        // the last TIA operation; never claim unwritten translations succeeded.
+        renderHmiBatchProgress(
+            hmiCombinedApprovedCount - hmiReviewQueueStartApproved,
+            hmiReviewQueueQuota
+        );
         // Discard any unimported proposals; the read-only preparation may have
         // just returned, but it never authorizes an implicit TIA write.
         discardHmiTextListReview();
@@ -2494,7 +2500,8 @@ export function initTiaUi(
         if (hmiReviewQueueStopRequested
             && (completed === true || completed === "edit_invalid"
                 || completed === "cancelled"
-                || completed?.state === "verified_refresh_failed")) {
+                || completed?.state === "verified_refresh_failed"
+                || completed?.state === "prewrite_rejected")) {
             finishStoppedReviewedHmiQueue();
             return;
         }
