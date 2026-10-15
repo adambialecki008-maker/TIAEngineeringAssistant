@@ -10,14 +10,6 @@ import {
 export async function generatePreview(
     previewElement
 ) {
-    if (!projectConfig.plc_family) {
-        alert(
-            "Select PLC family first."
-        );
-
-        return;
-    }
-
     if (
         projectConfig.udts.length === 0 &&
         projectConfig.dbs.length === 0
