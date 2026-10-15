@@ -182,6 +182,9 @@ jobs:
       - name: Run existing UDT/DB browser regression
         run: node tests/member_editor_browser.cjs
 
+      - name: Check member attribute checkboxes (UDT and DB)
+        run: node tests/member_flags_browser.cjs
+
       - name: Run I/O template and TIA UDT import browser regression
         run: node tests/io_udt_browser.cjs
 
