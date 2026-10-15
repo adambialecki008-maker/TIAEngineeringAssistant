@@ -179,6 +179,9 @@ jobs:
       - name: Run existing UDT/DB browser regression
         run: node tests/member_editor_browser.cjs
 
+      - name: Run I/O template and TIA UDT import browser regression
+        run: node tests/io_udt_browser.cjs
+
       - name: Upload Playwright evidence on failure
         if: failure()
         uses: actions/upload-artifact@v7
