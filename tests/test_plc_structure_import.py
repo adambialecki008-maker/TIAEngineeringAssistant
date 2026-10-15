@@ -818,7 +818,8 @@ def test_existing_db_comments_are_compared_instead_of_blanket_unknown(
     xml = {"DB_Motors": (
         '<Document><Section Name="Static"><Member Name="Motors" '
         'Datatype="Array[1..10] of UDT_Motor">'
-        + ('<Comment><MultiLanguageText>Motor running</MultiLanguageText></Comment>'
+        + ('<Comment><MultiLanguageText>' + attrs["comment"]
+           + '</MultiLanguageText></Comment>'
            if attrs["comment"] is not None else '')
         + '</Member></Section></Document>'
     )}
