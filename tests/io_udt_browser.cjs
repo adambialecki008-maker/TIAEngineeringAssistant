@@ -56,13 +56,16 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
     return route.fulfill({status:503,json:{detail:"Blocked Siemens access in test"}});
   });
   await page.goto(process.env.APP_URL||"http://127.0.0.1:8765/");
+  // Process selector lives in the TIA Portal tab and is not actionable
+  // while that panel is hidden by the I/O Engineering tab.
+  await page.locator('[data-tab="plc"]').click();
+  await page.locator("#tia-process option[value='123']").waitFor({state:"attached"});
+  await page.locator("#tia-process").selectOption("123");
   await page.locator('[data-tab="devices"]').click();
   await assert.equal((await page.locator('[data-tab="devices"]').innerText()).trim(),
     "I/O Engineering");
   await page.locator("#device-mapping-mode").waitFor();
   assert.equal(await page.locator("#device-mapping-mode").inputValue(),"device");
-  await page.locator("#tia-process option[value='123']").waitFor({state:"attached"});
-  await page.locator("#tia-process").selectOption("123");
   await page.locator("#refresh-hardware-button").click();
   await page.locator("#device-io-mapping-body select").first().selectOption({index:1});
   const addressRows=page.locator("#generated-plc-tags-body tr");
