@@ -208,6 +208,8 @@ const seed = {
         await duplicateForm.locator(':scope > .action-row')
             .getByRole("button", { name: "Cancel", exact: true }).click();
 
+        // Selection checkboxes expose member actions; expansion uses arrows.
+        assert.equal((await stsRow.locator(".member-tree-toggle").innerText()).trim(), "▸");
         // Add/delete/reorder works within a draft Struct.
         const tree = stsForm.locator(".member-tree").first();
         await tree.locator(":scope > .member-add-toggle").click();
@@ -217,12 +219,16 @@ const seed = {
         await addForm.locator('input[id$="-name"]').fill("Alarm");
         await addForm.locator('select[id$="-type"]').selectOption("Bool");
         await addForm.getByRole("button", { name: "Add", exact: true }).click();
-        await stsForm.locator(
+        const selectedDelete = stsForm.locator(
             'tr[data-member-path="udt-field-0-edit-1-struct:3"]'
-        ).getByRole("button", { name: "Delete" }).click();
-        await stsForm.locator(
+        );
+        await selectedDelete.locator("input.member-row-checkbox").check();
+        await selectedDelete.getByRole("button", { name: "Delete", exact: true }).click();
+        const selectedMove = stsForm.locator(
             'tr[data-member-path="udt-field-0-edit-1-struct:2"]'
-        ).getByRole("button", { name: "Move up" }).click();
+        );
+        await selectedMove.locator("input.member-row-checkbox").check();
+        await selectedMove.getByRole("button", { name: "Move up" }).click();
         await save(stsForm);
         config = await page.evaluate((key) =>
             JSON.parse(localStorage.getItem(key)), key);
