@@ -60,13 +60,14 @@ export function saveProjectConfig() {
     // The original pre-migration value is preserved at LEGACY_BACKUP_KEY.
     if (active === DEFAULT_PROFILE) localStorage.setItem(STORAGE_KEY, value);
 }
-function assignProject(parsed) {
+function assignProject(parsed, clearTiaTarget = false) {
     projectConfig.plc_family = typeof parsed?.plc_family === "string" ? parsed.plc_family : "";
     projectConfig.udts = Array.isArray(parsed?.udts) ? parsed.udts : [];
     projectConfig.dbs = Array.isArray(parsed?.dbs) ? parsed.dbs : [];
     projectConfig.device_config = normalizeDeviceConfig(parsed?.device_config);
-    // An open Siemens project is never portable between local profiles.
-    projectConfig.tia_target = null;
+    // Preserve startup compatibility; clear bindings only when switching
+    // local projects or restoring a portable backup.
+    projectConfig.tia_target = clearTiaTarget ? null : normalizeTiaTarget(parsed?.tia_target);
 }
 export function loadProjectConfig() {
     const key = PROFILE_PREFIX + getActiveProjectProfileId();
@@ -110,7 +111,7 @@ export function switchProjectProfile(id) {
     projectConfig.tia_target = null;
     saveProjectConfig();
     localStorage.setItem(ACTIVE_PROFILE_KEY, id);
-    assignProject(next);
+    assignProject(next, true);
     saveProjectConfig();
 }
 export function deleteProjectProfile(id) {
@@ -125,7 +126,7 @@ export function deleteProjectProfile(id) {
 export function replaceProjectConfig(parsed) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
         throw Error("Invalid project backup.");
-    assignProject(parsed);
+    assignProject(parsed, true);
     saveProjectConfig();
 }
 
