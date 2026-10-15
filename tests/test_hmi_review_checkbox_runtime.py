@@ -20,6 +20,6 @@ def test_review_checkbox_runtime_across_prepare_approval_import_and_pause():
         cwd=ROOT, capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "41 passed, 0 failed, 41 executed" in result.stdout
-    assert result.stdout.count("PASS ") == 41, result.stdout
+    assert "46 passed, 0 failed, 46 executed" in result.stdout
+    assert result.stdout.count("PASS ") == 46, result.stdout
     assert "HMI review checkbox transitions: PASS" in result.stdout

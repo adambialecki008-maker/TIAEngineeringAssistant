@@ -2720,6 +2720,19 @@ export function initTiaUi(
             return;
         }
         if (!hmiReviewQueueActive) return;
+        // A backend or transport preparation failure is not a QA-only skip or
+        // evidence that Project texts / a Text list have been exhausted.
+        // Stop without starting the next scope or attempting any TIA write.
+        if (prepared?.state === "prepare_failed") {
+            const format = project ? "XLSX Project texts"
+                : "XML Text list '" + pendingListName + "'";
+            finishReviewedHmiQueue(
+                format + " preparation FAILED before import: "
+                + prepared.detail + ". No further batches started. "
+                + "Inspect the error, then scan again before retrying.", true
+            );
+            return;
+        }
         if (!prepared) {
             // All proposals in this Project texts batch may have failed QA.
             // Previously the whole XLSX scope was marked exhausted here,
@@ -3349,12 +3362,14 @@ export function initTiaUi(
             }
             return Boolean(result.review_id && result.approved_count);
         } catch (error) {
+            const message = String(error.message || error);
             if (hmiTextListStatus)
-                hmiTextListStatus.textContent = "Prepare failed: " + error.message;
+                hmiTextListStatus.textContent = "Prepare failed: " + message;
             if (hmiReviewQueueActive) {
                 appendHmiRunIssue("XML", hmiTextListSelect?.value || "Text list",
-                    "", "", "Read-only preparation failed: " + error.message,
-                    "Skipped list");
+                    "", "", "Read-only preparation failed: " + message,
+                    "Preparation failed — no import attempted");
+                return {state: "prepare_failed", detail: message};
             }
             return false;
         } finally {
@@ -4636,11 +4651,13 @@ export function initTiaUi(
             renderPreparedHmiReview(result, key);
             return Boolean(preparedHmiReview);
         } catch (error) {
-            setHmiTranslationStatus(error.message, "error");
+            const message = String(error.message || error);
+            setHmiTranslationStatus(message, "error");
             if (hmiReviewQueueActive) {
                 appendHmiRunIssue("XLSX", "Project texts", "", "",
-                    "Read-only preparation failed: " + error.message,
-                    "Skipped batch");
+                    "Read-only preparation failed: " + message,
+                    "Preparation failed — no import attempted");
+                return {state: "prepare_failed", detail: message};
             }
             return false;
         } finally {

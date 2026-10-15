@@ -41,6 +41,11 @@ is requested.
   effective until the user resumes.
 - Automatic XML execution has no persistent resume checkpoint; if a write's
   outcome is uncertain, inspect TIA and rescan before further imports.
+- A preparation transport/backend failure (XLSX or XML) is **not** a QA
+  rejection or an exhausted scope: the queue stops with an error before any
+  further batch/import and requires a fresh scan to restart. Previously
+  verified batches remain counted; failed preparations are listed in the
+  run report.
 - Automatic XLSX batch jobs maintain checkpoints under the ignored
   `.local/hmi_translation_jobs/` directory and do not blindly repeat
   previously verified batches.
