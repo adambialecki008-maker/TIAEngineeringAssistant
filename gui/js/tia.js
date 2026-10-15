@@ -1685,8 +1685,12 @@ export function initTiaUi(
         if (hmiBatchResumeButton) {
             hmiBatchResumeButton.classList.toggle("hidden",
                 !hmiReviewQueuePaused);
-            hmiBatchResumeButton.disabled = !hmiReviewQueuePaused
-                || hmiReviewQueuePending || busy;
+            // A paused, prepared batch may resume directly into automatic
+            // import after the user explicitly disabled per-batch review.
+            // Keep the control disabled during any active/uncertain operation.
+            hmiBatchResumeButton.disabled = !hmiReviewQueuePaused || busy
+                || Boolean(hmiReviewQueueOperation)
+                || (hmiReviewQueuePending && !hmiReviewQueueAutoContinue);
             hmiBatchResumeButton.textContent = "Resume review queue";
         }
         if (hmiBatchPauseButton) {
@@ -2690,6 +2694,18 @@ export function initTiaUi(
             return;
         }
         hmiReviewQueuePending = true;
+        // A Pause may have arrived WHILE Ollama was preparing this batch.
+        // A successful read-only prepare must not authorize a new TIA write.
+        if (hmiReviewQueuePaused) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                hmiReviewQueueAutoContinue
+                    ? "Queue paused with a prepared batch. Click Resume review "
+                        + "queue to import automatically after safety validation."
+                    : "Queue paused with a prepared batch. Review in Step 2; "
+                        + "approve after resuming.";
+            updateHmiTranslateButtonState();
+            return;
+        }
         if (hmiReviewQueueAutoContinue) {
             if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                 "Review disabled. Importing the prepared batch automatically, "
@@ -9803,23 +9819,41 @@ export function initTiaUi(
     });
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
     hmiReviewEachBatch?.addEventListener("change", () => {
-        updateHmiTranslateButtonState();
-        if (!hmiReviewQueueActive) return;
-        if (hmiReviewEachBatch.checked) {
-            hmiReviewQueueAutoContinue = false;
+        if (!hmiReviewQueueActive) {
+            // Switching mode during an already-automatic run applies only
+            // to the NEXT run; it must never spawn another import.
+            updateHmiTranslateButtonState();
             return;
         }
-        // Turning review off is explicit authorization to continue this run
-        // automatically. Never interrupt an active TIA operation; instead
-        // switch at its next verified boundary.
+        if (hmiReviewEachBatch.checked) {
+            hmiReviewQueueAutoContinue = false;
+            if (!hmiReviewQueueOperation && hmiUnifiedStatus)
+                hmiUnifiedStatus.textContent = hmiReviewQueuePending
+                    ? "Review enabled. The prepared batch awaits manual "
+                        + "approval in Step 3; no automatic write will start."
+                    : "Review enabled. The next batch will await manual approval.";
+            updateHmiTranslateButtonState();
+            return;
+        }
+        // Turning review off requests automatic continuation. Never start
+        // another write during an active import, or while the queue is paused.
         hmiReviewQueueAutoContinue = true;
-        if (hmiReviewQueuePending && !hmiReviewQueueOperation) {
+        if (hmiReviewQueuePaused) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Review disabled, but the queue remains PAUSED. "
+                + "Click Resume review queue to continue automatically. "
+                + "No new TIA write has started.";
+        } else if (hmiReviewQueuePending && !hmiReviewQueueOperation) {
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Review disabled. Starting automatic import of the prepared "
+                + "batch with TIA verification.";
             void approveReviewedHmiQueueBatch({automatic: true});
         } else if (hmiUnifiedStatus) {
             hmiUnifiedStatus.textContent =
-                "Review disabled. The current safe operation will finish, "
-                + "then the queue continues automatically.";
+                "Review disabled. The current safe operation will finish "
+                + "and be verified before automatic continuation.";
         }
+        updateHmiTranslateButtonState();
     });
 
     const changeHmiScope = (changed) => {
@@ -9874,8 +9908,22 @@ export function initTiaUi(
     hmiBatchResumeButton?.addEventListener(
         "click", () => {
             if (hmiReviewQueuePaused) {
+                if (hmiReviewQueueOperation || hmiReviewQueueStopRequested) return;
                 hmiReviewQueuePaused = false;
-                void prepareNextReviewedHmiBatch();
+                if (hmiReviewQueuePending) {
+                    // A prepared batch must not be prepared twice. If the
+                    // user disabled review while paused, resume directly at
+                    // the existing verified-import boundary.
+                    if (hmiReviewQueueAutoContinue) {
+                        void approveReviewedHmiQueueBatch({automatic: true});
+                    } else {
+                        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                            "Queue resumed. Prepared batch awaits manual approval.";
+                        updateHmiTranslateButtonState();
+                    }
+                } else {
+                    void prepareNextReviewedHmiBatch();
+                }
             } else {
                 void resumeHmiBatchImport();
             }
