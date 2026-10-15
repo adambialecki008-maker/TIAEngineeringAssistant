@@ -565,6 +565,9 @@ def test_stopping_hmi_run_clears_visual_progress_but_keeps_verified_count():
 const assert = require("node:assert/strict");
 let hmiCombinedApprovedCount = 5;
 let hmiReviewQueueStartApproved = 0;
+let verifiedHmiScanKey = "verified-project";
+let verifiedHmiTextListsScanKey = "verified-xml";
+let controlsUpdated = 0;
 const uiProgress = [];
 let stoppedStatus = "";
 function renderHmiBatchProgress(done, total) {
@@ -572,13 +575,21 @@ function renderHmiBatchProgress(done, total) {
 }
 function discardHmiTextListReview() {}
 function discardHmiReview() {}
+function updateHmiTranslateButtonState() {controlsUpdated++;}
 function finishReviewedHmiQueue(message) {stoppedStatus = message;}
 function finishStoppedReviewedHmiQueue()""" + review_stop + r"""
 finishStoppedReviewedHmiQueue();
 assert.deepEqual(uiProgress, [[0, 0]]);
 assert.match(stoppedStatus, /5 translation\(s\) already verified in TIA/);
 assert.equal(hmiCombinedApprovedCount, 5);
+assert.equal(verifiedHmiScanKey, null);
+assert.equal(verifiedHmiTextListsScanKey, null);
+assert.equal(controlsUpdated, 1);
 
+// Check Stop of an automatic run independently from the reviewed run.
+verifiedHmiScanKey = "verified-project";
+verifiedHmiTextListsScanKey = "verified-xml";
+let hmiUnifiedCarryVerified = 0;
 let hmiUnifiedStopRequested = true;
 let hmiUnifiedPauseRequested = true;
 let hmiUnifiedXlsxVerified = 5, hmiXmlAutoVerified = 0;
@@ -594,6 +605,8 @@ assert.match(hmiUnifiedStatus.textContent, /5 translation\(s\) already verified 
 assert.equal(hmiCombinedApprovedCount, 5);
 assert.equal(hmiUnifiedStopRequested, false);
 assert.equal(hmiUnifiedPauseRequested, false);
+assert.equal(verifiedHmiScanKey, null);
+assert.equal(verifiedHmiTextListsScanKey, null);
 
 // Successful runs should retain their completed-progress display.
 hmiUnifiedStopRequested = false;
