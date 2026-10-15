@@ -87,9 +87,9 @@ test("interleaved DI/DO signals use separate manual anchors and streams",()=>{
  x.mappings.push({group_id:"Motor",signal_id:"@lane:Output:1",
  start_channel_key:key(ch(3200,{io:"Output",mod:"DO1"}))});
  const p=allocate(x);assert.equal(p.errors.length,0);
- assert.deepEqual(Array.from(p.rows, r=>r.tag_name),["Run_Motor1","Stop_Motor1",
- "Run_Motor2","Stop_Motor2","Enable_Motor1","Reset_Motor1",
- "Enable_Motor2","Reset_Motor2"]);
+ assert.deepEqual(Array.from(p.rows, r=>r.tag_name),["Run_Motor1","Enable_Motor1",
+ "Stop_Motor1","Reset_Motor1","Run_Motor2","Enable_Motor2",
+ "Stop_Motor2","Reset_Motor2"]);
 });
 test("mixed lanes require their own start anchors",()=>{
  const x=basics();x.templates=[{id:"motor",signals:[signal("Run"),

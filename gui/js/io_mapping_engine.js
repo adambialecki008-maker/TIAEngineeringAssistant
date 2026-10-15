@@ -23,6 +23,15 @@ export function allocateTemplateByDevice({
     widthOf, compatible, keyOf, addressOf, tagNameOf, deviceNameOf,
 }) {
     const rows = [], errors = [];
+    const rowOrder = new Map();
+    const result = () => {
+        rows.sort((a,b) => {
+            const first = rowOrder.get(a), second = rowOrder.get(b);
+            return first[0]-second[0] || first[1]-second[1]
+                || first[2]-second[2];
+        });
+        return {rows, errors};
+    };
     const usedBits = new Map(), usedTags = new Set();
     const ordered = [...channels].sort((a,b) =>
         a.channel_address_bits - b.channel_address_bits
@@ -30,7 +39,7 @@ export function allocateTemplateByDevice({
         || a.item_path.localeCompare(b.item_path)
         || a.channel_number - b.channel_number
     );
-    for (const group of groups) {
+    for (const [groupIndex, group] of groups.entries()) {
         const template = templates.find(t => t.id === group.template_id);
         if (!template) {
             errors.push(group.prefix + ": template not found.");
@@ -90,7 +99,7 @@ export function allocateTemplateByDevice({
                         errors.push(label + ": non-contiguous physical addresses after "
                             + addressOf(previous, signal.data_type) + ".");
                         // No skipping to another free module/channel.
-                        return {rows, errors};
+                        return result();
                     }
                     previous = ch;
                     const address = addressOf(ch, signal.data_type);
@@ -129,9 +138,11 @@ export function allocateTemplateByDevice({
                         logical_address: address,
                         channel: ch,
                     });
+                    rowOrder.set(rows[rows.length-1],
+                        [groupIndex, offset, template.signals.indexOf(signal)]);
                 }
             }
         }
     }
-    return {rows, errors};
+    return result();
 }
