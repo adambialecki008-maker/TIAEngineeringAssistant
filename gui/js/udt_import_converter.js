@@ -48,6 +48,11 @@ export function convertTiaUdtDetail(detail) {
             || path.split(".").at(-1) !== name) {
             throw Error("Invalid TIA UDT member path or level.");
         }
+        // Expanded ARRAY elements in exported XML are not declarations;
+        // importing them as editable fields would corrupt the UDT.
+        if (/[\[\]]/.test(path)) {
+            throw Error(path + ": expanded Array element cannot be imported as a member.");
+        }
         const parts = path.split(".");
         if (parts.length !== level + 1 || parts.some(p=>!p)) {
             throw Error(path + ": ambiguous nesting in TIA export.");
