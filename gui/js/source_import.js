@@ -120,11 +120,6 @@ export function initSourceImportUi() {
                 "Select at least one UDT or DB.";
             return;
         }
-        if (!projectConfig.plc_family) {
-            if (sourcePreview) sourcePreview.textContent =
-                "Select PLC family first.";
-            return;
-        }
         try {
             const response = await postJson(
                 "/api/v1/tia/plc-structure-import/preview",
