@@ -72,7 +72,7 @@ const item = (pathName, data_type, remanence = undefined) => ({
         // the Windows Openness adapter or connects to a real PLC.
         await page.evaluate(async () => {
             const {projectConfig,saveProjectConfig} = await import("/gui/js/state.js");
-            projectConfig.plc_family = "S7-1500";
+            projectConfig.plc_family = ""; // read-only import must work without Create PLC family
             projectConfig.tia_target = {device_name:"Device_1",plc_name:"PLC_1",
                 type_identifier:"System:Device.S71500"};
             saveProjectConfig();
