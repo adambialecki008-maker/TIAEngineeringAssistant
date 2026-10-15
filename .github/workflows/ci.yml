@@ -188,6 +188,9 @@ jobs:
       - name: Round-trip Engineering Libraries across isolated browser profiles
         run: node tests/library_transfer_browser.cjs
 
+      - name: Read TIA global DB into local editor (mocked Openness)
+        run: node tests/db_import_browser.cjs
+
       - name: Upload Playwright evidence on failure
         if: failure()
         uses: actions/upload-artifact@v7
