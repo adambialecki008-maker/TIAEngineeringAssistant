@@ -1,8 +1,8 @@
 # Local project profiles and legacy migration
 
-## Profiles in Data & Libraries
+## Project profiles on Overview
 
-Expand **Local project profiles** to create, select, rename, duplicate or delete
+On **Overview**, use **Local project profiles** to create, select, rename, duplicate or delete
 a local engineering project. Each profile has separate PLC family, UDTs, DBs,
 device templates, groups and I/O mappings. Libraries remain shared.
 
@@ -15,7 +15,7 @@ device templates, groups and I/O mappings. Libraries remain shared.
 - **Delete** is not supported for the Default or currently active profile.
   Create/export backups first; local deletion is not reversible.
 
-Selecting a profile **does not** import anything into an open TIA project, and
+**Overview** is also the single entry point for selecting the TIA process and Active PLC. There are no duplicated connection selectors in PLC, HMI or Data & Libraries.\n\nSelecting a profile **does not** import anything into an open TIA project, and
 does not carry a live Siemens connection between profiles. Re-select the TIA
 process and PLC and verify them before any separate write operation.
 
