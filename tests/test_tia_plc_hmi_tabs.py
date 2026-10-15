@@ -23,35 +23,36 @@ def test_plc_and_hmi_are_separate_navigation_tabs():
     assert 'tabName === "tia" ? "plc"' in TABS_JS
 
 
-def test_each_tab_shows_connection_and_project_context_without_duplicate_ids():
+def test_overview_owns_single_connection_and_project_context():
+    overview = _tab("project")
     plc = _tab("plc")
     hmi = _tab("hmi")
-    for text in ("Connection", "Project context", "TIA process:", "TIA project:"):
-        assert text in plc
-        assert text in hmi
-
-    for name in ("tia-process", "tia-refresh-button", "tia-connection-status",
-                 "tia-project-name"):
+    for name in ("overview-profile-management", "overview-profile-name",
+                 "tia-process", "tia-refresh-button", "tia-connection-status",
+                 "tia-project-name", "tia-existing-plcs-table",
+                 "tia-refresh-plcs-button"):
+        assert f'id="{name}"' in overview
+        assert f'id="{name}"' not in plc
+        assert f'id="{name}"' not in hmi
+    for obsolete in ("tia-hmi-process", "tia-hmi-refresh-button",
+                     "tia-hmi-connection-status", "tia-hmi-project-name"):
+        assert f'id="{obsolete}"' not in HTML
+    for name in ("tia-plc-tags-body", "tia-plc-program-blocks-body",
+                 "tia-plc-dbs-body", "tia-create-plc-button"):
         assert f'id="{name}"' in plc
         assert f'id="{name}"' not in hmi
-
-    for name in ("tia-hmi-process", "tia-hmi-refresh-button",
-                 "tia-hmi-connection-status", "tia-hmi-project-name"):
-        assert f'id="{name}"' in hmi
-        assert f'id="{name}"' not in plc
-
     counts = Counter(re.findall(r'id="([^"]+)"', HTML))
     assert all(count == 1 for count in counts.values())
 
 
-def test_plc_specific_engineering_is_not_in_hmi_tab():
-    plc = _tab("plc")
-    hmi = _tab("hmi")
-    for control in ("tia-existing-plcs-table", "tia-plc-tags-body",
-                    "tia-plc-program-blocks-body", "tia-plc-dbs-body",
-                    "tia-create-plc-button"):
-        assert f'id="{control}"' in plc
-        assert f'id="{control}"' not in hmi
+def test_profile_selection_and_active_plc_live_on_overview():
+    overview = _tab("project")
+    for phrase in ("Local project profile", "TIA process:",
+                   "Choose Active PLC", "Refresh TIA", "TIA project"):
+        assert phrase in overview
+    assert 'id="header-profile-summary"' in HTML
+    libraries_js = (ROOT / "gui" / "js" / "data_libraries.js").read_text(encoding="utf-8")
+    assert "overviewProfilesHost.replaceChildren(profilesCard)" in libraries_js
 
 
 def test_hmi_translation_and_xml_list_workflow_are_not_in_plc_tab():
@@ -65,12 +66,10 @@ def test_hmi_translation_and_xml_list_workflow_are_not_in_plc_tab():
         assert f'id="{control}"' not in plc
 
 
-def test_hmi_and_plc_session_controls_use_same_process():
-    assert 'function syncHmiConnectionControls()' in TIA_JS
-    assert 'hmiProcessSelect.value = processSelect.value;' in TIA_JS
-    assert 'hmiProcessSelect.disabled = processSelect.disabled;' in TIA_JS
-    assert 'hmiProjectNameElement.textContent =' in TIA_JS
-    assert 'hmiConnectionStatus.textContent = tiaConnectionStatus.textContent;' in TIA_JS
-    assert 'hmiRefreshButton?.addEventListener("click", refreshProcesses);' in TIA_JS
-    assert 'hmiRefreshProjectButton?.addEventListener("click", refreshProjectPlcs);' in TIA_JS
-    assert 'processSelect.dispatchEvent(new Event("change"));' in TIA_JS
+def test_single_overview_tia_process_is_shared_by_workflows():
+    overview = _tab("project")
+    assert overview.count('id="tia-process"') == 1
+    assert overview.count('id="tia-refresh-button"') == 1
+    assert "function syncHmiConnectionControls()" in TIA_JS
+    assert "processSelect.addEventListener(" in TIA_JS
+    assert "refreshProjectPlcs" in TIA_JS
