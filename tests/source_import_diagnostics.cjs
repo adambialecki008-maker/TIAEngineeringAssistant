@@ -18,23 +18,23 @@ const source = fs.readFileSync(
         + "\\n Manual TIA review required; dependent imports remain blocked.";
     const inconsistent = describeSourceImport({...base, reason:raw});
     assert.match(inconsistent.problem, /DB_Motors2/);
-    assert.match(inconsistent.cause, /niespójność bloku lub typu danych PLC/);
-    assert.match(inconsistent.cause, /Nie oznacza to automatycznie błędu kompilacji/);
+    assert.match(inconsistent.cause, /inconsistent block or PLC data/);
+    assert.match(inconsistent.cause, /does not necessarily indicate a compilation failure/);
     assert.equal(inconsistent.checklist, true);
     for (const name of ["Visible in HMI", "Accessible from HMI/OPC UA",
         "Writable from HMI/OPC UA", "Retain", "Start values"]) {
         assert.ok(inconsistent.issueLines.some(item => item.includes(name)), name);
     }
-    assert.match(inconsistent.action, /Porównaj powyższe ustawienia/);
+    assert.match(inconsistent.action, /Compare these settings/);
     assert.match(inconsistent.action, /TIA default/);
-    assert.doesNotMatch(inconsistent.action, /Skompiluj wymagane/i);
+    assert.doesNotMatch(inconsistent.action, /Compile the required/i);
     assert.ok(!inconsistent.cause.includes("EngineeringTargetInvocationException"));
     assert.equal(inconsistent.technical,raw);
 
     const generic = describeSourceImport({...base, reason:
         'Existing structure export unavailable: 502: Timeout while exporting'});
     assert.match(generic.problem, /DB_Motors2/);
-    assert.match(generic.cause, /odrzucił eksport/);
+    assert.match(generic.cause, /rejected the existing structure export/);
     assert.match(generic.technical, /Timeout/);
     assert.equal(generic.issueLines.length, 0);
     assert.equal(generic.checklist, undefined);
@@ -43,14 +43,14 @@ const source = fs.readFileSync(
     assert.match(retain.problem, /RETAIN/);
     const other = describeSourceImport({...base,status:"conflict",reason:
         'Ready: start_value differs (application=FALSE, TIA=TRUE). No overwrite.'});
-    assert.match(other.issueLines.join(" "), /Ready.*wartość początkowa/);
+    assert.match(other.issueLines.join(" "), /Ready.*Start value differs/);
     const hmi = describeSourceImport({...base,status:"conflict",reason:
         'Ready: hmi_accessible differs (application=True, TIA=False). No overwrite.'});
-    assert.match(hmi.issueLines.join(" "), /Dostęp z HMI/);
+    assert.match(hmi.issueLines.join(" "), /Accessible from HMI\/OPC UA/);
     const clean = describeSourceImport({...base,status:"identical",reason:
         'Declared DB structure matches. Identical — skip. No import or overwrite.'});
-    assert.match(clean.problem, /zgodny/);
-    assert.match(clean.action,/nie trzeba nic importować/i);
+    assert.match(clean.problem, /matches the existing object/);
+    assert.match(clean.action,/No import is needed/i);
     const blocked = describeSourceImport({...base,status:"blocked",reason:
         'Dependency unavailable or mismatched: UDT_Motor (unknown). No import.'});
     assert.match(blocked.cause,/UDT_Motor/);
@@ -58,5 +58,5 @@ const source = fs.readFileSync(
         reason:"Existing compatible UDT — reuse, no import required.",
         metadata_warnings:["Cmd.Start: comments differ; existing comment retained."]});
     assert.match(warning.technical,/Cmd.Start: comments differ/);
-    console.log("Preflight Polish diagnostic scenarios: PASS");
+    console.log("Preflight English diagnostic scenarios: PASS");
 })().catch(error => {console.error(error);process.exitCode=1;});

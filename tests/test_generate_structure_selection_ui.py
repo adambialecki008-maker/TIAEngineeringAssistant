@@ -71,7 +71,7 @@ def test_preflight_includes_dependency_udts_and_discloses_them_for_confirmation(
 def test_preflight_details_collapse_and_refresh_after_successful_import():
     assert 'function appendDetailsCell(row, value)' in SOURCE_UI
     assert 'details.className = "source-import-details";' in SOURCE_UI
-    assert 'summary.textContent = "Szczegóły";' in SOURCE_UI
+    assert 'summary.textContent = "Details";' in SOURCE_UI
     assert 'function renderAppliedReport(plan, result)' in SOURCE_UI
     assert 'status: "imported"' in SOURCE_UI
     assert 'Created and compiler-confirmed in the current TIA import batch.' in SOURCE_UI
@@ -79,10 +79,18 @@ def test_preflight_details_collapse_and_refresh_after_successful_import():
 def test_preflight_diagnosis_shows_problem_action_and_collapses_stack_trace():
     assert 'describeSourceImport(value)' in SOURCE_UI
     assert 'paragraph("Problem", diagnosis.problem);' in SOURCE_UI
-    assert 'paragraph("Przyczyna", diagnosis.cause);' in SOURCE_UI
-    assert 'paragraph("Co zrobić", diagnosis.action);' in SOURCE_UI
+    assert 'paragraph("Cause", diagnosis.cause);' in SOURCE_UI
+    assert 'paragraph("What to check", diagnosis.action);' in SOURCE_UI
     assert 'if (diagnosis.checklist)' in SOURCE_UI
-    assert 'lista kontrolna, nie potwierdzone różnice' in SOURCE_UI
-    assert 'technicalSummary.textContent = "Szczegóły techniczne (TIA / Openness)";' in SOURCE_UI
+    assert 'checklist, not confirmed differences' in SOURCE_UI
+    assert 'technicalSummary.textContent = "Technical details (TIA / Openness)";' in SOURCE_UI
     assert 'pre.textContent = diagnosis.technical;' in SOURCE_UI
     assert "d.cause" in SOURCE_UI  # CSV includes readable root cause
+
+
+def test_source_import_details_labels_are_english():
+    for label in ('Details', 'Cause', 'What to check', 'Technical details',
+                  'Properties to compare'):
+        assert label in SOURCE_UI
+    for old in ('Szczegóły', 'Przyczyna', 'Co zrobić'):
+        assert old not in SOURCE_UI

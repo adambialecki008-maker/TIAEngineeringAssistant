@@ -19,10 +19,10 @@ function metadataIssues(reason) {
         const [, path, detail] = match;
         const field = path + ": ";
         if (detail.startsWith("comment differs")) {
-            issues.push(field + "Comment differs between the application and TIA"
+            issues.push(field + "Comment differs between the application and TIA "
                 + (detail.match(/\(([^)]*)\)/)?.[0] || ""));
         } else if (detail.startsWith("start_value differs")) {
-            issues.push(field + "Start value differs"
+            issues.push(field + "Start value differs "
                 + (detail.match(/\(([^)]*)\)/)?.[0] || ""));
         } else if (detail.startsWith("start_value not exported")) {
             issues.push(field + "TIA did not export the start value");
@@ -39,7 +39,7 @@ function metadataIssues(reason) {
                         : detail.includes("unreadable")
                             ? "unreadable value from TIA"
                             : "insufficient data to compare";
-                issues.push(field + TYPE_LABELS[key] + " — " + message
+                issues.push(field + TYPE_LABELS[key] + " — " + message + " "
                     + (detail.match(/\(([^)]*)\)/)?.[0] || ""));
             }
         }
@@ -176,7 +176,7 @@ export function describeSourceImport(item) {
     if (/^Member /i.test(rawReason)) {
         const m = rawReason.match(/^Member\s+([^:]+):\s*(.*?)(?:\. No existing|$)/s);
         return {...common, problem: "Structure mismatch for " + what + ".",
-            cause: m ? "Pole '" + m[1] + "': " + m[2].split("\n")[0].slice(0,220)
+            cause: m ? "Member '" + m[1] + "': " + m[2].split("\n")[0].slice(0,220)
                 : "Member names, types, or order differ.",
             action: "Compare member declarations in TIA and the application. "
                 + "No existing block will be overwritten."};
