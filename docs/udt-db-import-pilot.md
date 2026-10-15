@@ -16,6 +16,12 @@ Possible decisions include:
 - **Conflicting or unverifiable**: block the affected item and its dependent
   objects; do not silently override compatibility checks.
 - **Existing equivalent object**: skip rather than overwrite.
+- **Existing DB metadata**: compare member comments, scalar initial values and
+  explicitly requested HMI visibility/access/write attributes against exported
+  TIA XML, including nested Struct members. Matching evidence permits
+  `Identical — skip`; a confirmed difference gives `Conflict`; absent,
+  unreadable or default-dependent evidence gives `Unverified`. Explicit
+  RETAIN verification remains required for retained DBs.
 - **Unrelated independent object**: can remain eligible even if a different
   dependency conflicts.
 

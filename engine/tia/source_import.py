@@ -8,6 +8,7 @@ Import only missing objects after user confirmation and a fresh token recheck.
 from __future__ import annotations
 
 import hashlib
+from decimal import Decimal, InvalidOperation
 import json
 import re
 import tempfile
@@ -20,7 +21,9 @@ from engine.project import ProjectSpecification
 from engine.tia.compat import run_adapter
 from engine.tia.project import get_project_context
 from engine.tia.structures import get_plc_structure, get_plc_structures
-from functions.tia_source_generator import generate_db_source, generate_udt_source
+from functions.tia_source_generator import (
+    generate_db_source, generate_udt_source, sanitize_comment,
+)
 
 
 router = APIRouter()
@@ -163,26 +166,6 @@ def _expected_members(members, parent=""):
     return result
 
 
-def _has_unverifiable_attributes(definition: dict) -> bool:
-    """Existing XML detail parser does not expose all initial/HMI/RETAIN values.
-
-    Never falsely label complex objects identical based on names/fields alone.
-    """
-    spec = definition["spec"]
-
-    def special(members):
-        for m in members:
-            if (m.comment or m.start_value is not None
-                or m.hmi_visible is not None or m.hmi_accessible is not None
-                or m.hmi_writable is not None):
-                return True
-            if special(m.struct_members or []):
-                return True
-        return False
-
-    return special(spec.fields if definition["kind"] == "udt" else spec.members)
-
-
 def _declared_members(detail):
     """UDT/array XML may expand referenced types or include element start values.
 
@@ -300,6 +283,127 @@ def _db_retain_comparison(spec, members) -> dict | None:
     return None
 
 
+_START_INTEGER_TYPES = frozenset({
+    "sint", "usint", "int", "uint", "dint", "udint", "lint", "ulint",
+})
+_START_REAL_TYPES = frozenset({"real", "lreal"})
+_START_BOOLEAN_TYPES = frozenset({"bool"})
+
+
+def _canonical_db_start(value: str, data_type: str):
+    """Normalize the SCL scalar types supported by the source generator.
+
+    Return None for unreadable/complex XML, not a guessed equivalent value.
+    """
+    text = str(value).strip()
+    kind = data_type.casefold()
+    if kind in _START_BOOLEAN_TYPES:
+        if text.casefold() in {"true", "1"}:
+            return ("bool", True)
+        if text.casefold() in {"false", "0"}:
+            return ("bool", False)
+        return None
+    if kind in _START_INTEGER_TYPES:
+        if not re.fullmatch(r"[+-]?[0-9]+", text):
+            return None
+        return ("integer", int(text))
+    if kind in _START_REAL_TYPES:
+        try:
+            number = Decimal(text)
+        except InvalidOperation:
+            return None
+        return ("decimal", number) if number.is_finite() else None
+    return None
+
+
+def _db_member_metadata_comparison(spec, members) -> dict | None:
+    """Compare DB declaration metadata with the live exported XML.
+
+    Missing explicit attributes are not evidence of a default value. However,
+    an absent requested numeric/bool start value is handled as uncertain,
+    whereas an exported type-default 0/FALSE matches an omitted initializer.
+    """
+    actual = {member.path.casefold(): member for member in members}
+    conflicts, unknowns = [], []
+
+    def inspect(fields, parent=""):
+        for field in fields:
+            path = parent + "." + field.name if parent else field.name
+            observed = actual.get(path.casefold())
+            if observed is None:
+                unknowns.append(path + ": missing exported declaration metadata")
+                continue
+
+            expected_comment = sanitize_comment(field.comment or "")
+            live_comment = observed.comment.strip()
+            if expected_comment != live_comment:
+                conflicts.append(path + ": comment differs (application="
+                                 + repr(expected_comment) + ", TIA="
+                                 + repr(live_comment) + ")")
+
+            required_start = field.start_value
+            live_start = observed.metadata.get("start_value")
+            if required_start is not None:
+                expected_value = _canonical_db_start(required_start, field.data_type)
+                if live_start is None:
+                    unknowns.append(path + ": start_value not exported by TIA")
+                else:
+                    actual_value = _canonical_db_start(live_start, field.data_type)
+                    if actual_value is None or expected_value is None:
+                        unknowns.append(path + ": start_value cannot be compared "
+                                        "from TIA XML")
+                    elif expected_value != actual_value:
+                        conflicts.append(path + ": start_value differs "
+                                         "(application=" + repr(required_start)
+                                         + ", TIA=" + repr(live_start) + ")")
+            elif live_start is not None:
+                # With no initializer, Bool and numeric types start at zero.
+                actual_value = _canonical_db_start(live_start, field.data_type)
+                default_value = _canonical_db_start("0", field.data_type)
+                if actual_value is None or default_value is None:
+                    unknowns.append(path + ": exported start_value cannot be "
+                                    "matched to the implicit source default")
+                elif actual_value != default_value:
+                    conflicts.append(path + ": start_value differs from implicit "
+                                     "source default (TIA=" + repr(live_start)
+                                     + ")")
+
+            for key in ("hmi_visible", "hmi_accessible", "hmi_writable"):
+                required = getattr(field, key)
+                live = observed.metadata.get(key)
+                if required is None:
+                    if live is not None:
+                        # Source omits this setting and relies on the TIA
+                        # default. Its default is not inferred from XML.
+                        unknowns.append(path + ": " + key + " is explicit in "
+                                        "TIA but unspecified in the source")
+                elif live is None:
+                    unknowns.append(path + ": " + key
+                                    + " not explicitly exported by TIA")
+                else:
+                    normalized = live.strip().casefold()
+                    actual_bool = (True if normalized in {"true", "1"} else
+                                   False if normalized in {"false", "0"} else None)
+                    if actual_bool is None:
+                        unknowns.append(path + ": " + key + " has unreadable "
+                                        "exported value " + repr(live))
+                    elif required != actual_bool:
+                        conflicts.append(path + ": " + key + " differs "
+                                         "(application=" + str(required)
+                                         + ", TIA=" + str(actual_bool) + ")")
+            inspect(field.struct_members or [], path)
+
+    inspect(spec.members)
+    if conflicts:
+        return {"status": "conflict", "reason":
+                "; ".join(conflicts + unknowns) + ". No overwrite."}
+    if unknowns:
+        return {"status": "unknown", "reason":
+                "; ".join(unknowns) + ". Manual TIA review required; "
+                "no import or overwrite."}
+    return None
+
+
 def _compare_existing(request, definition: dict, existing) -> dict:
     kind = definition["kind"]
     if kind == "db" and (
@@ -354,17 +458,13 @@ def _compare_existing(request, definition: dict, existing) -> dict:
                        "live type by name. ")
                     + "Existing defaults, comments and HMI/retain settings are retained."}
         retain_issue = _db_retain_comparison(spec, members)
-        if retain_issue:
-            return {**result, **retain_issue}
-        if _has_unverifiable_attributes(definition):
-            return {**result, "status": "unknown", "reason":
-                    "DB structure matches, but requested start values/HMI "
-                    "metadata are not fully compared. Review the existing DB in "
-                    "TIA; no import or overwrite."}
-        if any(m.comment or m.metadata.get("start_value") for m in members):
-            return {**result, "status": "unknown", "reason":
-                    "DB structure matches; existing comments/start values require "
-                    "manual review. No import or overwrite."}
+        metadata_issue = _db_member_metadata_comparison(spec, members)
+        if retain_issue or metadata_issue:
+            issues = [issue for issue in (retain_issue, metadata_issue) if issue]
+            status = ("conflict" if any(issue["status"] == "conflict"
+                                        for issue in issues) else "unknown")
+            return {**result, "status": status, "reason":
+                    "; ".join(issue["reason"] for issue in issues)}
         return {**result, "status": "identical", "reason":
                 "Declared DB structure matches"
                 + ("; explicit RETAIN confirmed in TIA XML"

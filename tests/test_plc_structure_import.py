@@ -804,3 +804,188 @@ def test_nested_explicit_nonretain_stays_unknown_for_retained_db(monkeypatch):
     assert "Nested DB members override RETAIN" in db["reason"]
     assert report["will_create"] == []
     assert not any(call[0] == "import-plc-structure-batch" for call in calls)
+
+
+@pytest.mark.parametrize(("attrs", "expected"), [
+    ({"comment": "Motor running"}, "identical"),
+    ({"comment": "Different comment"}, "conflict"),
+    ({"comment": None}, "conflict"),
+])
+def test_existing_db_comments_are_compared_instead_of_blanket_unknown(
+    monkeypatch, attrs, expected
+):
+    calls = []
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static"><Member Name="Motors" '
+        'Datatype="Array[1..10] of UDT_Motor">'
+        + ('<Comment><MultiLanguageText>Motor running</MultiLanguageText></Comment>'
+           if attrs["comment"] is not None else '')
+        + '</Member></Section></Document>'
+    )}
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["dbs"][0]["members"][0]["comment"] = "Motor running"
+    db = preflight(payload).json()["items"][0]
+    assert db["status"] == expected
+    if expected == "conflict":
+        assert "comment differs" in db["reason"]
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+@pytest.mark.parametrize(("requested", "exported", "expected"), [
+    ("TRUE", "1", "identical"),
+    ("FALSE", "1", "conflict"),
+    ("TRUE", None, "unknown"),
+    (None, "0", "identical"),
+    (None, "1", "conflict"),
+    ("1", "<complex XML>", "unknown"),
+])
+def test_db_boolean_start_values_match_and_detect_differences(
+    monkeypatch, requested, exported, expected
+):
+    calls = []
+    start_xml = ('<StartValue>' + exported + '</StartValue>'
+                 if exported is not None else '')
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static"><Member Name="Ready" '
+        'Datatype="Bool">' + start_xml
+        + '</Member></Section></Document>'
+    )}
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["udts"] = []
+    member = {"name": "Ready", "data_type": "Bool"}
+    if requested is not None:
+        member["start_value"] = requested
+    payload["project"]["dbs"][0]["members"] = [member]
+    plan = preflight(payload).json()
+    db = plan["items"][0]
+    assert db["status"] == expected, db["reason"]
+    assert "DB_Motors" not in plan["will_create"]
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+@pytest.mark.parametrize(("datatype", "requested", "exported", "expected"), [
+    ("Int", "10", "+0010", "identical"),
+    ("DInt", "10", "11", "conflict"),
+    ("Real", "10.0", "1E1", "identical"),
+    ("LReal", "1.25", "1.3", "conflict"),
+    ("Real", "1.25", None, "unknown"),
+    ("Real", None, "0.0", "identical"),
+])
+def test_db_numeric_start_value_comparison(
+    monkeypatch, datatype, requested, exported, expected
+):
+    xml_value = (f'<StartValue>{exported}</StartValue>'
+                 if exported is not None else '')
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static"><Member Name="Setpoint" '
+        f'Datatype="{datatype}">{xml_value}</Member></Section></Document>'
+    )}
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["udts"] = []
+    member = {"name": "Setpoint", "data_type": datatype}
+    if requested is not None:
+        member["start_value"] = requested
+    payload["project"]["dbs"][0]["members"] = [member]
+    db = preflight(payload).json()["items"][0]
+    assert db["status"] == expected, db["reason"]
+
+
+@pytest.mark.parametrize(("requested", "exported", "expected"), [
+    (True, "true", "identical"),
+    (False, "0", "identical"),
+    (False, "true", "conflict"),
+    (True, None, "unknown"),
+    (None, "true", "unknown"),
+    (True, "invalid", "unknown"),
+])
+def test_hmi_member_attribute_comparison(
+    monkeypatch, requested, exported, expected
+):
+    attributes_xml = (
+        '<AttributeList><BooleanAttribute Name="ExternalAccessible">'
+        + exported + '</BooleanAttribute></AttributeList>'
+        if exported is not None else ''
+    )
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static"><Member Name="Ready" '
+        'Datatype="Bool">' + attributes_xml
+        + '</Member></Section></Document>'
+    )}
+    calls = []
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["udts"] = []
+    member = {"name": "Ready", "data_type": "Bool"}
+    if requested is not None:
+        member["hmi_accessible"] = requested
+    payload["project"]["dbs"][0]["members"] = [member]
+    db = preflight(payload).json()["items"][0]
+    assert db["status"] == expected, db["reason"]
+
+
+def test_db_nested_struct_comments_hmi_and_start_values(monkeypatch):
+    calls = []
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static"><Member Name="Settings" '
+        'Datatype="Struct">'
+        '<Member Name="Ready" Datatype="Bool">'
+        '<Comment><MultiLanguageText>Ready status</MultiLanguageText></Comment>'
+        '<StartValue>FALSE</StartValue>'
+        '<AttributeList><BooleanAttribute Name="ExternalVisible">'
+        'true</BooleanAttribute><BooleanAttribute Name="ExternalWritable">'
+        'false</BooleanAttribute></AttributeList>'
+        '</Member></Member></Section></Document>'
+    )}
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["udts"] = []
+    payload["project"]["dbs"][0]["members"] = [
+        {"name": "Settings", "data_type": "Struct", "struct_members": [{
+            "name": "Ready", "data_type": "Bool", "comment": "Ready status",
+            "start_value": "0", "hmi_visible": True, "hmi_writable": False,
+        }]}
+    ]
+    good = preflight(payload).json()
+    assert good["counts"]["identical"] == 1, good["items"]
+    payload["project"]["dbs"][0]["members"][0]["struct_members"][0][
+        "hmi_writable"] = True
+    changed = preflight(payload).json()
+    assert changed["counts"]["conflict"] == 1
+    assert "Settings.Ready: hmi_writable differs" in changed["items"][0]["reason"]
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)
+
+
+def test_retention_unknown_does_not_hide_confirmed_member_conflict(monkeypatch):
+    calls = []
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static"><Member Name="Ready" '
+        'Datatype="Bool"><StartValue>TRUE</StartValue>'
+        '</Member></Section></Document>'
+    )}
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["udts"] = []
+    payload["project"]["dbs"][0]["retain"] = True
+    payload["project"]["dbs"][0]["members"] = [
+        {"name": "Ready", "data_type": "Bool", "start_value": "FALSE"}
+    ]
+    plan = preflight(payload).json()
+    assert plan["counts"]["conflict"] == 1
+    assert "start_value differs" in plan["items"][0]["reason"]
+    assert "not explicitly confirm Remanence=Retain" in plan["items"][0]["reason"]
