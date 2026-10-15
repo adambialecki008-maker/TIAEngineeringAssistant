@@ -290,6 +290,10 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     let detailsId = null;
     let pendingImport = null;
     let pendingImportAnalysis = null;
+    let selectiveSelected = new Set();
+    let selectiveDecisions = {};
+    let selectiveTargetId = "";
+    let selectivePlan = null;
     let backupPreview = null;
     let categories = LIBRARY_CATEGORIES.map(name => ({key: name.toLocaleLowerCase(), name, built_in: true}));
     const filters = {query: "", type: "", category: "", compatibility: "all", tia: "", sort: "name"};
@@ -1086,6 +1090,9 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             library = imported.library;
             pendingImport = null;
             pendingImportAnalysis = null;
+            selectiveSelected.clear();
+            selectivePlan = null;
+            selectiveApply.disabled = true;
             importApply.disabled = true;
             await refresh();
             renderImportPreview();
@@ -1097,18 +1104,166 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         }
     }, true);
     importApply.disabled = true;
+
+    // Selectively merge an exported library into a DIFFERENT existing local
+    // library; the existing full-library import above remains available.
+    const selectiveImport = element("details");
+    selectiveImport.id = "library-selective-import-panel";
+    selectiveImport.className = "library-category-manager";
+    selectiveImport.append(element("summary", "Selective import into existing library — resolve conflicts"));
+    const selectiveBody = element("div");
+    selectiveBody.className = "details-content";
+    const selectiveTarget = document.createElement("select");
+    selectiveTarget.id = "library-selective-target";
+    const selectiveStatus = element("p", "Choose a file and a destination library.");
+    selectiveStatus.className = "status-box";
+    const selectiveObjectList = element("div");
+    selectiveObjectList.id = "library-selective-preview";
+    const selectiveApply = actionButton("Confirm selected import", async () => {
+        try {
+            if (!pendingImport || !selectivePlan || selectivePlan.unresolved.length)
+                throw Error("Preview all selected objects and resolve conflicts first.");
+            const target = (await listLibraries()).find(item => item.id === selectiveTargetId);
+            if (!target) throw Error("Destination library no longer exists.");
+            const changes = selectivePlan.rows.map(row =>
+                `${row.action.toUpperCase()} ${typeLabel(row.source.object_type)} ${row.source.name}${row.name !== row.source.name ? " -> " + row.name : ""}`);
+            if (!confirm(`Import into "\${target.name}"?\n\n${changes.join("\n")}\n\nReplace/New Version updates existing local objects and preserves their revision history. This does NOT write to TIA Portal. Proceed?`)) return;
+            const result = await applySelectiveLibraryImport(
+                selectiveTargetId, [...selectiveSelected], pendingImport.objects, selectiveDecisions);
+            selectivePlan = null;
+            library = target;
+            await refresh();
+            selectiveStatus.classList.remove("error");
+            selectiveStatus.textContent = `Import completed atomically: ${result.added} new, ${result.revised} revised, ${result.skipped} kept/skipped.`;
+            await renderSelectivePreview();
+        } catch (error) {
+            selectiveStatus.classList.add("error");
+            selectiveStatus.textContent = error.message;
+        }
+    }, true);
+    selectiveApply.disabled = true;
+    const populateSelectiveTargets = async () => {
+        const libraries = await listLibraries();
+        selectiveTarget.replaceChildren();
+        selectOption(selectiveTarget, "", "Select existing destination library");
+        for (const candidate of libraries) selectOption(selectiveTarget, candidate.id, candidate.name);
+        if (!libraries.some(item => item.id === selectiveTargetId)) selectiveTargetId = "";
+        selectiveTarget.value = selectiveTargetId;
+    };
+    const renderSelectivePreview = async () => {
+        selectiveObjectList.replaceChildren();
+        selectivePlan = null;
+        selectiveApply.disabled = true;
+        if (!pendingImport) {
+            selectiveObjectList.append(element("p", "Load a portable library file first."));
+            return;
+        }
+        const analysis = analyzeDependencies([...selectiveSelected], pendingImport.objects);
+        selectiveObjectList.append(element("p", "Tick objects to import; their UDT dependencies are automatically included. Nothing will be imported until approval."));
+        const selections = element("div");
+        selections.className = "details-content";
+        for (const item of pendingImport.objects) {
+            const label = document.createElement("label");
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = selectiveSelected.has(item.id);
+            checkbox.addEventListener("change", async () => {
+                checkbox.checked ? selectiveSelected.add(item.id) : selectiveSelected.delete(item.id);
+                await renderSelectivePreview();
+            });
+            label.append(checkbox, document.createTextNode(` ${typeLabel(item.object_type)} ${item.name} [${item.version}]`));
+            selections.append(label, document.createElement("br"));
+        }
+        selectiveObjectList.append(selections);
+        if (!selectiveSelected.size || !selectiveTargetId) {
+            selectiveStatus.textContent = "Select at least one source object and a destination library.";
+            return;
+        }
+        const targetObjects = await listLibraryObjects(selectiveTargetId);
+        const existing = new Map(targetObjects.map(item => [objectKey(item), item]));
+        const table = document.createElement("table");
+        table.className = "management-table";
+        table.innerHTML = "<thead><tr><th>Source / dependency</th><th>Destination</th><th>Conflict resolution</th><th>New name / SemVer</th></tr></thead>";
+        const tbody = document.createElement("tbody");
+        for (const item of analysis.plan) {
+            const found = existing.get(objectKey(item));
+            const tr = document.createElement("tr");
+            tr.append(element("td", `${selectiveSelected.has(item.id) ? "Selected" : "Dependency"}: ${typeLabel(item.object_type)} ${item.name}`),
+                element("td", found ? `Existing ${found.name} (${found.version})` : "New"));
+            const actions = document.createElement("td");
+            const values = document.createElement("td");
+            if (found) {
+                const control = document.createElement("select");
+                for (const [value, label] of [
+                    ["", "Auto-skip identical / resolve conflict"], ["keep", "Keep Existing"],
+                    ["rename", "Rename Imported"], ["version", "Import as New Version"],
+                    ["replace", "Replace after approval"]
+                ]) selectOption(control, value, label);
+                control.value = selectiveDecisions[item.id]?.action || "";
+                const detail = document.createElement("input");
+                detail.placeholder = control.value === "rename" ? "Imported object name" : "New SemVer (e.g. 2.0.0)";
+                detail.value = selectiveDecisions[item.id]?.name || selectiveDecisions[item.id]?.version || "";
+                detail.disabled = !["rename", "version", "replace"].includes(control.value);
+                control.addEventListener("change", async () => {
+                    selectiveDecisions[item.id] = {action: control.value};
+                    await renderSelectivePreview();
+                });
+                detail.addEventListener("change", async () => {
+                    const action = selectiveDecisions[item.id]?.action;
+                    if (action === "rename") selectiveDecisions[item.id] = {action, name: detail.value};
+                    else if (action === "version" || action === "replace") selectiveDecisions[item.id] = {action, version: detail.value};
+                    await renderSelectivePreview();
+                });
+                actions.append(control);
+                values.append(detail);
+            } else {
+                actions.textContent = "Add";
+                values.textContent = "—";
+            }
+            tr.append(actions, values);
+            tbody.append(tr);
+        }
+        table.append(tbody);
+        selectiveObjectList.append(table);
+        try {
+            const plan = planSelectiveLibraryImport(
+                [...selectiveSelected], pendingImport.objects, targetObjects, selectiveDecisions);
+            selectivePlan = plan;
+            selectiveApply.disabled = plan.unresolved.length > 0;
+            selectiveStatus.classList.toggle("error", plan.unresolved.length > 0);
+            selectiveStatus.textContent = `Preview: ${plan.rows.length} object(s), ${plan.dependencies.length} required dependencies, ${plan.unresolved.length} unresolved conflicts. ${plan.candidates.length} write(s) after confirmation.`;
+        } catch (error) {
+            selectiveStatus.classList.add("error");
+            selectiveStatus.textContent = "Import blocked: " + error.message;
+        }
+    };
+    selectiveTarget.addEventListener("change", async () => {
+        selectiveTargetId = selectiveTarget.value;
+        selectiveDecisions = {};
+        await renderSelectivePreview();
+    });
+    selectiveBody.append(
+        element("p", "FROM: selected objects in the loaded JSON. TO: the chosen existing local Engineering Library. Conflicting objects require an explicit Keep/Rename/Version/Replace decision."),
+        selectiveTarget, selectiveObjectList, selectiveApply, selectiveStatus,
+    );
+    selectiveImport.append(selectiveBody);
     importFile.addEventListener("change", async () => {
         try {
             pendingImport = parsePackage(await importFile.files[0].text());
+            selectiveSelected = new Set(pendingImport.objects.map(item => item.id));
+            selectiveDecisions = {};
+            await populateSelectiveTargets();
             const analysis = analyzeDependencies(pendingImport.objects.map(item => item.id), pendingImport.objects);
             if (analysis.missing.length) throw Error(`Import blocked: missing UDT definition(s): ${analysis.missing.join(", ")}.`);
+            // A duplicate library name blocks only the separate-library
+            // import action, not selective import into an existing library.
             const importedName = String(pendingImport.metadata?.name || "Imported Engineering Library").trim() || "Imported Engineering Library";
             const names = await listLibraries();
-            if (names.some(item => normalizeLibraryName(item.name) === normalizeLibraryName(importedName))) {
-                throw Error(`A library named \"${importedName}\" already exists. Rename the source library before importing it.`);
-            }
+            importApply.disabled = names.some(item => normalizeLibraryName(item.name) === normalizeLibraryName(importedName));
             pendingImportAnalysis = analysis;
-            importApply.disabled = false;
+            // Keep disabled if the name is already used; selective import
+            // remains possible in this case.
+            await renderSelectivePreview();
             importStatus.classList.remove("error");
             importStatus.textContent = `Preview: ${pendingImport.objects.length} validated object(s), ${analysis.dependencies.length} dependency object(s). A separate library will be created.`;
             renderImportPreview();
@@ -1123,7 +1278,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     });
     importContent.append(
         element("p", "FROM: a JSON file exported on another computer. TO: a NEW local Engineering Library (IndexedDB) in this browser. This import currently loads all objects together; existing libraries are not overwritten. No TIA Portal operations."),
-        importFile, importApply, importStatus, importPreviewPanel
+        importFile, importApply, importStatus, importPreviewPanel, selectiveImport
     );
     renderExportPreview();
     renderImportPreview();
