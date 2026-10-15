@@ -1,5 +1,6 @@
 """Read-only multi-structure preflight and guarded create-only import."""
 from pathlib import Path
+from engine.tia.source_import import _structure_differences
 
 import pytest
 
@@ -994,3 +995,57 @@ def test_retention_unknown_does_not_hide_confirmed_member_conflict(monkeypatch):
     assert plan["counts"]["conflict"] == 1
     assert "start_value differs" in plan["items"][0]["reason"]
     assert "not explicitly confirm Remanence=Retain" in plan["items"][0]["reason"]
+
+
+def test_structured_decl_diff_reports_all_paths_and_is_stable():
+    wanted = [("cmd", "struct"), ("cmd.start", "bool"),
+              ("cmd.stop", "bool"), ("counter", "dint")]
+    actual = [("cmd", "struct"), ("cmd.start", "int"),
+              ("cmd.extra", "bool"), ("counter", "dint")]
+    differences = _structure_differences(actual, wanted)
+    assert [(d["path"], d["kind"]) for d in differences] == [
+        ("cmd.start", "changed"), ("cmd.stop", "missing"),
+        ("cmd.extra", "unexpected"),
+    ]
+    assert differences[0]["expected"] == "bool"
+    assert differences[0]["actual"] == "int"
+    assert differences[1]["actual"] == "(missing)"
+    assert differences[2]["expected"] == "(not declared)"
+    assert _structure_differences(actual, wanted) == differences
+    assert _structure_differences(wanted, wanted) == []
+
+
+def test_structured_decl_diff_detects_reorder_without_fake_type_conflicts():
+    expected = [("a", "bool"), ("b", "int")]
+    actual = [("b", "int"), ("a", "bool")]
+    assert _structure_differences(actual, expected) == [{
+        "path": "(members)", "property": "order",
+        "expected": "a, b", "actual": "b, a",
+        "kind": "reordered",
+    }]
+
+
+def test_preflight_exposes_all_member_differences_without_writing(monkeypatch):
+    calls = []
+    xml = {
+        "UDT_Motor": (
+            '<Document><Section Name="Static">'
+            '<Member Name="Cmd" Datatype="Struct">'
+            '<Member Name="Start" Datatype="Int"/>'
+            '<Member Name="Extra" Datatype="Bool"/>'
+            '</Member></Section></Document>'
+        )
+    }
+    monkeypatch.setattr(facade, "_run_adapter",
+        mock_adapter(calls, existing=[
+            "PLC_UDT||UDT_Motor|PlcType|True",
+        ], xml=xml))
+    data = preflight(request_data())
+    assert data.status_code == 200, data.text
+    result = data.json()
+    issue = next(item for item in result["items"] if item["name"] == "UDT_Motor")
+    assert issue["status"] == "conflict"
+    diffs = issue["declaration_differences"]
+    assert len(diffs) == 3
+    assert {d["path"] for d in diffs} == {"cmd.start", "cmd.stop", "cmd.extra"}
+    assert not any(c[0] == "import-plc-structure-batch" for c in calls)

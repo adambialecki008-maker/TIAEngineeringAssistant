@@ -260,6 +260,37 @@ export function initSourceImportUi() {
         }
         paragraph("What to check", diagnosis.action);
 
+        // The API provides all declaration mismatches, not just the first
+        // blocker in the compatibility status. Render as text, never HTML.
+        if (Array.isArray(value.declaration_differences)
+            && value.declaration_differences.length) {
+            const title = document.createElement("strong");
+            title.textContent = "Declaration differences (read-only)";
+            const table = document.createElement("table");
+            table.className = "management-table source-declaration-differences";
+            const head = document.createElement("thead");
+            const headRow = document.createElement("tr");
+            for (const heading of ["Member", "Difference", "Requested", "Existing TIA"]) {
+                const th = document.createElement("th");
+                th.textContent = heading;
+                headRow.append(th);
+            }
+            head.append(headRow);
+            const tbody = document.createElement("tbody");
+            for (const mismatch of value.declaration_differences) {
+                const item = document.createElement("tr");
+                for (const text of [mismatch.path, mismatch.property,
+                    mismatch.expected, mismatch.actual]) {
+                    const cell = document.createElement("td");
+                    cell.textContent = String(text ?? "");
+                    item.appendChild(cell);
+                }
+                tbody.appendChild(item);
+            }
+            table.append(head, tbody);
+            body.append(title, table);
+        }
+
         if (diagnosis.technical) {
             const technical = document.createElement("details");
             technical.className = "source-import-technical";
@@ -347,12 +378,17 @@ export function initSourceImportUi() {
         if (!lastReport) return;
         const rows = [
             ["Type", "Name", "Status", "Problem", "Cause",
-                "What to check", "Technical details"],
+                "What to check", "Declaration differences", "Technical details"],
             ...(lastReport.items || []).map(x => {
                 const d = describeSourceImport(x);
+                const differences = (x.declaration_differences || []).map(
+                    issue => [issue.path, issue.property,
+                        "requested=" + issue.expected,
+                        "TIA=" + issue.actual].join(" | ")
+                ).join("\n");
                 return [x.kind.toUpperCase(), x.name, x.status, d.problem,
                     d.cause + (d.issueLines.length ? "\n" + d.issueLines.join("\n") : ""),
-                    d.action, d.technical];
+                    d.action, differences, d.technical];
             }),
         ];
         const csv = "\ufeff" + rows.map(row => row.map(csvCell).join(";"))

@@ -58,7 +58,11 @@ to the wrong definition.
 2. Generate local source and run read-only **preflight**. Verify dependency
    order (nested UDT → parent UDT → DB), all requested names and no cycles.
 3. Approve the explicit TIA write in the backed-up test project.
-4. Import. Check the adapter confirms each created object and compiles it.
+4. Before approving, open **Details → Declaration differences** on every
+   conflict. Compare all missing, additional and changed member paths/types
+   in the structured table or CSV report. Preflight must not overwrite.
+   After review, import only approved missing objects and check that
+   Openness confirms each created object and compiled DB.
 5. Save, compile in TIA, inspect UDT/DB declarations and re-export XML.
 6. Run the same preflight a second time. Existing identical DBs must report
    **Identical — skip** and compatible UDTs must be reused. No duplicates

@@ -186,6 +186,41 @@ def _declared_members(detail):
     return result
 
 
+def _structure_differences(actual, expected) -> list[dict]:
+    """Complete, stable, read-only declaration diff (before any TIA write)."""
+    actual_types = dict(actual)
+    expected_types = dict(expected)
+    differences = []
+    for member_path, wanted in expected:
+        if member_path not in actual_types:
+            differences.append({
+                "path": member_path, "property": "declaration",
+                "expected": wanted, "actual": "(missing)",
+                "kind": "missing",
+            })
+        elif actual_types[member_path] != wanted:
+            differences.append({
+                "path": member_path, "property": "data_type",
+                "expected": wanted, "actual": actual_types[member_path],
+                "kind": "changed",
+            })
+    for member_path, present in actual:
+        if member_path not in expected_types:
+            differences.append({
+                "path": member_path, "property": "declaration",
+                "expected": "(not declared)", "actual": present,
+                "kind": "unexpected",
+            })
+    if not differences and actual != expected:
+        differences.append({
+            "path": "(members)", "property": "order",
+            "expected": ", ".join(path for path, _ in expected),
+            "actual": ", ".join(path for path, _ in actual),
+            "kind": "reordered",
+        })
+    return differences
+
+
 def _structure_mismatch(actual, expected):
     actual_by_path = dict(actual)
     expected_by_path = dict(expected)
@@ -452,7 +487,10 @@ def _compare_existing(request, definition: dict, existing) -> dict:
             expected = _expected_members(spec.fields if kind == "udt" else spec.members)
             mismatch = _structure_mismatch(actual, expected)
             if mismatch:
-                return {**result, "status": "conflict", "reason":
+                return {**result, "status": "conflict",
+                        "declaration_differences":
+                            _structure_differences(actual, expected),
+                        "reason":
                         mismatch + " No existing object will be overwritten."}
         if kind == "udt":
             result["metadata_warnings"] = _udt_metadata_notes(spec, members)
