@@ -28,11 +28,10 @@ does not establish that any TIA XML was imported successfully.
    records are eligible; InstanceDB and inconsistent blocks are excluded.
 5. Select a DB referencing a nested UDT or `Array[lower..upper]` of UDT.
    Click **Import DB into editor**. Confirm the proposed dependency UDTs.
-6. Verify the local DB's member names, nesting, Array bounds, comments and
-   whole-DB `RETAIN` state match the TIA source. The import screen has no
-   manual retentivity override: if XML omits or ambiguously reports this
-   property, the import is blocked rather than guessing. Unsupported mixed
-   retentivity must be rejected.
+6. Check member names, nested declarations, Array bounds and comments against
+   the TIA global DB. In Static, verify Retain on two different variables,
+   plus individual Visible/Accessible/Writable checkboxes. Unknown Retain in
+   the XML blocks import; there is no manual override in this screen.
 7. Reload the browser. Confirm objects persisted only in the selected local
    profile. Repeat the import and confirm the existing local DB is not
    overwritten. Verify TIA XML and project contents are **unchanged**.
@@ -49,9 +48,14 @@ does not establish that any TIA XML was imported successfully.
 6. Run the same preflight a second time. Existing identical DBs must report
    **Identical — skip** and compatible UDTs must be reused. No duplicates
    should be generated.
-7. For an explicitly retained DB, verify exported remanence matches the
-   requested whole-DB retain mode. Missing XML remanence is not proof of
-   identical behavior; verify in TIA.
+7. Generate a test optimized global DB with Static variables:
+   `Ready: Bool` (NON_RETAIN), `Counter: DInt` (RETAIN) and
+   `Settings: Struct` (RETAIN). Check grouped SCL `VAR`/`VAR RETAIN`
+   declarations. Explicitly approve the create-only write, compile in TIA
+   Portal V21 and re-export the DB XML. Confirm Retain and
+   Visible/Accessible/Writable for each variable. This must remain a manual
+   smoke test: automated CI cannot prove that TIA compiles mixed Retain.
+
 8. Prepare a differently declared existing UDT/DB name. Preflight must block
    overwriting. The originally existing object must remain byte-for-byte or
    semantically equivalent to its before-export.

@@ -54,7 +54,26 @@ transaction. Category/object/library updates commit together or abort together.
 Importing a renamed UDT rewrites references in the incoming dependency set.
 No local user object is silently overwritten.
 
-## Engineering UI consistency\n\nOverview owns the active local profile, TIA connection and Active PLC selection.\nUDT and DB tabs share the same read-only import pattern and TIA-style\nmember trees: `▸`/`▾` chevrons expand declaration details, while member\ncheckboxes reveal edit actions (Delete, Move up, Move down). Bulk deletion\nrequires selection and explicit confirmation. The DB import has no independent\nRETAIN/NON_RETAIN override; XML ambiguity is rejected.\n\n## Limitations
+## Engineering UI consistency
+
+Overview owns the active local profile, TIA connection and Active PLC selection.
+UDT and global DB editors use TIA-inspired declaration tables with `▸`/`▾`
+chevrons and directly visible row actions. Accessible, Writable and Visible
+properties use checkbox columns; a dash/indeterminate state means the
+attribute is unspecified, not false. Right-click restores the default.
+
+Global DBs have only **Static** declarations. Input, Output and InOut sections
+belong to FB interfaces and instance DBs and are not synthesized.
+
+For optimized global DBs, Retain may be set per top-level Static variable;
+an omitted per-member Retain inherits the saved DB default. Retaining a
+Struct, Array or UDT covers its entire value. Retain on nested Struct fields
+is rejected before source generation. Mixed Retain settings produce
+successive `VAR` and `VAR RETAIN` declarations in the original order.
+The read-only DB import reads Retain from TIA XML and rejects ambiguity.
+Source compilation must still be verified in real TIA Portal V21.
+
+## Limitations
 
 The library is not a TIA Global Library and does not preserve every Siemens
 proprietary XML attribute. Import from live TIA is intentionally conservative:
