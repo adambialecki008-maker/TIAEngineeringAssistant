@@ -824,11 +824,15 @@ def test_existing_db_comments_are_compared_instead_of_blanket_unknown(
         + '</Member></Section></Document>'
     )}
     monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
-        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+        calls, existing=[
+            "PLC_UDT||UDT_Motor|PlcType|True",
+            "PLC_DB||DB_Motors|1|GlobalDB|True",
+        ], xml=xml
     ))
     payload = request_data()
     payload["project"]["dbs"][0]["members"][0]["comment"] = "Motor running"
-    db = preflight(payload).json()["items"][0]
+    report = preflight(payload).json()
+    db = next(item for item in report["items"] if item["name"] == "DB_Motors")
     assert db["status"] == expected
     if expected == "conflict":
         assert "comment differs" in db["reason"]
