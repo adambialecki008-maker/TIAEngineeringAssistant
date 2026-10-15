@@ -1531,7 +1531,10 @@ export function initTiaUi(
                     + (appliesToNextRun ? " Changes apply to the next run." : "")
                 : "OFF: translate and import automatically, with verification after every batch."
                     + (hmiReviewQueueActive
-                        ? " Current reviewed queue switches at its next safe boundary."
+                        ? (hmiReviewQueuePending
+                            ? " The prepared batch still requires approval; "
+                                + "automatic mode applies after it is resolved."
+                            : " Current reviewed queue switches at its next safe boundary.")
                         : "");
             if (hmiStep3Description) hmiStep3Description.textContent = isReview
                 ? "Edit prepared translations in Step 2; approve and import each batch here in Step 3."
@@ -2718,6 +2721,12 @@ export function initTiaUi(
         if (!hmiReviewQueueActive || !hmiReviewQueuePending
             || hmiReviewQueueOperation || hmiReviewQueuePaused
             || hmiReviewQueueStopRequested) return;
+        // A pending review keeps its manual boundary even when the checkbox
+        // changed.  After an explicit approval, the latest checkbox value
+        // controls continuation to the following batch.
+        if (!automatic) {
+            hmiReviewQueueAutoContinue = !hmiReviewEachBatch?.checked;
+        }
         const before = hmiCombinedApprovedCount;
         const reviewListName = hmiReviewQueueCurrentScope === "text_lists"
             ? hmiTextListSelect?.value || "Text list" : "Project texts";
@@ -2828,6 +2837,10 @@ export function initTiaUi(
             return;
         }
         hmiReviewQueuePending = false;
+        // The prepared batch was already explicitly approved (manually or by
+        // the mode latched before it was prepared).  Only now may a checkbox
+        // change choose the mode for the following batch.
+        hmiReviewQueueAutoContinue = !hmiReviewEachBatch?.checked;
         renderHmiBatchProgress(
             hmiCombinedApprovedCount - hmiReviewQueueStartApproved,
             hmiReviewQueueQuota
@@ -9824,6 +9837,18 @@ export function initTiaUi(
         if (!hmiReviewQueueActive) {
             // Switching mode during an already-automatic run applies only
             // to the NEXT run; it must never spawn another import.
+            updateHmiTranslateButtonState();
+            return;
+        }
+        // A rendered review is an explicit approval boundary.  A mode change
+        // may choose how to continue afterwards, but cannot approve or import
+        // the batch currently being edited.
+        if (hmiReviewQueuePending) {
+            if (!hmiReviewQueueOperation && hmiUnifiedStatus) {
+                hmiUnifiedStatus.textContent =
+                    "Prepared batch still awaits approval. The mode change "
+                    + "will apply after you approve or skip this batch.";
+            }
             updateHmiTranslateButtonState();
             return;
         }

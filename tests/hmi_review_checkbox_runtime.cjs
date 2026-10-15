@@ -121,8 +121,10 @@ function browser(scope="project",total=10){
 const scenarios=[];function scenario(name,body){scenarios.push({name,body});}
 for(const scope of["project","text_lists"]){
     const ready=async()=>{const b=browser(scope);await b.start();await b.prepare();return b;};
-    scenario(scope+": ready OFF imports once; ON during write restores review",async()=>{
-        const b=await ready();b.change(false);b.change(false);assert.equal(b.c.imports.length,1);
+    scenario(scope+": pending review stays manual when checkbox turns OFF",async()=>{
+        const b=await ready();b.change(false);b.change(false);assert.equal(b.c.imports.length,0);
+        assert.equal(b.state().pending,true);assert.match(b.c.hmiUnifiedStatus.textContent,/still awaits approval/);
+        b.approve();assert.equal(b.c.imports.length,1);
         b.change(true);await b.verify();assert.equal(b.c.prepares.length,2);await b.prepare();
         assert.equal(b.state().pending,true);assert.equal(b.c.imports.length,1);
         assert.equal(b.c.hmiImportReviewedButton.disabled,false);b.clean();
@@ -141,34 +143,36 @@ for(const scope of["project","text_lists"]){
     });
     scenario(scope+": rapid ON/OFF/ON/OFF during write honors last state",async()=>{
         const b=await ready();b.change(false);b.change(true);b.change(false);b.change(true);b.change(false);
+        assert.equal(b.c.imports.length,0);b.approve();
         assert.equal(b.c.imports.length,1);await b.verify();await b.prepare();
         assert.equal(b.c.imports.length,2);await b.verify();assert.equal(b.state().active,false);b.clean();
     });
     scenario(scope+": Pause + OFF + Resume preserves prepared batch",async()=>{
         const b=await ready();b.pause();b.change(false);assert.equal(b.c.imports.length,0);
         assert.equal(b.state().paused,true);assert.equal(b.c.hmiImportReviewedButton.disabled,true);
-        b.resume();assert.equal(b.c.imports.length,1);assert.equal(b.c.prepares.length,1);
-        b.change(true);await b.verify();await b.prepare();b.clean();
+        b.resume();assert.equal(b.c.imports.length,0);assert.equal(b.c.prepares.length,1);
+        b.approve();assert.equal(b.c.imports.length,1);b.change(true);await b.verify();await b.prepare();b.clean();
     });
     scenario(scope+": paused review ON can Resume without preparing twice",async()=>{
         const b=await ready();b.pause();b.resume();assert.equal(b.c.prepares.length,1);
         assert.equal(b.c.imports.length,0);assert.equal(b.c.hmiImportReviewedButton.disabled,false);b.clean();
     });
-    scenario(scope+": Pause during prepare blocks import until Resume",async()=>{
+    scenario(scope+": Pause during automatic prepare imports only after Resume",async()=>{
         const b=browser(scope);await b.start();b.change(false);b.pause();await b.prepare();
         assert.equal(b.c.imports.length,0);assert.equal(b.state().pending,true);
-        b.resume();b.change(true);await b.verify();await b.prepare();b.clean();
+        b.change(true);b.resume();assert.equal(b.c.imports.length,1);
+        await b.verify();await b.prepare();assert.equal(b.state().pending,true);b.clean();
     });
     scenario(scope+": Stop during prepare prevents write",async()=>{
         const b=browser(scope);await b.start();b.change(false);b.stop();await b.prepare();
         assert.equal(b.c.imports.length,0);assert.equal(b.state().active,false);assert.equal(b.state().pending,false);b.clean();
     });
     scenario(scope+": Stop during write preserves verification and stops next batch",async()=>{
-        const b=await ready();b.change(false);b.stop();await b.verify();assert.equal(b.state().count,5);
+        const b=await ready();b.change(false);b.approve();b.stop();await b.verify();assert.equal(b.state().count,5);
         assert.equal(b.state().report,5);assert.equal(b.state().active,false);assert.equal(b.c.prepares.length,1);b.clean();
     });
     scenario(scope+": uncertain write stops without retry or stale review",async()=>{
-        const b=await ready();b.change(false);b.c.imports[0].reject(Error("Connection lost"));await b.flush();
+        const b=await ready();b.change(false);b.approve();b.c.imports[0].reject(Error("Connection lost"));await b.flush();
         b.change(true);b.change(false);assert.equal(b.state().active,false);assert.equal(b.c.imports.length,1);
         assert.equal(b.state().count,0);assert.equal(b.state().review,null);assert.equal(b.state().xmlToken,null);b.clean();
     });
@@ -178,12 +182,12 @@ for(const scope of["project","text_lists"]){
         assert.equal(b.c.hmiImportReviewedButton.disabled,false);b.clean();
     });
     for(const failure of["fail","throw"])scenario(scope+": refresh "+failure+" keeps confirmed writes",async()=>{
-        const b=await ready();b.c.refreshMode=failure;b.change(false);await b.verify();
+        const b=await ready();b.c.refreshMode=failure;b.change(false);b.approve();await b.verify();
         assert.equal(b.state().count,5);assert.equal(b.state().active,false);
         assert.equal(b.c.prepares.length,1);assert.equal(b.state().report,5);b.clean();
     });
     scenario(scope+": checkbox during refresh applies at next boundary",async()=>{
-        const b=await ready();b.c.refreshMode="hold";b.change(false);await b.verify();
+        const b=await ready();b.c.refreshMode="hold";b.change(false);b.approve();await b.verify();
         assert.equal(b.state().count,5);assert.equal(b.c.refreshes.length,1);
         b.change(true);b.change(false);b.change(true);b.c.refreshes[0].resolve(true);
         await b.flush();await b.prepare();assert.equal(b.c.imports.length,1);
@@ -194,20 +198,20 @@ for(const scope of["project","text_lists"]){
         assert.equal(b.c.prepares.length,1);await b.prepare();b.clean();
     });
     scenario(scope+": malformed verification stops without credit or retry",async()=>{
-        const b=await ready();b.change(false);
+        const b=await ready();b.change(false);b.approve();
         b.c.imports[0].resolve({status:"verified",verified_rows:1,imported_rows:5,verified_entries:1});
         await b.flush();assert.equal(b.state().active,false);assert.equal(b.state().count,0);
         assert.equal(b.c.prepares.length,1);b.clean();
     });
     scenario(scope+": backend edit rejection preserves review without automatic retry",async()=>{
-        const b=await ready();b.change(false);
+        const b=await ready();b.change(false);b.approve();
         b.c.imports[0].reject(Error(scope==="project"?"PROJECT_TEXT_REVIEW_EDIT_INVALID: invalid"
             :"TEXT_LIST_REVIEW_EDIT_INVALID: invalid"));await b.flush();
         assert.equal(b.state().active,true);assert.equal(b.state().pending,true);
         assert.equal(b.c.imports.length,1);assert.equal(b.c.hmiImportReviewedButton.disabled,false);b.clean();
     });
     scenario(scope+": Pause during verified refresh holds next batch",async()=>{
-        const b=await ready();b.c.refreshMode="hold";b.change(false);await b.verify();
+        const b=await ready();b.c.refreshMode="hold";b.change(false);b.approve();await b.verify();
         b.pause();b.c.refreshMode="ok";b.c.refreshes[0].resolve(true);await b.flush();
         assert.equal(b.state().paused,true);assert.equal(b.c.prepares.length,1);
         b.resume();assert.equal(b.c.prepares.length,2);await b.prepare();b.change(true);
@@ -231,7 +235,7 @@ scenario("Blank total preserves the original run quota and caps last batch",asyn
     assert.equal(b.state().count,7);assert.equal(b.state().active,false);b.clean();
 });
 scenario("XML safe rejection: scan is serialized and Stop prevents next prepare",async()=>{
-    const b=browser("text_lists");await b.start();await b.prepare();b.c.refreshMode="hold";b.change(false);
+    const b=browser("text_lists");await b.start();await b.prepare();b.c.refreshMode="hold";b.change(false);b.approve();
     b.c.imports[0].reject(Error("TextList changed since preparation. Nothing imported."));await b.flush();
     assert.equal(b.c.refreshes.length,1);b.change(true);b.change(false);
     void b.run("prepareNextReviewedHmiBatch()");assert.equal(b.c.prepares.length,1);
