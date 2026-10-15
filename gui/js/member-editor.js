@@ -199,41 +199,6 @@ function labeledControl(text, control) {
 // A native checkbox represents Enabled/Disabled. Indeterminate means that the
 // optional TIA attribute is NOT specified, preserving existing project data.
 // The small Default action restores the unspecified state after editing.
-function optionalBooleanCheckbox(id, value, title) {
-    const container = document.createElement("div");
-    container.className = "member-flag";
-    const label = document.createElement("label");
-    label.className = "member-flag-label";
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.id = id;
-    label.append(box, document.createTextNode(title));
-    const status = document.createElement("span");
-    status.className = "member-flag-status";
-    const reset = createButton("Default", () => {
-        set(null);
-        // An explicit user action changes a draft (no mutation until Save).
-        box.dispatchEvent(new Event("input", {bubbles: true}));
-    });
-    reset.className = "member-flag-reset";
-    reset.title = "Leave this TIA attribute unspecified";
-    let current = value == null ? null : value === true;
-    function set(next) {
-        current = next;
-        box.checked = next === true;
-        box.indeterminate = next === null;
-        box.setAttribute("aria-checked", next === null ? "mixed" : String(next));
-        status.textContent = next === null ? "TIA default" : next ? "On" : "Off";
-        reset.hidden = next === null;
-    }
-    box.addEventListener("change", () => {
-        set(box.checked);
-    });
-    container.append(label, status, reset);
-    set(current);
-    return {element:container, value:() => current, set};
-}
-
 function selectStoredType(select, value) {
     if (!value) return;
     if (![...select.options].some((option) => option.value === value)) {
@@ -255,6 +220,9 @@ export function createMemberEditor({
     onSave = null,
     onCancel = null,
     onDraftChange = null,
+    isDb = false,
+    retainDefault = false,
+    inheritedRetain = null,
 }) {
     const root = document.createElement("div");
     root.className = "member-editor-form";
@@ -275,33 +243,17 @@ export function createMemberEditor({
     );
     root.appendChild(row);
 
-    // These are optional explicit SCL attributes. Empty means TIA default,
-    // preserving the behavior of projects saved before this editor change.
-    const optionsRow = document.createElement("div");
-    optionsRow.className = "editor-row member-options-row";
+    // Attribute checkboxes belong directly to the TIA-style declaration
+    // table. The expanded editor only changes names, types, start values and
+    // nested member structure, preserving all attributes not edited here.
     const startValueInput = createInput(prefix + "-start-value", "Start value");
     startValueInput.value = member?.start_value ?? "";
     const startValueLabel = labeledControl("Start value (optional)", startValueInput);
-    const visibleFlag = optionalBooleanCheckbox(
-        prefix + "-visible", member?.hmi_visible, "Visible in HMI"
-    );
-    const accessibleFlag = optionalBooleanCheckbox(
-        prefix + "-accessible", member?.hmi_accessible, "Accessible from HMI/OPC UA"
-    );
-    const writableFlag = optionalBooleanCheckbox(
-        prefix + "-writable", member?.hmi_writable, "Writable from HMI/OPC UA"
-    );
-    optionsRow.append(
-        startValueLabel, visibleFlag.element, accessibleFlag.element,
-        writableFlag.element
-    );
-    root.appendChild(optionsRow);
+    root.appendChild(startValueLabel);
     const optionsNote = document.createElement("p");
     optionsNote.className = "hint";
-    optionsNote.textContent = "HMI checkboxes: checked = Enabled, unchecked = Disabled, "
-        + "dash = TIA default (unspecified). Use Default to restore the original "
-        + "unspecified state. Start values support Bool, integer and Real/LReal "
-        + "scalars. Retain is set at DB level; Setpoint and Supervision are not editable.";
+    optionsNote.textContent = "Edit Retain and HMI attributes in the checkboxes "
+        + "of the declaration table; right-click a checkbox to restore TIA default.";
     root.appendChild(optionsNote);
 
     const complexArea = document.createElement("div");
@@ -366,6 +318,10 @@ export function createMemberEditor({
                     members: structMembers,
                     ownerUdtName: excludeUdtName,
                     validateOnChange: false,
+                    isDb,
+                    retainDefault,
+                    inheritedRetain: member?.retain ?? inheritedRetain ?? retainDefault,
+                    nested: true,
                     onChange: (next) => {
                         structMembers = next;
                         onDraftChange?.();
@@ -398,9 +354,9 @@ export function createMemberEditor({
             comment: commentInput.value.trim() || null,
             start_value: startValueInput.disabled
                 ? null : (startValueInput.value.trim() || null),
-            hmi_visible: visibleFlag.value(),
-            hmi_accessible: accessibleFlag.value(),
-            hmi_writable: writableFlag.value(),
+            hmi_visible: member?.hmi_visible ?? null,
+            hmi_accessible: member?.hmi_accessible ?? null,
+            hmi_writable: member?.hmi_writable ?? null,
             array_element_type: null,
             array_lower_bound: null,
             array_upper_bound: null,
@@ -434,9 +390,6 @@ export function createMemberEditor({
             nameInput.value = "";
             commentInput.value = "";
             startValueInput.value = "";
-            visibleFlag.set(null);
-            accessibleFlag.set(null);
-            writableFlag.set(null);
             typeSelect.value = "";
             structMembers = [];
             arrayElement = "";
@@ -466,6 +419,47 @@ export function getExpandedMemberPaths(container) {
         .map((button) => button.dataset.memberPath));
 }
 
+const TABLE_FIELDS = [
+    ["hmi_accessible", "Accessible from HMI/OPC UA"],
+    ["hmi_writable", "Writable from HMI/OPC UA"],
+    ["hmi_visible", "Visible in HMI"],
+];
+
+function tableFlagCell({member, key, inherited, editable = true, onChange}) {
+    const cell = document.createElement("td");
+    cell.className = "member-attribute-cell";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.className = "member-attribute-checkbox";
+    box.setAttribute("aria-label", key === "retain"
+        ? "Retain " + member.name
+        : (TABLE_FIELDS.find(item => item[0] === key)?.[1] || key)
+            + " " + member.name);
+    box.disabled = !editable;
+    const raw = member[key];
+    const value = raw == null ? inherited : raw;
+    box.checked = value === true;
+    box.indeterminate = raw == null && inherited == null;
+    box.setAttribute("aria-checked",
+        box.indeterminate ? "mixed" : String(box.checked));
+    box.title = !editable
+        ? (key === "retain" ? "Inherited or not applicable; edit the top-level DB variable" : "Read only")
+        : raw == null
+            ? "TIA default / inherited setting. Click to override; right-click to reset default."
+            : "Explicit " + (raw ? "enabled" : "disabled")
+                + ". Right-click to restore TIA default.";
+    box.addEventListener("change", () => {
+        if (editable) onChange(box.checked);
+    });
+    box.addEventListener("contextmenu", event => {
+        if (!editable) return;
+        event.preventDefault();
+        onChange(null);
+    });
+    cell.appendChild(box);
+    return cell;
+}
+
 export function createMemberTree({
     prefix,
     members,
@@ -473,6 +467,10 @@ export function createMemberTree({
     onChange,
     openPaths = null,
     validateOnChange = true,
+    isDb = false,
+    retainDefault = false,
+    inheritedRetain = null,
+    nested = false,
 }) {
     const root = document.createElement("div");
     root.className = "member-tree";
@@ -507,7 +505,9 @@ export function createMemberTree({
         const table = document.createElement("table");
         table.className = "member-tree-table";
         const head = document.createElement("thead");
-        head.innerHTML = "<tr><th>Name</th><th>Data type</th>"
+        head.innerHTML = "<tr><th>Name</th><th>Data type</th><th>Start value</th>"
+            + "<th>Retain</th><th>Accessible from HMI/OPC UA</th>"
+            + "<th>Writable from HMI/OPC UA</th><th>Visible in HMI</th>"
             + "<th>Comment</th><th>Actions</th></tr>";
         table.appendChild(head);
         const body = document.createElement("tbody");
@@ -523,7 +523,7 @@ export function createMemberTree({
             editRow.className = "member-tree-edit-row";
             editRow.dataset.memberDetails = memberKey;
             const editCell = document.createElement("td");
-            editCell.colSpan = 4;
+            editCell.colSpan = 9;
             editRow.appendChild(editCell);
 
             let expanded = false;
@@ -568,6 +568,8 @@ export function createMemberTree({
                     excludeUdtName: ownerUdtName,
                     member,
                     editIndex: index,
+                    isDb, retainDefault,
+                    inheritedRetain: member.retain ?? inheritedRetain ?? retainDefault,
                     onDraftChange: () => { dirty = true; },
                     onSave: (candidate) => {
                         // The renderer preserves expanded paths on refresh.
@@ -595,10 +597,28 @@ export function createMemberTree({
                 row.after(editRow);
             }
 
+            const ownRetain = isDb && !nested && path.length === 0;
+            const effectiveRetain = member.retain ?? inheritedRetain ?? retainDefault;
+            const retainCell = isDb
+                ? tableFlagCell({
+                    member, key:"retain",
+                    inherited:effectiveRetain,
+                    editable:ownRetain,
+                    onChange:value => mutate(path, rows => { rows[index].retain = value; }),
+                })
+                : createTextCell("—");
+            if (!isDb) retainCell.title = "Retain belongs to a DB, not a UDT declaration";
+            const attrCells = TABLE_FIELDS.map(([key]) => tableFlagCell({
+                member, key, inherited:null,
+                onChange:value => mutate(path, rows => { rows[index][key] = value; }),
+            }));
             row.append(
                 nameCell,
                 createTextCell(formatMemberType(member)),
-                createTextCell(member.comment)
+                createTextCell(member.start_value ?? "—"),
+                retainCell,
+                ...attrCells,
+                createTextCell(member.comment),
             );
             const actions = document.createElement("td");
             actions.className = "member-tree-actions";
@@ -630,6 +650,7 @@ export function createMemberTree({
             prefix: prefix + "-add-" + (path.join("-") || "root"),
             existingMembers: list,
             excludeUdtName: ownerUdtName,
+            isDb, retainDefault, inheritedRetain,
             onAdd: (candidate) => mutate(path, (target) => {
                 target.push(candidate);
             }),
