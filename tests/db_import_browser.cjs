@@ -120,6 +120,8 @@ const item = (pathName, data_type, remanence = undefined) => ({
 
         await page.locator("#tia-db-select").selectOption({label:"DB_Missing [root] (DB14)"});
         await page.locator("#tia-db-load").click();
+        await page.waitForFunction(() => /missing.*UDT/i.test(
+            document.getElementById("tia-db-import-status").textContent));
         assert.match(await page.locator("#tia-db-import-status").textContent(), /missing.*UDT/i);
         assert.equal((await read()).dbs.length, 2);
 
