@@ -243,9 +243,16 @@ const seed = {
         await page.locator('[data-tab="udt"]').click();
         await page.locator("#udt-container > details > summary").click();
         const persistedForm = await expand(row("udt-field-0:1"));
-        await persistedForm.locator(
+        const persistedMember = persistedForm.locator(
             'tr[data-member-path="udt-field-0-edit-1-struct:0"]'
-        ).getByText("Running", { exact: true }).waitFor();
+        );
+        await persistedMember.waitFor();
+        // The visible name cell also contains the +/- editor toggle.
+        // getByText("Running", {exact:true}) cannot match "+ Running".
+        assert.match(
+            await persistedMember.locator("td").first().innerText(),
+            /\\bRunning\\b/
+        );
         await persistedForm.locator(':scope > .action-row')
             .getByRole("button", { name: "Cancel", exact: true }).click();
         await page.locator('[data-tab="preview"]').click();
