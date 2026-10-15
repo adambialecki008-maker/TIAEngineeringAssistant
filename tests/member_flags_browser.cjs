@@ -36,62 +36,64 @@ const artifacts = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwrig
             return {udt:projectConfig.udts[0].fields[0],
                 db:projectConfig.dbs[0].members[0]};
         });
-        const open = async (tab, kind) => {
+        async function openTab(tab) {
             await page.locator('[data-tab="' + tab + '"]').click();
-            const group = page.locator("#" + kind + "-container > details").first();
-            if (!(await group.evaluate(node=>node.open))) await group.locator(":scope > summary").click();
-            await page.locator('tr[data-member-path="' + kind + '-field-0:0"],tr[data-member-path="'
-                + kind + '-member-0:0"]').first()
-                .locator("button.member-tree-toggle").click();
-            return page.locator('tr[data-member-details="' + kind +
-                (kind==="udt" ? '-field' : '-member') + '-0:0"] > td > .member-editor-form');
-        };
-        const save = editor => editor.locator(":scope > .action-row")
-            .getByRole("button",{name:"Save",exact:true}).click();
-        let editor = await open("udt","udt");
-        const visible = editor.locator('input[type="checkbox"][id$="-visible"]');
-        const accessible = editor.locator('input[type="checkbox"][id$="-accessible"]');
-        const writable = editor.locator('input[type="checkbox"][id$="-writable"]');
-        assert.equal(await editor.locator('select[id$="-visible"]').count(),0);
-        assert.equal(await editor.locator('select[id$="-accessible"]').count(),0);
-        assert.equal(await editor.locator('select[id$="-writable"]').count(),0);
+            const details = page.locator("#" + tab + "-container > details").first();
+            if (!(await details.evaluate(el => el.open)))
+                await details.locator(":scope > summary").click();
+        }
+        const checkbox = (owner, name, flag) => page.locator(
+            'tr[data-member-path="' + owner + ':0"] input.member-attribute-checkbox'
+            + '[aria-label="' + flag + ' ' + name + '"]');
+        await openTab("udt");
+        const udt = "udt-field-0";
+        const visible = checkbox(udt, "Enabled", "Visible in HMI");
+        const accessible = checkbox(udt, "Enabled", "Accessible from HMI/OPC UA");
+        const writable = checkbox(udt, "Enabled", "Writable from HMI/OPC UA");
+        const retain = checkbox(udt, "Enabled", "Retain");
+        assert.equal(await retain.count(),0, "UDT declarations cannot set DB Retain");
+        assert.equal(await page.locator("#udt-container .member-flag").count(),0);
         for(const el of [visible,accessible,writable]) {
-            assert.equal(await el.evaluate(node=>node.indeterminate),true,
-                "Legacy unset attributes must remain TIA default");
+            assert.equal(await el.evaluate(node => node.indeterminate),true,
+                "Old unset attributes must remain TIA default");
         }
         await visible.check();
         await accessible.check();
         await accessible.uncheck();
         await writable.check();
-        await save(editor);
         let data = await state();
         assert.equal(data.udt.hmi_visible,true);
         assert.equal(data.udt.hmi_accessible,false);
         assert.equal(data.udt.hmi_writable,true);
-        editor = await open("udt","udt");
-        await editor.locator(".member-flag").first()
-            .getByRole("button",{name:"Default"}).click();
-        await save(editor);
+        await visible.click({button:"right"});
         data = await state();
-        assert.equal(data.udt.hmi_visible,null,"Default must restore unspecified state");
-        assert.equal(data.udt.hmi_accessible,false);
+        assert.equal(data.udt.hmi_visible,null,"Context menu restores unspecified state");
 
-        editor = await open("db","db");
-        const dbVisible = editor.locator('input[id$="-visible"]');
-        const dbAccessible = editor.locator('input[id$="-accessible"]');
-        const dbWritable = editor.locator('input[id$="-writable"]');
+        await openTab("db");
+        const key = "db-member-0";
+        const dbVisible = checkbox(key, "Ready", "Visible in HMI");
+        const dbAccessible = checkbox(key, "Ready", "Accessible from HMI/OPC UA");
+        const dbWritable = checkbox(key, "Ready", "Writable from HMI/OPC UA");
+        const dbRetain = checkbox(key, "Ready", "Retain");
+        assert.equal(await page.locator("#db-container .member-declaration-section > summary")
+            .innerText(),"Static (1 variables)");
         assert.equal(await dbVisible.isChecked(),true);
         assert.equal(await dbAccessible.isChecked(),false);
-        assert.equal(await dbWritable.evaluate(node=>node.indeterminate),true);
-        await editor.locator(".member-flag").first()
-            .getByRole("button",{name:"Default"}).click();
+        assert.equal(await dbWritable.evaluate(node => node.indeterminate),true);
+        assert.equal(await dbRetain.isChecked(),false);
+        await dbVisible.click({button:"right"});
         await dbAccessible.check();
         await dbWritable.check();
-        await save(editor);
+        await dbRetain.check();
         data = await state();
         assert.equal(data.db.hmi_visible,null);
         assert.equal(data.db.hmi_accessible,true);
         assert.equal(data.db.hmi_writable,true);
+        assert.equal(data.db.retain,true);
+        await dbRetain.click({button:"right"});
+        data = await state();
+        assert.equal(data.db.retain,null, "Right-click restores DB-level default");
+
         await page.reload();
         data = await state();
         assert.equal(data.udt.hmi_visible,null);
@@ -100,9 +102,10 @@ const artifacts = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwrig
         assert.equal(data.db.hmi_visible,null);
         assert.equal(data.db.hmi_accessible,true);
         assert.equal(data.db.hmi_writable,true);
+        assert.equal(data.db.retain,null);
         assert.equal(await page.locator(".member-row-checkbox").count(),0);
         assert.equal(await page.locator(".member-selection-toolbar").count(),0);
-        console.log("member_flags_browser: PASS — TIA checkbox tri-state, persistence, no row selection");
+        console.log("member_flags_browser: PASS — inline checkbox columns, explicit/inherited Retain and reload");
     } catch (error) {
         await fs.mkdir(artifacts,{recursive:true});
         if(page) await page.screenshot({
