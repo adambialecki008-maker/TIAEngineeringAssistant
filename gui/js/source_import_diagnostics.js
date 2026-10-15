@@ -1,14 +1,14 @@
 // Presentation-only diagnostics for PLC structure preflight.
 // The raw Openness error is preserved; no changes to the plan or safety status.
 const TYPE_LABELS = {
-    hmi_visible: "Widoczność w HMI",
-    hmi_accessible: "Dostęp z HMI",
-    hmi_writable: "Zapis z HMI",
+    hmi_visible: "Visible in HMI",
+    hmi_accessible: "Accessible from HMI/OPC UA",
+    hmi_writable: "Writable from HMI/OPC UA",
 };
 
 function subject(item) {
     return (item.kind === "udt" ? "UDT" : "DB")
-        + " „" + String(item.name || "?") + "”";
+        + " '" + String(item.name || "?") + "'";
 }
 
 function metadataIssues(reason) {
@@ -19,26 +19,26 @@ function metadataIssues(reason) {
         const [, path, detail] = match;
         const field = path + ": ";
         if (detail.startsWith("comment differs")) {
-            issues.push(field + "komentarz różni się między aplikacją i TIA"
+            issues.push(field + "Comment differs between the application and TIA"
                 + (detail.match(/\(([^)]*)\)/)?.[0] || ""));
         } else if (detail.startsWith("start_value differs")) {
-            issues.push(field + "inna wartość początkowa (Start value)"
+            issues.push(field + "Start value differs"
                 + (detail.match(/\(([^)]*)\)/)?.[0] || ""));
         } else if (detail.startsWith("start_value not exported")) {
-            issues.push(field + "TIA nie wyeksportował wartości początkowej");
+            issues.push(field + "TIA did not export the start value");
         } else if (detail.startsWith("start_value cannot be compared")
             || detail.startsWith("exported start_value cannot be matched")) {
-            issues.push(field + "wartości początkowej nie można wiarygodnie porównać");
+            issues.push(field + "Start value cannot be reliably compared");
         } else {
             const key = Object.keys(TYPE_LABELS)
                 .find(name => detail.startsWith(name));
             if (key) {
                 const message = detail.includes(" differs")
-                    ? "różne ustawienia" : detail.includes("not explicitly exported")
-                        ? "brak jednoznacznego atrybutu w eksporcie"
+                    ? "settings differ" : detail.includes("not explicitly exported")
+                        ? "attribute not explicitly exported"
                         : detail.includes("unreadable")
-                            ? "nieczytelna wartość z TIA"
-                            : "brak danych do porównania";
+                            ? "unreadable value from TIA"
+                            : "insufficient data to compare";
                 issues.push(field + TYPE_LABELS[key] + " — " + message
                     + (detail.match(/\(([^)]*)\)/)?.[0] || ""));
             }
@@ -60,68 +60,68 @@ export function describeSourceImport(item) {
         if (/Inconsistent blocks and PLC data types \(UDT\) cannot be exported/i
             .test(rawReason)) {
             return {...common,
-                problem: "Nie można zweryfikować " + what
-                    + " — TIA odrzucił eksport XML.",
-                cause: "TIA Openness zgłasza niespójność bloku lub typu danych "
-                    + "PLC (UDT). Nie oznacza to automatycznie błędu kompilacji. "
-                    + "Bez eksportu XML preflight nie może wskazać, czy różnią się "
-                    + "deklaracje, wartości czy atrybuty HMI.",
+                problem: "Unable to verify " + what
+                    + " — TIA rejected the XML export.",
+                cause: "TIA Openness reports an inconsistent block or PLC data "
+                    + "type (UDT). This does not necessarily indicate a compilation failure. "
+                    + "Without the XML export, preflight cannot determine whether "
+                    + "declarations, values or HMI attributes differ.",
                 checklist: true,
                 issueLines: [
-                    "Deklaracje DB i powiązanego UDT (także pól zagnieżdżonych).",
+                    "DB and referenced UDT declarations (including nested members).",
                     "Visible in HMI.",
                     "Accessible from HMI/OPC UA.",
                     "Writable from HMI/OPC UA.",
-                    "Retain i Start values.",
+                    "Retain and Start values.",
                 ],
-                action: "Porównaj powyższe ustawienia tych samych pól w aplikacji "
-                    + "i TIA Portal. W edytorze aplikacji 'TIA default' oznacza "
-                    + "brak jawnego ustawienia, a nie automatycznie FALSE. "
-                    + "Jeśli ustawienia są zgodne, sprawdź diagnostykę spójności "
-                    + "DB i referencyjnych UDT w TIA i ponów Check target. "
-                    + "Żaden istniejący obiekt nie zostanie nadpisany.",
+                action: "Compare these settings for the corresponding members in the app "
+                    + "and TIA Portal. In the application, 'TIA default' means "
+                    + "unspecified, not necessarily FALSE. "
+                    + "If the settings match, review consistency diagnostics for "
+                    + "the DB and referenced UDTs in TIA and rerun Check target. "
+                    + "No existing object will be overwritten.",
             };
         }
         return {...common,
-            problem: "Nie udało się odczytać " + what + " z TIA.",
-            cause: "TIA Openness odrzucił eksport istniejącej struktury. "
-                + "Szczegółowy kod błędu znajduje się w danych technicznych; "
-                + "zgodność nie została sprawdzona.",
-            action: "Sprawdź stan obiektu, diagnostykę i kompilację w TIA, "
-                + "a następnie uruchom Check target ponownie.",
+            problem: "Unable to read " + what + " from TIA.",
+            cause: "TIA Openness rejected the existing structure export. "
+                + "The original error is available under Technical details; "
+                + "compatibility was not verified.",
+            action: "Review the object and diagnostics in TIA, "
+                + "then rerun Check target.",
         };
     }
 
     if (item.status === "unknown" && /Remanence=Retain/i.test(rawReason)) {
         return {...common,
-            problem: "Nie można potwierdzić RETAIN dla " + what + ".",
-            cause: "Eksport XML nie potwierdza jednoznacznie retencji "
-                + "wymaganych pól, choć ich struktura pasuje.",
-            action: "Sprawdź ustawienia Retain w TIA oraz odczyt XML. "
-                + "Ponów Check target; brak potwierdzenia nie oznacza, "
-                + "że RETAIN jest wyłączone.",
+            problem: "RETAIN could not be verified for " + what + ".",
+            cause: "The XML export does not explicitly confirm remanence "
+                + "of the required members, although their structure matches.",
+            action: "Review the Retain settings and XML data in TIA. "
+                + "Rerun Check target; missing evidence does not mean "
+                + "that RETAIN is disabled.",
         };
     }
 
     if (/DB retention mismatch/i.test(rawReason)) {
         return {...common,
-            problem: "Różne ustawienia RETAIN dla " + what + ".",
-            cause: "TIA i konfiguracja aplikacji zgłaszają różne "
-                + "ustawienia retencji. Konkretne pola są opisane w danych technicznych.",
-            action: "Porównaj Retain pól DB w TIA z konfiguracją aplikacji. "
-                + "Istniejący DB nie zostanie nadpisany.",
+            problem: "Different RETAIN settings for " + what + ".",
+            cause: "TIA and the application configuration report different "
+                + "remanence settings. Affected members are in Technical details.",
+            action: "Compare the DB members' Retain settings in TIA and the application. "
+                + "The existing DB will not be overwritten.",
         };
     }
 
     if (/Dependency unavailable or mismatched/i.test(rawReason)) {
         const named = rawReason.match(/Dependency unavailable or mismatched:\s*([^;(]+)/i);
         return {...common,
-            problem: "Zależność " + what + " blokuje sprawdzenie lub import.",
+            problem: "A dependency of " + what + " prevents verification or import.",
             cause: named
-                ? "Niedostępna lub niezgodna zależność: " + named[1].trim() + "."
-                : "Brak wymaganej lub zgodnej zależności UDT.",
-            action: "Sprawdź wymieniony UDT i jego kompilację w TIA. "
-                + "Ponów preflight po usunięciu problemu.",
+                ? "Missing or incompatible dependency: " + named[1].trim() + "."
+                : "A required UDT is missing or incompatible.",
+            action: "Check the referenced UDT and its declarations in TIA. "
+                + "Rerun preflight after fixing the problem.",
         };
     }
 
@@ -129,69 +129,69 @@ export function describeSourceImport(item) {
     if (issues.length) {
         const different = item.status === "conflict";
         return {...common, issueLines: issues,
-            problem: (different ? "Wykryto różnice w " : "Nie można zweryfikować ")
+            problem: (different ? "Differences detected in " : "Unable to verify ")
                 + what + ".",
             cause: different
-                ? "Deklaracje lub metadane różnią się między konfiguracją "
-                    + "a odczytem TIA. Wykryte pola:"
-                : "TIA nie udostępniło kompletnych danych dla wskazanych pól:",
+                ? "Declarations or metadata differ between the configuration "
+                    + "and the TIA export. Affected members:"
+                : "TIA did not provide enough data for these members:",
             action: different
-                ? "Porównaj wymienione pola w aplikacji i TIA. "
-                    + "Preflight nie nadpisuje istniejących obiektów."
-                : "Sprawdź te właściwości w TIA. Bez potwierdzenia "
-                    + "zgodności obiekt pozostaje niezweryfikowany.",
+                ? "Compare the listed members in the application and TIA. "
+                    + "Preflight does not overwrite existing objects."
+                : "Review these attributes in TIA. Without verification, "
+                    + "the object remains unverified.",
         };
     }
 
     if (item.status === "identical") {
-        return {...common, problem: what + " jest zgodny.",
-            cause: "Porównanie potwierdziło zgodność dostępnych "
-                + "wymaganych deklaracji i atrybutów.",
-            action: "Nie trzeba nic importować — istniejący obiekt zostanie pominięty."};
+        return {...common, problem: what + " matches the existing object.",
+            cause: "The comparison confirmed matching required "
+                + "declarations and verified attributes.",
+            action: "No import is needed; the existing object will be skipped."};
     }
     if (item.status === "compatible") {
-        return {...common, problem: what + " może zostać użyty ponownie.",
-            cause: "Istniejący UDT ma zgodną strukturę; "
-                + "pozostałe ustawienia i wartości pozostają bez zmian.",
-            action: "Nie twórz ponownie typu. "
-                + (warnings.length ? "Ostrzeżenia metadanych są w danych technicznych."
-                    : "Preflight wykorzysta istniejący typ.")};
+        return {...common, problem: what + " can be reused.",
+            cause: "The existing UDT has a compatible structure; "
+                + "other attributes and values remain unchanged.",
+            action: "Do not recreate the type. "
+                + (warnings.length ? "Metadata warnings are in Technical details."
+                    : "Preflight will reuse the existing type.")};
     }
     if (item.status === "create") {
-        return {...common, problem: what + " nie istnieje w docelowym PLC.",
-            cause: "Obiekt jest kandydatem do utworzenia — nie wykryto kolizji.",
-            action: "Sprawdź podgląd i zatwierdź import na kopii projektu TIA."};
+        return {...common, problem: what + " is missing from the target PLC.",
+            cause: "The object can be created; no collision was detected.",
+            action: "Review the preview and approve import into a TIA project copy."};
     }
     if (item.status === "imported") {
-        return {...common, problem: what + " utworzono w TIA.",
-            cause: "Importer zgłosił zakończenie bieżącej operacji.",
-            action: "Sprawdź obiekt i wynik kompilacji w TIA."};
+        return {...common, problem: what + " was created in TIA.",
+            cause: "The importer reported completion of the operation.",
+            action: "Inspect the object and compilation result in TIA."};
     }
     if (/not confirmed as a global data block/i.test(rawReason)) {
-        return {...common, problem: what + " nie jest potwierdzonym globalnym DB.",
-            cause: "Obiekt może być instancyjnym DB; nie można bezpiecznie "
-                + "uznać go za równoważny.",
-            action: "Sprawdź typ DB w TIA. Istniejący blok nie zostanie nadpisany."};
+        return {...common, problem: what + " is not confirmed to be a global DB.",
+            cause: "The object may be an instance DB and cannot safely "
+                + "be treated as identical.",
+            action: "Check the DB type in TIA. The existing block will not be overwritten."};
     }
     if (/^Member /i.test(rawReason)) {
         const m = rawReason.match(/^Member\s+([^:]+):\s*(.*?)(?:\. No existing|$)/s);
-        return {...common, problem: "Niezgodna struktura " + what + ".",
-            cause: m ? "Pole „" + m[1] + "”: " + m[2].split("\n")[0].slice(0,220)
-                : "Lista pól, typy lub ich kolejność różnią się.",
-            action: "Porównaj deklaracje pól w TIA i w aplikacji. "
-                + "Żaden istniejący blok nie zostanie nadpisany."};
+        return {...common, problem: "Structure mismatch for " + what + ".",
+            cause: m ? "Pole '" + m[1] + "': " + m[2].split("\n")[0].slice(0,220)
+                : "Member names, types, or order differ.",
+            action: "Compare member declarations in TIA and the application. "
+                + "No existing block will be overwritten."};
     }
     return {...common,
         problem: item.status === "conflict"
-            ? "Wystąpił konflikt dla " + what + "."
+            ? "Conflict detected for " + what + "."
             : item.status === "unknown"
-                ? "Nie udało się potwierdzić zgodności " + what + "."
+                ? "Unable to verify compatibility of " + what + "."
                 : item.status === "blocked"
-                    ? "Sprawdzenie " + what + " jest zablokowane."
-                    : "Wynik porównania " + what + ".",
-        cause: "Preflight zgłosił: " + (item.status || "brak statusu")
-            + ". Oryginalne uzasadnienie znajduje się w danych technicznych.",
-        action: "Rozwiń szczegóły techniczne i sprawdź wskazaną "
-            + "przyczynę w TIA przed ponowieniem preflight.",
+                    ? "Verification of " + what + " is blocked."
+                    : "Comparison result for " + what + ".",
+        cause: "Preflight reported: " + (item.status || "unknown status")
+            + ". The original reason is available under Technical details.",
+        action: "Expand Technical details and check the indicated "
+            + "cause in TIA before rerunning preflight.",
     };
 }
