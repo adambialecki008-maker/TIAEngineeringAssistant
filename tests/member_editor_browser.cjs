@@ -209,7 +209,7 @@ const seed = {
             .getByRole("button", { name: "Cancel", exact: true }).click();
 
         // Selection checkboxes expose member actions; expansion uses arrows.
-        assert.equal((await stsRow.locator(".member-tree-toggle").innerText()).trim(), "▸");
+        assert.equal((await stsRow.locator(".member-tree-toggle").innerText()).trim(), "▾");
         // Add/delete/reorder works within a draft Struct.
         const tree = stsForm.locator(".member-tree").first();
         await tree.locator(":scope > .member-add-toggle").click();
