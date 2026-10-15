@@ -17,33 +17,32 @@ export function convertTiaDbDetail(detail) {
             throw Error("Unsupported DB section " + (row.section || "(missing)") +
                 ". Only Static declarations of a global DB can be imported.");
     }
-    const flags = new Set();
+    const topRetain = new Map();
     const sanitizedMembers = detail.members.map(row => {
         const metadata = {...(row.metadata || {})};
+        const raw = String(metadata.remanence || "").trim().toLowerCase();
+        const actual = RETAIN.has(raw) ? true : NON_RETAIN.has(raw) ? false : null;
+        if (raw && actual === null)
+            throw Error(row.path + ": unsupported remanence " + raw);
         if (row.level === 0) {
-            const raw = String(metadata.remanence || "").trim().toLowerCase();
-            if (RETAIN.has(raw)) flags.add(true);
-            else if (NON_RETAIN.has(raw)) flags.add(false);
-            else if (raw) throw Error(row.path + ": unsupported remanence " + raw);
-            else flags.add(null);
-        } else if (metadata.remanence) {
-            // Per-member remanence has no equivalent in the current whole-DB
-            // editor. Only matching whole-DB attributes may be dropped.
-            const raw = String(metadata.remanence).trim().toLowerCase();
-            if (!RETAIN.has(raw) && !NON_RETAIN.has(raw))
-                throw Error(row.path + ": unsupported nested remanence " + raw);
-            flags.add(RETAIN.has(raw));
+            if (actual === null)
+                throw Error(row.path + ": TIA XML does not clearly establish "
+                    + "whole-DB retain settings. Import was blocked.");
+            topRetain.set(row.path, actual);
+        } else if (actual !== null) {
+            const parent = row.path.split(".", 1)[0];
+            if (!topRetain.has(parent) || topRetain.get(parent) !== actual)
+                throw Error(row.path + ": nested retention differs from the "
+                    + "parent declaration; import blocked to avoid data loss.");
         }
         delete metadata.remanence;
         return {...row, metadata};
     });
-    if (flags.has(true) && flags.has(false))
-        throw Error("Mixed RETAIN/NON_RETAIN declarations cannot be represented as a whole-DB setting.");
-    const known = flags.has(true) ? true : flags.has(false) ? false : null;
-    if (known === null || flags.has(null)) {
-        throw Error("TIA XML does not clearly establish whole-DB retain settings. "
-            + "Import was blocked to avoid changing the original DB properties.");
-    }
+    const modes = new Set(topRetain.values());
     const parsed = convertTiaUdtDetail({...detail, kind:"udt", members:sanitizedMembers});
-    return {name:parsed.name, retain:known, members:parsed.fields};
+    const retain = modes.size === 1 ? [...modes][0] : false;
+    if (modes.size > 1) {
+        for (const member of parsed.fields) member.retain = topRetain.get(member.name);
+    }
+    return {name:parsed.name, retain, members:parsed.fields};
 }
