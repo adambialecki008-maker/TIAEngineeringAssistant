@@ -28,6 +28,17 @@ function references(members) {
     visit(members);
     return [...names];
 }
+// Compare PLC declarations rather than incidental editor UI attributes.
+// Reusing a name with a different UDT layout would corrupt DB semantics.
+function declarationShape(fields) {
+    return (fields || []).map(field => [
+        String(field.name).toLowerCase(),
+        String(field.data_type).toLowerCase(),
+        String(field.array_element_type || "").toLowerCase(),
+        field.array_lower_bound ?? null, field.array_upper_bound ?? null,
+        declarationShape(field.struct_members),
+    ]);
+}
 function url(target, extra = {}) {
     return new URLSearchParams({
         process_id:target.process_id, device_name:target.device_name,
@@ -131,10 +142,8 @@ export function initDbTiaImportUi(renderAll) {
                 if (isPrimitive(rawName) || resolved.has(key)) return;
                 if (visiting.has(key))
                     throw Error("Circular UDT dependency detected: " + rawName);
-                if (projectConfig.udts.some(item => item.name.toLowerCase() === key)) {
-                    resolved.add(key);
-                    return; // An existing local UDT is reused, never replaced.
-                }
+                const existing = projectConfig.udts.find(item =>
+                    item.name.toLowerCase() === key);
                 const matches = udtInventory.filter(item => item.name.toLowerCase() === key);
                 if (matches.length !== 1 || matches[0].is_consistent !== true)
                     throw Error("Missing, inconsistent or ambiguous TIA UDT dependency: " +
@@ -150,13 +159,21 @@ export function initDbTiaImportUi(renderAll) {
                         exported.group_path !== (source.group_path || ""))
                         throw Error("Exported TIA UDT identity changed: " + source.name);
                     const udt = convertTiaUdtDetail(exported);
+                    if (existing && JSON.stringify(declarationShape(existing.fields)) !==
+                        JSON.stringify(declarationShape(udt.fields))) {
+                        throw Error("Local UDT " + udt.name +
+                            " differs from the active TIA definition. " +
+                            "Import was blocked; no existing UDT was overwritten.");
+                    }
                     for (const dependency of references(udt.fields))
                         await resolveUdt(dependency);
-                    await postJson("/api/v1/udt-specifications", udt);
-                    requireSameTarget();
-                    stagedUdts.push({...udt, tia_source:{
-                        ...scannedTarget, group_path:source.group_path || "", name:source.name,
-                    }});
+                    if (!existing) {
+                        await postJson("/api/v1/udt-specifications", udt);
+                        requireSameTarget();
+                        stagedUdts.push({...udt, tia_source:{
+                            ...scannedTarget, group_path:source.group_path || "", name:source.name,
+                        }});
+                    }
                     resolved.add(key);
                 } finally {
                     visiting.delete(key);
