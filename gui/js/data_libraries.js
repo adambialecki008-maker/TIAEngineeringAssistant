@@ -890,11 +890,15 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     categoryManager.append(categoryContent);
     libraryCard.append(libraryActions, status, categoryManager, selectedCount, objectList);
 
-    const transfer = element("div");
-    transfer.className = "card";
-    transfer.append(element("h3", "Import / Export Library"), element("p", "Imports create a complete separate local library. Nothing is sent to TIA Portal."));
+    // Export is part of the selected library; it stays collapsed until needed.
+    const exportSection = element("details");
+    exportSection.id = "library-export-panel";
+    exportSection.className = "library-category-manager";
+    const exportContent = element("div");
+    exportContent.className = "details-content";
+    exportSection.append(element("summary", "Export Library — save selected objects as JSON"), exportContent);
     let exportPreview = null;
-    const exportStatus = element("p", "Select a library, then export selected objects or the complete library.");
+    const exportStatus = element("p", "Select objects with the checkboxes above, then preview the JSON download. Required UDT dependencies are included and listed before you save.");
     exportStatus.className = "status-box";
     const exportPreviewPanel = element("div");
     exportPreviewPanel.className = "details-content";
@@ -952,6 +956,24 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             catch (error) { exportStatus.classList.add("error"); exportStatus.textContent = error.message; }
         }),
     );
+    exportContent.append(
+        element("p", "FROM: the selected Engineering Library. TO: a portable JSON file on your computer. Select individual UDTs, DBs and templates using the checkboxes above, or export the entire library. Nothing is sent to TIA Portal."),
+        exportActions, exportStatus, exportPreviewPanel
+    );
+    libraryCard.append(exportSection);
+
+    // Import is a separate foldable menu, not mixed with library export.
+    const transfer = element("div");
+    transfer.className = "card";
+    transfer.id = "library-import-card";
+    transfer.append(element("h3", "Import Library"));
+    const importSection = element("details");
+    importSection.id = "library-import-panel";
+    importSection.className = "library-category-manager";
+    const importContent = element("div");
+    importContent.className = "details-content";
+    importSection.append(element("summary", "Import Library — load JSON from another computer"), importContent);
+    transfer.append(importSection);
     const importFile = document.createElement("input");
     importFile.type = "file";
     importFile.accept = ".json,application/json";
@@ -1030,7 +1052,10 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             renderImportPreview();
         }
     });
-    transfer.append(exportActions, exportStatus, exportPreviewPanel, importFile, importApply, importStatus, importPreviewPanel);
+    importContent.append(
+        element("p", "FROM: a JSON file exported on another computer. TO: a NEW local Engineering Library (IndexedDB) in this browser. This import currently loads all objects together; existing libraries are not overwritten. No TIA Portal operations."),
+        importFile, importApply, importStatus, importPreviewPanel
+    );
     renderExportPreview();
     renderImportPreview();
 
