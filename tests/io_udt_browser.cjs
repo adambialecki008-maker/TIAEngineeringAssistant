@@ -33,7 +33,7 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
     const url=new URL(route.request().url()),p=url.pathname;
     calls.push({method:route.request().method(),path:p});
     if(p==="/api/v1/tia/processes")
-      return route.fulfill({json:[{process_id:123}]});
+      return route.fulfill({json:[{process_id:123},{process_id:124}]});
     if(p==="/api/v1/tia/io")
       return route.fulfill({json:{project_name:"Test_Copy",items:[],addresses:[],
           profinet_device_names:{},channels}});
@@ -60,7 +60,9 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
   // while that panel is hidden by the I/O Engineering tab.
   await page.locator('[data-tab="plc"]').click();
   await page.locator("#tia-process option[value='123']").waitFor({state:"attached"});
-  await page.locator("#tia-process").selectOption("123");
+  // Keep seeded Active PLC intact: the test does not simulate a real TIA
+  // project-context refresh, and there is no Openness process behind the mock.
+  await page.locator("#tia-process").evaluate(el => { el.value="123"; });
   await page.locator('[data-tab="devices"]').click();
   await assert.equal((await page.locator('[data-tab="devices"]').innerText()).trim(),
     "I/O Engineering");
