@@ -250,6 +250,9 @@ export function createMemberEditor({
     startValueInput.value = member?.start_value ?? "";
     const startValueLabel = labeledControl("Start value (optional)", startValueInput);
     root.appendChild(startValueLabel);
+    const durationArea = document.createElement("div");
+    durationArea.className = "duration-editor";
+    root.appendChild(durationArea);
     const optionsNote = document.createElement("p");
     optionsNote.className = "hint";
     optionsNote.textContent = "Edit Retain and HMI attributes in the checkboxes "
@@ -271,6 +274,55 @@ export function createMemberEditor({
     let lowerInput = null;
     let upperInput = null;
 
+    function renderDurationAssistant() {
+        durationArea.replaceChildren();
+        const kind = normalized(typeSelect.value);
+        if (kind !== "time" && kind !== "ltime") return;
+        const quantity = createInput(prefix + "-duration-quantity", "Quantity", "text");
+        quantity.inputMode = "numeric";
+        quantity.pattern = "[+-]?[0-9]+";
+        const unit = document.createElement("select");
+        unit.id = prefix + "-duration-unit";
+        const units = kind === "ltime"
+            ? ["ns", "us", "ms", "s", "m", "h", "d", "w"]
+            : ["ms", "s", "m", "h", "d", "w"];
+        for (const value of units) {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = value;
+            unit.appendChild(option);
+        }
+        const parsed = String(startValueInput.value || "").match(/^(?:LT|T)#([+-]?)(\d+)(ns|us|ms|s|m|h|d|w)$/i);
+        if (parsed && units.includes(parsed[3].toLowerCase())) {
+            quantity.value = parsed[1] + parsed[2];
+            unit.value = parsed[3].toLowerCase();
+        }
+        const result = document.createElement("output");
+        result.className = "duration-result";
+        function updateResult() {
+            const value = quantity.value.trim();
+            if (!/^[+-]?\d+$/.test(value)) {
+                result.textContent = "Enter a whole number; the literal stays editable below.";
+                return;
+            }
+            const literal = (kind === "ltime" ? "LT#" : "T#") + value + unit.value;
+            startValueInput.value = literal;
+            result.textContent = "Result: " + literal;
+        }
+        quantity.addEventListener("input", updateResult);
+        unit.addEventListener("change", updateResult);
+        durationArea.append(
+            labeledControl("Duration", quantity),
+            labeledControl("Unit", unit),
+            result,
+        );
+        const note = document.createElement("p");
+        note.className = "hint";
+        note.textContent = "Weeks are fixed seven-day durations. Months and years are calendar concepts and are not TIME/LTIME units.";
+        durationArea.appendChild(note);
+        updateResult();
+    }
+
     function rememberArray() {
         if (elementSelect) arrayElement = elementSelect.value;
         if (lowerInput) arrayLower = lowerInput.value;
@@ -286,6 +338,7 @@ export function createMemberEditor({
         startValueLabel.title = scalar
             ? "Initial value for this scalar variable"
             : "Set values on scalar members of a Struct/UDT";
+        renderDurationAssistant();
         if (typeSelect.value === "Array") {
             const arrayRow = document.createElement("div");
             arrayRow.className = "editor-row";

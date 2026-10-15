@@ -8,6 +8,8 @@ from pydantic import (
 import math
 import re
 
+from engine.tia.duration import normalize_duration_literal
+
 ARRAY_MIN_BOUND = -32768
 ARRAY_MAX_BOUND = 32767
 
@@ -63,6 +65,9 @@ class TiaMember(BaseModel):
         kind = self.data_type.casefold()
         if kind in {"struct", "array"}:
             raise ValueError("Set initial values on scalar members, not on Struct/Array.")
+        if kind in {"time", "ltime"}:
+            self.start_value = normalize_duration_literal(value, kind)
+            return
         if kind == "bool":
             if value.casefold() not in {"true", "false", "0", "1"}:
                 raise ValueError("Bool Start value must be TRUE or FALSE.")

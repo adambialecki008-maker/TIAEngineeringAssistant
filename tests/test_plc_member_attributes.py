@@ -89,7 +89,7 @@ def test_unspecified_options_keep_previous_source_format():
 @pytest.mark.parametrize("data_type, value", [
     ("Bool", "YES"), ("Int", "65536"), ("USInt", "-1"),
     ("DInt", "3.5"), ("Real", "1;DeleteDB"), ("Real", "NaN"),
-    ("Real", "1e9999"), ("Array", "TRUE"), ("Time", "T#10S"),
+    ("Real", "1e9999"), ("Array", "TRUE"), ("Time", "T#10months"),
 ])
 def test_reject_invalid_or_unsupported_initial_values(data_type, value):
     payload = {
