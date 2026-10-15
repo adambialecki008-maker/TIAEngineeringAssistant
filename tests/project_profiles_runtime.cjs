@@ -25,13 +25,14 @@ globalThis.api = {
 const a = env.api;
 a.loadProjectConfig();
 assert.equal(a.projectConfig.udts[0].name, "LEGACY_Motor");
-assert.equal(a.projectConfig.tia_target, null);
+assert.equal(a.projectConfig.tia_target.plc_name, "PLC_1"); // Start-up compatibility
 assert.equal(a.getActiveProjectProfileId(), "default");
 assert.equal(JSON.parse(localStorage.getItem(
     "tiaEngineeringAssistant.projectConfig.legacyBackup")).tia_target.plc_name, "PLC_1");
 const second = a.createProjectProfile("Machine 2");
 assert.throws(() => a.createProjectProfile("machine 2"), /already exists/);
 a.switchProjectProfile(second.id);
+assert.equal(a.projectConfig.tia_target, null); // Switch disconnects TIA
 assert.equal(a.projectConfig.udts.length, 0);
 a.projectConfig.plc_family = "S7-1200";
 a.projectConfig.udts.push({name: "Other", fields: []});
