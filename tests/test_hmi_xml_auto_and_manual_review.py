@@ -273,7 +273,7 @@ def test_reviewed_xml_approval_uses_step3_and_does_not_silently_fallback():
     approval = js.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
-    assert 'Approve clicked for ' in approval
+    assert 'Confirmation required — ' in approval
     assert 'completed = await importSelectedHmiBatch({automatic})' in approval
     xml_import = js.split('async function importReviewedHmiTextList()', 1)[1].split(
         'async function startAutomaticXmlBatches(', 1

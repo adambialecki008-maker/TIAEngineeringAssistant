@@ -404,7 +404,9 @@ def test_stop_during_inflight_prepare_or_import_never_aborts_tia_write():
     approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
-    assert 'hmiReviewQueueOperation = "importing / verifying"' in approval
+    assert '"importing / verifying" : "awaiting confirmation"' in approval
+    # The importer switches to writing state only AFTER user confirmation.
+    assert 'completed = await importSelectedHmiBatch({automatic});' in approval
     assert 'completed = await importSelectedHmiBatch({automatic});' in approval
     assert 'hmiReviewQueueStopRequested' in approval
     assert 'completed?.state === "prewrite_rejected"' in approval
