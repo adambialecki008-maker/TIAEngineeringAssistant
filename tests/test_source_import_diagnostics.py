@@ -15,4 +15,4 @@ def test_source_import_diagnostics_runtime():
         cwd=ROOT, capture_output=True, text=True, timeout=15,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Preflight Polish diagnostic scenarios: PASS" in result.stdout
+    assert "Preflight English diagnostic scenarios: PASS" in result.stdout
