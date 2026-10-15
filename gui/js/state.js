@@ -90,6 +90,31 @@ export function createProjectProfile(value) {
     localStorage.setItem(PROFILES_KEY, JSON.stringify([...profiles, entry]));
     return entry;
 }
+export function duplicateProjectProfile(id, value) {
+    const name = normalizeProfileName(value);
+    const profiles = initializeProjectProfiles();
+    if (!profiles.some(profile => profile.id === id)) throw Error("Source profile not found.");
+    if (profiles.some(profile => profile.name.toLocaleLowerCase() === name.toLocaleLowerCase()))
+        throw Error("A project profile with this name already exists.");
+    // Ensure the source's current unsaved editor changes are included.
+    if (id === getActiveProjectProfileId()) saveProjectConfig();
+    const raw = localStorage.getItem(PROFILE_PREFIX + id);
+    if (raw === null) throw Error("Source profile configuration is missing.");
+    const copy = JSON.parse(raw);
+    if (!copy || typeof copy !== "object" || Array.isArray(copy))
+        throw Error("Source profile configuration is invalid.");
+    const entry = {id: "profile-" + crypto.randomUUID(), name};
+    // A copied project must never inherit an active TIA target.
+    copy.tia_target = null;
+    localStorage.setItem(PROFILE_PREFIX + entry.id, JSON.stringify(copy));
+    try {
+        localStorage.setItem(PROFILES_KEY, JSON.stringify([...profiles, entry]));
+    } catch (error) {
+        localStorage.removeItem(PROFILE_PREFIX + entry.id);
+        throw error;
+    }
+    return entry;
+}
 export function renameProjectProfile(id, value) {
     const name = normalizeProfileName(value);
     const profiles = initializeProjectProfiles();
