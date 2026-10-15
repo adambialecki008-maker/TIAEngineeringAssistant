@@ -46,7 +46,10 @@ unresolved external type references. This is an offline export only: it does
 not connect to Siemens Openness or guarantee compilable SCL.
 
 Review the exported sources and resolve external types before a manually
-approved create-only import into an archived test project.
+approved create-only import into an archived test project. Duplicate names
+across the configured UDT/DB definitions are rejected even when only one of
+the duplicated objects is selected, so a dependency cannot silently resolve
+to the wrong definition.
 
 ## B. UDT → DB create-only write with dependencies
 

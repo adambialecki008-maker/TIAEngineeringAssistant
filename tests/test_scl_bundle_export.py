@@ -158,7 +158,7 @@ def test_invalid_selection_and_structure_never_access_tia(monkeypatch):
         select(udts=["UDT_Child", "UDT_Child"], dbs=[]),
     ):
         response = client.post(EXPORT, json=payload)
-        assert response.status_code == 422, response.text
+        assert response.status_code == 422, response.status_code
 
     cyclic = project()
     cyclic["udts"][1]["fields"] = [{"name": "Parent", "data_type": "UDT_Parent"}]

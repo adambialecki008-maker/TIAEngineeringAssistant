@@ -494,6 +494,15 @@ _BUILTIN_TYPES = {
 
 
 def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecification:
+    # A subset selection must not conceal ambiguous identities elsewhere in
+    # the configured project. The dependency resolver indexes by folded name;
+    # otherwise a duplicate entry is silently dropped before validation.
+    all_names = [item.name.casefold() for item in
+                 [*request.project.udts, *request.project.dbs]]
+    if len(all_names) != len(set(all_names)):
+        raise HTTPException(422, "Duplicate UDT/DB name in project configuration. "
+                            "Resolve duplicate definitions before export or preflight.")
+
     def pick(items, selected, label):
         if selected is None:
             return list(items)
