@@ -2738,3 +2738,21 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     border-radius: 4px;
     font: 12px/1.5 Consolas, monospace;
 }
+
+/* One project context: profile, TIA session and Active PLC live on Overview. */
+.header-context {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-left: auto;
+}
+.header-context .active-plc-summary { margin-left: 0; }
+#overview-profile-management > .card { margin-bottom: 18px; }
+#overview-profile-management .action-row { margin-top: 12px; }
+#overview-tia-controls .table-wrapper { max-height: 400px; overflow: auto; }
+.overview-navigation-hint { margin: 0 0 18px; }
+@media (max-width: 900px) {
+    .header-context { margin-left: 0; justify-content: flex-start; }
+}

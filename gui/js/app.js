@@ -2,6 +2,8 @@ import {
     projectConfig,
     loadProjectConfig,
     saveProjectConfig,
+    listProjectProfiles,
+    getActiveProjectProfileId,
 } from "./state.js";
 
 import {
@@ -127,8 +129,19 @@ const tiaUi =
 
 let devicesUi = null;
 
+function refreshProfileSummary() {
+    const active = listProjectProfiles().find(p => p.id === getActiveProjectProfileId());
+    const name = active?.name || "Default project";
+    const overview = document.getElementById("overview-profile-name");
+    const header = document.getElementById("header-profile-summary");
+    if (overview) overview.textContent = name;
+    if (header) header.textContent = "Profile: " + name;
+}
+
+window.addEventListener("project-profile-changed", refreshProfileSummary);
 
 function renderAll() {
+    refreshProfileSummary();
     sourceImportUi?.refreshSelection();
     if (udtContainer) {
         renderUdts(
@@ -360,6 +373,7 @@ const dataLibrariesUi = initDataLibrariesUi(() => {
     if (plcFamilySelect) plcFamilySelect.value = projectConfig.plc_family;
     sourceImportUi?.refreshSelection();
     renderAll();
+    tiaUi.updateTargetSummary();
 });
 if (dataLibrariesUi?.ready) {
     dataLibrariesUi.ready.then(refreshLibraryCategoryOptions);

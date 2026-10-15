@@ -807,6 +807,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             selectOption(profileSelector, item.id, item.name);
         }
         profileSelector.value = getActiveProjectProfileId();
+        window.dispatchEvent(new Event("project-profile-changed"));
     };
     profileSelector.addEventListener("change", async () => {
         try {
@@ -814,6 +815,11 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
                 renderProfiles(); return;
             }
             switchProjectProfile(profileSelector.value);
+            const processSelect = document.getElementById("tia-process");
+            if (processSelect) {
+                processSelect.value = "";
+                processSelect.dispatchEvent(new Event("change", {bubbles: true}));
+            }
             refreshProject();
             profileStatus.textContent = "Active project: " + profileSelector.selectedOptions[0]?.textContent + ". TIA target must be selected again.";
             await renderSnapshots();
@@ -856,6 +862,11 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
                 if (!confirm("Delete this local project profile and its configuration? This cannot be undone. Export a backup first.")) return;
                 // Active profiles cannot be removed without first switching.
                 switchProjectProfile("default");
+                const processSelect = document.getElementById("tia-process");
+                if (processSelect) {
+                    processSelect.value = "";
+                    processSelect.dispatchEvent(new Event("change", {bubbles: true}));
+                }
                 deleteProjectProfile(id);
                 renderProfiles();
                 refreshProject();
@@ -1493,8 +1504,11 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         snapshotDetails,
     );
 
+    // Profiles belong to Overview; keep one live instance of the controls.
+    const overviewProfilesHost = document.getElementById("overview-profile-management");
+    if (overviewProfilesHost) overviewProfilesHost.replaceChildren(profilesCard);
     root.replaceChildren(
-        collapsibleCard(profilesCard, "Local project profiles"),
+        ...(overviewProfilesHost ? [] : [profilesCard]),
         collapsibleCard(libraryCard, "Engineering Library", true),
         collapsibleCard(transfer, "Import Library"),
         collapsibleCard(backup, "Project Backup"),

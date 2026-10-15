@@ -33,11 +33,14 @@
             </p>
         </div>
 
+        <div class="header-context" aria-label="Current engineering context">
+            <div id="header-profile-summary" class="active-plc-summary">Profile: Default project</div>
         <div
             id="active-plc-summary"
             class="active-plc-summary"
         >
             Active PLC: not selected
+        </div>
         </div>
 
     </header>
@@ -175,43 +178,15 @@
                 </div>
 
 
-            </div>
-
-
-            <div class="card">
-                <h3>
-                    Engineering context
-                </h3>
-
-                <p class="hint">
-                    Select the TIA process and Active PLC in the PLC tab. HMI
-                    engineering and translations are available in the HMI tab.
-                    New PLC family selection is available only in Create PLC.
-                </p>
-            </div>
-
-        </section>
-
-
-        <section
-            class="tab-panel"
-            data-tab-panel="plc"
-        >
-
-            <div class="panel-header">
-                <div>
-                    <h2>
-                        PLC
-                    </h2>
-
-                    <p class="panel-description">
-                        Connect to TIA Portal V21, inspect PLC hardware, tags,
-                        program blocks and DB/UDT structures, or create a PLC.
-                    </p>
+                <div class="card overview-card">
+                    <div class="overview-label">Local project profile</div>
+                    <div id="overview-profile-name" class="overview-value">Default project</div>
                 </div>
             </div>
 
+            <div id="overview-profile-management"></div>
 
+            <div id="overview-tia-controls">
             <div class="card">
 
                 <div class="card-header">
@@ -257,41 +232,7 @@
             </div>
 
 
-            <div class="card">
-
-                <div class="card-header">
-                    <div>
-                        <h3>
-                            Project context
-                        </h3>
-
-                        <p class="hint">
-                            Project detected from the selected TIA Portal process.
-                        </p>
-                    </div>
-                </div>
-
-
-                <div class="form-grid">
-
-                    <div class="field-group">
-                        <label>
-                            TIA project:
-                        </label>
-
-                        <div
-                            id="tia-project-name"
-                            class="read-only-value"
-                        >
-                            Not connected
-                        </div>
-                    </div>
-
-
-                </div>
-
-            </div>
-
+            <span id="tia-project-name" hidden aria-hidden="true"></span>
 
             <div class="card">
 
@@ -299,7 +240,7 @@
 
                     <div>
                         <h3>
-                            Existing PLCs
+                            Choose Active PLC
                         </h3>
 
                         <p class="hint">
@@ -375,6 +316,40 @@
                     Active PLC: not selected
                 </p>
 
+            </div>
+            </div>
+
+            <div class="card">
+                <h3>
+                    Engineering context
+                </h3>
+
+                <p class="hint">
+                    Select the local profile and connect to TIA Portal above. Choose the
+                    Active PLC here before using UDT/DB and HMI tools.
+                    Changing profiles disconnects the TIA target; only Create PLC uses PLC family.
+                </p>
+            </div>
+
+        </section>
+
+
+        <section
+            class="tab-panel"
+            data-tab-panel="plc"
+        >
+
+            <div class="panel-header">
+                <div>
+                    <h2>
+                        PLC
+                    </h2>
+
+                    <p class="panel-description">
+                        Inspect the Active PLC hardware, tags,
+                        program blocks and DB/UDT structures, or create a PLC.
+                    </p>
+                </div>
             </div>
 
 
@@ -1127,87 +1102,9 @@
             </div>
 
 
-            <div class="card">
-
-                <div class="card-header">
-                    <div>
-                        <h3>
-                            Connection
-                        </h3>
-
-                        <p class="hint">
-                            Running TIA Portal V21 processes detected through Openness.
-                        </p>
-                    </div>
-
-                    <button
-                        id="tia-hmi-refresh-button"
-                        type="button"
-                    >
-                        Refresh TIA
-                    </button>
-                </div>
-
-
-                <div class="form-row">
-
-                    <label for="tia-hmi-process">
-                        TIA process:
-                    </label>
-
-                    <select id="tia-hmi-process">
-
-                        <option value="">
-                            Select TIA process
-                        </option>
-
-                    </select>
-
-                </div>
-                <p id="tia-hmi-connection-status" class="status-box tia-connection-status"
-                   role="status" aria-live="polite">
-                    Click Refresh TIA to detect available TIA Portal processes.
-                </p>
-
-            </div>
-
-
-            <div class="card">
-
-                <div class="card-header">
-                    <div>
-                        <h3>
-                            Project context
-                        </h3>
-
-                        <p class="hint">
-                            Project detected from the selected TIA Portal process.
-                        </p>
-                    </div>
-                </div>
-
-
-                <div class="form-grid">
-
-                    <div class="field-group">
-                        <label>
-                            TIA project:
-                        </label>
-
-                        <div
-                            id="tia-hmi-project-name"
-                            class="read-only-value"
-                        >
-                            Not connected
-                        </div>
-                    </div>
-
-
-                </div>
-
-            </div>
-
-
+            <p class="hint overview-navigation-hint">
+                TIA Portal connection and project selection are managed on Overview.
+            </p>
 
             <div class="card">
 

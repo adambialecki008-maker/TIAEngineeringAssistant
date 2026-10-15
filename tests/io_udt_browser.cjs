@@ -58,7 +58,7 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
   await page.goto(process.env.APP_URL||"http://127.0.0.1:8765/");
   // Process selector lives in the TIA Portal tab and is not actionable
   // while that panel is hidden by the I/O Engineering tab.
-  await page.locator('[data-tab="plc"]').click();
+  await page.locator('[data-tab="project"]').click();
   await page.locator("#tia-process option[value='123']").waitFor({state:"attached"});
   // Keep seeded Active PLC intact: the test does not simulate a real TIA
   // project-context refresh, and there is no Openness process behind the mock.
