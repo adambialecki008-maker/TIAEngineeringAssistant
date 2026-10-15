@@ -53,8 +53,7 @@ function targetIdentity() {
         !selected?.plc_name) throw Error("Select a TIA process and Active PLC first.");
     // The active TIA target, not the Create PLC family selector, identifies the source.
     return {process_id:String(process), device_name:selected.device_name,
-        plc_name:selected.plc_name, profile_id:getActiveProjectProfileId(),
-        plc_family:projectConfig.plc_family};
+        plc_name:selected.plc_name, profile_id:getActiveProjectProfileId()};
 }
 const sameTarget = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
@@ -62,9 +61,8 @@ export function initDbTiaImportUi(renderAll) {
     const scan = document.getElementById("tia-db-scan");
     const select = document.getElementById("tia-db-select");
     const load = document.getElementById("tia-db-load");
-    const mode = document.getElementById("tia-db-retain");
     const status = document.getElementById("tia-db-import-status");
-    if (!scan || !select || !load || !mode || !status) return;
+    if (!scan || !select || !load || !status) return;
 
     let available = [], udtInventory = [], scannedTarget = null, busy = false;
     function report(message, error = false) {
@@ -74,7 +72,7 @@ export function initDbTiaImportUi(renderAll) {
     }
     function requireSameTarget() {
         if (!scannedTarget || !sameTarget(scannedTarget, targetIdentity()))
-            throw Error("Active PLC, project profile or family changed. Scan DBs again.");
+            throw Error("Active PLC or project profile changed. Scan DBs again.");
     }
     scan.addEventListener("click", async () => {
         if (busy) return;
@@ -99,8 +97,7 @@ export function initDbTiaImportUi(renderAll) {
                 const option = document.createElement("option");
                 option.value = String(i);
                 option.textContent = available[i].name + " [" +
-                    (available[i].group_path || "root") + "] (DB" +
-                    available[i].number + ")";
+                    (available[i].group_path || "root") + "]";
                 select.append(option);
             }
             load.disabled = available.length === 0;
@@ -131,9 +128,7 @@ export function initDbTiaImportUi(renderAll) {
             if (detail.kind !== "db" || detail.name !== selected.name ||
                 detail.group_path !== (selected.group_path || ""))
                 throw Error("Exported TIA DB identity changed. Nothing imported.");
-            const retainChoice = mode.value === "retain" ? true :
-                mode.value === "nonretain" ? false : null;
-            const db = convertTiaDbDetail(detail, retainChoice);
+            const db = convertTiaDbDetail(detail);
             await postJson("/api/v1/db-specifications", db);
             requireSameTarget();
 

@@ -1,4 +1,4 @@
-import { projectConfig, saveProjectConfig } from "./state.js";
+import { projectConfig, saveProjectConfig, getActiveProjectProfileId } from "./state.js";
 import { getJson, postJson } from "./api.js";
 import { convertTiaUdtDetail } from "./udt_import_converter.js";
 
@@ -21,7 +21,7 @@ export function initUdtTiaImportUi(renderAll) {
             ||!target?.plc_name) throw Error("Select a TIA process and Active PLC first.");
         return {
             process_id:String(process), device_name:target.device_name,
-            plc_name:target.plc_name,
+            plc_name:target.plc_name, profile_id:getActiveProjectProfileId(),
         };
     }
     const identity=t=>JSON.stringify(t);
@@ -36,7 +36,7 @@ export function initUdtTiaImportUi(renderAll) {
             const target=activeTarget();
             const data=await getJson("/api/v1/tia/plc-structures?"+query(target));
             if(identity(target)!==identity(activeTarget()))
-                throw Error("Active PLC changed during scan. Scan again.");
+                throw Error("Active PLC or local project profile changed during scan. Scan again.");
             available=(data.udts||[]).filter(u=>u.name&&u.is_consistent===true);
             scannedTarget=target;
             for(let n=0;n<available.length;n++){
@@ -56,14 +56,14 @@ export function initUdtTiaImportUi(renderAll) {
         try{
             const active=activeTarget();
             if(identity(scannedTarget)!==identity(active))
-                throw Error("Active PLC changed. Scan UDTs again.");
+                throw Error("Active PLC or local project profile changed. Scan UDTs again.");
             const selected=available[Number(select.value)];
             if(!selected) throw Error("Select a TIA UDT.");
             const data=await getJson("/api/v1/tia/plc-structure?"+query(active,{
                 kind:"udt",group_path:selected.group_path||"",name:selected.name,
             }));
             if(identity(scannedTarget)!==identity(activeTarget()))
-                throw Error("Active PLC changed during export. Nothing imported.");
+                throw Error("Active PLC or local project profile changed during export. Nothing imported.");
             if(data.name!==selected.name || data.group_path!==(selected.group_path||""))
                 throw Error("Exported UDT identity changed. Nothing imported.");
             const result=convertTiaUdtDetail(data);

@@ -5,7 +5,7 @@ import {convertTiaUdtDetail} from "./udt_import_converter.js";
 const RETAIN = new Set(["retain", "true"]);
 const NON_RETAIN = new Set(["nonretain", "non_retain", "non-retain", "noretain", "false"]);
 
-export function convertTiaDbDetail(detail, retainChoice = null) {
+export function convertTiaDbDetail(detail) {
     if (!detail || detail.kind !== "db" || !detail.name ||
         !Array.isArray(detail.members) || !detail.members.length) {
         throw Error("TIA did not export usable DB declarations.");
@@ -17,8 +17,6 @@ export function convertTiaDbDetail(detail, retainChoice = null) {
             throw Error("Unsupported DB section " + (row.section || "(missing)") +
                 ". Only Static declarations of a global DB can be imported.");
     }
-    if (retainChoice !== null && typeof retainChoice !== "boolean")
-        throw Error("Retain choice must be explicit RETAIN or NON_RETAIN.");
     const flags = new Set();
     const sanitizedMembers = detail.members.map(row => {
         const metadata = {...(row.metadata || {})};
@@ -42,11 +40,10 @@ export function convertTiaDbDetail(detail, retainChoice = null) {
     if (flags.has(true) && flags.has(false))
         throw Error("Mixed RETAIN/NON_RETAIN declarations cannot be represented as a whole-DB setting.");
     const known = flags.has(true) ? true : flags.has(false) ? false : null;
-    if (known !== null && retainChoice !== null && known !== retainChoice)
-        throw Error("Selected RETAIN mode disagrees with exported TIA remanence.");
-    if ((known === null || flags.has(null)) && retainChoice === null)
-        throw Error("TIA XML does not establish whole-DB RETAIN. Select RETAIN or NON_RETAIN after checking TIA.");
+    if (known === null || flags.has(null)) {
+        throw Error("TIA XML does not clearly establish whole-DB retain settings. "
+            + "Import was blocked to avoid changing the original DB properties.");
+    }
     const parsed = convertTiaUdtDetail({...detail, kind:"udt", members:sanitizedMembers});
-    return {name:parsed.name, retain:known === null ? retainChoice : known,
-        members:parsed.fields};
+    return {name:parsed.name, retain:known, members:parsed.fields};
 }

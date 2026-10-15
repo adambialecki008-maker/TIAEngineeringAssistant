@@ -24,6 +24,7 @@ const item = (pathName, data_type, remanence = undefined) => ({
             data_blocks:[
                 {name:"DB_Station",number:12,group_path:"DBs",block_kind:"GlobalDB",is_consistent:true},
                 {name:"DB_UnknownRetain",number:13,group_path:"",block_kind:"GlobalDB",is_consistent:true},
+                {name:"DB_ExplicitNonRetain",number:17,group_path:"",block_kind:"GlobalDB",is_consistent:true},
                 {name:"DB_Missing",number:14,group_path:"",block_kind:"GlobalDB",is_consistent:true},
                 {name:"DB_Instance",number:15,group_path:"",block_kind:"InstanceDB",is_consistent:true},
                 {name:"DB_Inconsistent",number:16,group_path:"",block_kind:"GlobalDB",is_consistent:false},
@@ -41,6 +42,9 @@ const item = (pathName, data_type, remanence = undefined) => ({
             ]},
             DB_UnknownRetain: {kind:"db",name:"DB_UnknownRetain",group_path:"",members:[
                 item("Ready","Bool"),
+            ]},
+            DB_ExplicitNonRetain: {kind:"db",name:"DB_ExplicitNonRetain",group_path:"",members:[
+                item("Ready","Bool","NonRetain"),
             ]},
             DB_Missing: {kind:"db",name:"DB_Missing",group_path:"",members:[
                 item("Dependency",'"UDT_NotFound"',"NonRetain"),
@@ -84,8 +88,8 @@ const item = (pathName, data_type, remanence = undefined) => ({
         await page.locator('[data-tab="db"]').click();
         await page.locator("#tia-db-scan").click();
         await page.waitForFunction(() => document.querySelectorAll(
-            "#tia-db-select option").length === 3);
-        assert.equal(await page.locator("#tia-db-select option").count(), 3);
+            "#tia-db-select option").length === 4);
+        assert.equal(await page.locator("#tia-db-select option").count(), 4);
         await page.locator("#tia-db-select").selectOption("0");
         // A same-named local UDT with an incompatible structure is never reused.
         await page.evaluate(async () => {
@@ -125,18 +129,22 @@ const item = (pathName, data_type, remanence = undefined) => ({
         assert.match(await page.locator("#tia-db-import-status").textContent(), /already exists/);
         data = await read();
         assert.equal(data.dbs.length, 1);
-        await page.locator("#tia-db-select").selectOption({label:"DB_UnknownRetain [root] (DB13)"});
+        await page.locator("#tia-db-select").selectOption({label:"DB_UnknownRetain [root]"});
         await page.locator("#tia-db-load").click();
-        assert.match(await page.locator("#tia-db-import-status").textContent(),
-            /select retain or non_retain/i);
-        assert.equal((await read()).dbs.length, 1);
-        await page.locator("#tia-db-retain").selectOption("nonretain");
+        await page.waitForFunction(() => /does not clearly establish/i.test(
+            document.getElementById("tia-db-import-status").textContent));
+        assert.equal((await read()).dbs.length, 1,
+            "Unknown retain must not silently modify local project");
+        assert.equal(await page.locator("#tia-db-retain").count(), 0,
+            "DB import UI must match UDT import without a retain selector");
+
+        await page.locator("#tia-db-select").selectOption({label:"DB_ExplicitNonRetain [root]"});
         await page.locator("#tia-db-load").click();
         await page.waitForFunction(() => document.getElementById(
-            "tia-db-import-status").textContent.includes("DB_UnknownRetain imported"));
+            "tia-db-import-status").textContent.includes("DB_ExplicitNonRetain imported"));
         assert.equal((await read()).dbs[1].retain, false);
 
-        await page.locator("#tia-db-select").selectOption({label:"DB_Missing [root] (DB14)"});
+        await page.locator("#tia-db-select").selectOption({label:"DB_Missing [root]"});
         await page.locator("#tia-db-load").click();
         await page.waitForFunction(() => /missing.*UDT/i.test(
             document.getElementById("tia-db-import-status").textContent));

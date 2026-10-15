@@ -29,9 +29,10 @@ does not establish that any TIA XML was imported successfully.
 5. Select a DB referencing a nested UDT or `Array[lower..upper]` of UDT.
    Click **Import DB into editor**. Confirm the proposed dependency UDTs.
 6. Verify the local DB's member names, nesting, Array bounds, comments and
-   whole-DB `RETAIN` state match the TIA source. When XML does not explicitly
-   expose remanence, verify it in TIA before selecting RETAIN/NON_RETAIN.
-   Unsupported mixed retentivity must be rejected.
+   whole-DB `RETAIN` state match the TIA source. The import screen has no
+   manual retentivity override: if XML omits or ambiguously reports this
+   property, the import is blocked rather than guessing. Unsupported mixed
+   retentivity must be rejected.
 7. Reload the browser. Confirm objects persisted only in the selected local
    profile. Repeat the import and confirm the existing local DB is not
    overwritten. Verify TIA XML and project contents are **unchanged**.

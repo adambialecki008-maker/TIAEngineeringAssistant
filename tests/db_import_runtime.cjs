@@ -37,26 +37,18 @@ run("RETTAIN with nested Struct, Array and UDT references", () => {
 run("explicit NON_RETAIN", () => {
     assert.equal(convert(detail([row("Ready", "Bool", "NonRetain")])).retain, false);
 });
-run("missing XML retain must be confirmed manually", () => {
+run("unknown retain is blocked without guessing", () => {
     const source = detail([row("Ready", "Bool")]);
-    assert.throws(() => convert(source), /select retain or non_retain/i);
-    assert.equal(convert(source, false).retain, false);
-    assert.equal(convert(source, true).retain, true);
-});
-run("explicit XML conflict cannot be silently overridden", () => {
-    assert.throws(() => convert(detail([row("Ready", "Bool", "Retain")]), false),
-        /disagrees/i);
+    assert.throws(() => convert(source), /does not clearly establish/i);
 });
 run("mixed member remanence is blocked", () => {
     assert.throws(() => convert(detail([
         row("A", "Bool", "Retain"), row("B", "Bool", "NonRetain"),
     ])), /mixed/i);
 });
-run("mixed explicit and unknown metadata requires confirmation", () => {
+run("mixed explicit and unknown metadata is rejected", () => {
     const source = detail([row("A", "Bool", "Retain"), row("B", "Bool")]);
-    assert.throws(() => convert(source), /select retain or non_retain/i);
-    assert.equal(convert(source, true).retain, true);
-    assert.throws(() => convert(source, false), /disagrees/i);
+    assert.throws(() => convert(source), /does not clearly establish/i);
 });
 run("unsafe DB sections are rejected", () => {
     assert.throws(() => convert(detail([row("In", "Bool", "Retain", "Input")])),
