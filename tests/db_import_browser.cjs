@@ -86,8 +86,7 @@ const item = (pathName, data_type, remanence = undefined) => ({
         await page.waitForFunction(() => document.querySelectorAll(
             "#tia-db-select option").length === 3);
         assert.equal(await page.locator("#tia-db-select option").count(), 3);
-        await page.locator("#tia-db-select").selectOption({label:/DB_Station/.source})
-            .catch(async () => page.locator("#tia-db-select").selectOption("0"));
+        await page.locator("#tia-db-select").selectOption("0");
         await page.locator("#tia-db-load").click();
         await page.waitForFunction(() => document.getElementById(
             "tia-db-import-status").textContent.includes("imported into the local editor"));
