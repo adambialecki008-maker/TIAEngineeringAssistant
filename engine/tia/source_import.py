@@ -266,7 +266,7 @@ def _db_retain_comparison(spec, members) -> dict | None:
                 + ". No overwrite."}
     if unknowns:
         return {"status": "unknown", "reason":
-                "Exported TIA XML does not explicitly confirm Retain: "
+                "Exported TIA XML does not explicitly confirm Remanence=Retain: "
                 + ", ".join(unknowns) + ". Manual verification required; no overwrite."}
 
     for row in members:

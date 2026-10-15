@@ -132,16 +132,14 @@ def test_variable_options_exist_in_shared_editors_and_persist_with_config():
     member = (base / "member-editor.js").read_text(encoding="utf-8")
     db = (base / "db.js").read_text(encoding="utf-8")
     assert 'prefix + "-start-value"' in member
-    assert 'function optionalBooleanCheckbox(' in member
+    assert 'function tableFlagCell(' in member
     assert 'box.type = "checkbox";' in member
-    assert 'box.indeterminate = next === null;' in member
-    for option, flag in (
-        ("hmi_visible", "visibleFlag"),
-        ("hmi_accessible", "accessibleFlag"),
-        ("hmi_writable", "writableFlag"),
-    ):
-        assert option + ": " + flag + ".value()" in member
+    assert 'box.indeterminate = raw == null && inherited == null;' in member
+    for option in ("hmi_visible", "hmi_accessible", "hmi_writable"):
+        assert f'"{option}"' in member
+        assert "member?." + option + " ?? null" in member
     assert "optionalBooleanSelect" not in member
+    assert "optionalBooleanCheckbox" not in member
     assert "saveProjectConfig()" in db
     assert 'db.retain = retainInput.checked' in db
     assert 'retainDefault: db.retain === true' in db
