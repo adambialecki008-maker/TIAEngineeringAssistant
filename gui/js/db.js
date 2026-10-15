@@ -342,34 +342,43 @@ export function renderDbs(
             retainInput.addEventListener("change", () => {
                 db.retain = retainInput.checked;
                 saveProjectConfig();
+                refresh();
             });
             retainLabel.append(
                 retainInput,
-                document.createTextNode(" RETAIN entire DB (otherwise NON_RETAIN)")
+                document.createTextNode(" Default Retain for new/inherited Static declarations")
             );
             content.appendChild(retainLabel);
 
             const retainNote = document.createElement("p");
             retainNote.className = "hint";
-            retainNote.textContent = "Currently RETAIN applies to the whole DB, "
-                + "not individual array elements. Verify CPU retentive memory "
-                + "and inspect the resulting DB in TIA after import.";
+            retainNote.textContent = "Set Retain for each Static variable in the table. "
+                + "Blank/inherited uses the DB default above; a STRUCT or UDT "
+                + "retains its whole value. Individual array elements cannot override Retain.";
             content.appendChild(retainNote);
 
-            content.appendChild(
-                createMemberTree({
-                    prefix: "db-member-" + dbIndex,
-                    members: db.members,
-                    ownerUdtName: null,
-                    openPaths: expandedPaths,
-                    onChange: (next) => {
-                        db.members = next;
-                        saveProjectConfig();
-                        refresh();
-                        return true;
-                    },
-                })
-            );
+            // Global DBs contain Static declarations, not FB Input/Output/InOut.
+            const staticSection = document.createElement("details");
+            staticSection.className = "member-declaration-section";
+            staticSection.open = true;
+            const staticSummary = document.createElement("summary");
+            staticSummary.textContent = "Static (" + db.members.length + " variables)";
+            staticSection.appendChild(staticSummary);
+            staticSection.appendChild(createMemberTree({
+                prefix: "db-member-" + dbIndex,
+                members: db.members,
+                ownerUdtName: null,
+                openPaths: expandedPaths,
+                isDb: true,
+                retainDefault: db.retain === true,
+                onChange: (next) => {
+                    db.members = next;
+                    saveProjectConfig();
+                    refresh();
+                    return true;
+                },
+            }));
+            content.appendChild(staticSection);
 
 
             const bottomActions =

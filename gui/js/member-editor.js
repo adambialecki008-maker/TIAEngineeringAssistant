@@ -357,6 +357,7 @@ export function createMemberEditor({
             hmi_visible: member?.hmi_visible ?? null,
             hmi_accessible: member?.hmi_accessible ?? null,
             hmi_writable: member?.hmi_writable ?? null,
+            retain: member?.retain ?? null,
             array_element_type: null,
             array_lower_bound: null,
             array_upper_bound: null,

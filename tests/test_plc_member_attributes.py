@@ -144,6 +144,10 @@ def test_variable_options_exist_in_shared_editors_and_persist_with_config():
     assert "optionalBooleanSelect" not in member
     assert "saveProjectConfig()" in db
     assert 'db.retain = retainInput.checked' in db
+    assert 'retainDefault: db.retain === true' in db
+    assert 'isDb: true' in db
+    assert 'member-attribute-checkbox' in member
+    assert 'tableFlagCell' in member
     generator = (Path(__file__).resolve().parents[1] / "functions"
                  / "tia_source_generator.py").read_text(encoding="utf-8")
     assert 'lines.append("VAR RETAIN")' in generator

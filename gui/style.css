@@ -2797,3 +2797,51 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .member-flag-reset { padding: 2px 7px; font-size: 11px; }
 .member-flag-reset[hidden] { display: none; }
 
+
+/* V21-inspired global DB Static declaration table, shared with UDT. */
+.member-declaration-section {
+    margin: 12px 0;
+    border: 1px solid var(--ui-border, #365268);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.member-declaration-section > summary {
+    cursor: pointer;
+    padding: 10px 12px;
+    font-weight: 600;
+    background: var(--ui-surface-raised, #202e39);
+}
+.member-declaration-section > .member-tree {
+    padding: 8px 10px 12px;
+    overflow-x: auto;
+}
+.member-tree {
+    overflow-x: auto;
+}
+.member-tree-table {
+    width: 100%;
+    min-width: 1110px;
+    border-collapse: collapse;
+}
+.member-attribute-cell {
+    text-align: center;
+    min-width: 84px;
+}
+.member-attribute-cell input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #69b9ff;
+    cursor: pointer;
+}
+.member-attribute-cell input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+.member-tree-table th {
+    font-size: 12px;
+    white-space: normal;
+    min-width: 75px;
+}
+.member-tree-table td {
+    vertical-align: middle;
+}
