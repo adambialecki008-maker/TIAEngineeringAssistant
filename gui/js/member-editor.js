@@ -493,10 +493,46 @@ export function createMemberTree({
         table.className = "member-tree-table";
         const head = document.createElement("thead");
         head.innerHTML = "<tr><th>Name</th><th>Data type</th>"
-            + "<th>Comment</th><th>Actions</th></tr>";
+            + "<th>Comment</th><th>Select / actions</th></tr>";
         table.appendChild(head);
         const body = document.createElement("tbody");
         table.appendChild(body);
+
+        // Select individual members with checkboxes; unsafe commands are only
+        // offered for explicitly selected rows (same behavior for UDT and DB).
+        const selectedPaths = new Set();
+        const checkboxes = new Map();
+        const actionsByPath = new Map();
+        const selectionToolbar = document.createElement("div");
+        selectionToolbar.className = "member-selection-toolbar";
+        const selectionInfo = document.createElement("span");
+        selectionInfo.className = "hint";
+        const bulkDelete = createButton("Delete selected", () => {
+            if (!selectedPaths.size) return;
+            const names = [...selectedPaths].map(index => list[index]?.name)
+                .filter(Boolean);
+            if (!confirm("Delete " + names.length + " selected member(s): "
+                + names.join(", ") + "?")) return;
+            mutate(path, target => {
+                const indices = [...selectedPaths].sort((a, b) => b - a);
+                for (const index of indices) target.splice(index, 1);
+            });
+        });
+        bulkDelete.className = "member-delete-selected";
+        const clearSelection = createButton("Clear selection", () => {
+            for (const checkbox of checkboxes.values()) checkbox.checked = false;
+            selectedPaths.clear();
+            syncSelection();
+        });
+        function syncSelection() {
+            selectionInfo.textContent = selectedPaths.size + " selected";
+            bulkDelete.disabled = selectedPaths.size === 0;
+            clearSelection.disabled = selectedPaths.size === 0;
+            for (const [index, buttons] of actionsByPath) {
+                buttons.hidden = !selectedPaths.has(index);
+            }
+        }
+        selectionToolbar.append(selectionInfo, bulkDelete, clearSelection);
 
         list.forEach((member, index) => {
             const memberPath = [...path, index];
@@ -513,14 +549,14 @@ export function createMemberTree({
 
             let expanded = false;
             let dirty = false;
-            const toggle = createButton("+", () => {
+            const toggle = createButton("▸", () => {
                 if (expanded) closeEditor(true);
                 else openEditor();
             });
             toggle.className = "member-tree-toggle";
             toggle.dataset.memberPath = memberKey;
             toggle.setAttribute("aria-expanded", "false");
-            toggle.setAttribute("aria-label", "Expand editor for " + member.name);
+            toggle.setAttribute("aria-label", "Expand details for " + member.name);
             nameCell.prepend(toggle, document.createTextNode(" "));
             editCell.addEventListener("input", () => { dirty = true; });
             editCell.addEventListener("change", () => { dirty = true; });
@@ -534,9 +570,9 @@ export function createMemberTree({
                 editCell.replaceChildren();
                 expanded = false;
                 dirty = false;
-                toggle.textContent = "+";
+                toggle.textContent = "▸";
                 toggle.setAttribute("aria-expanded", "false");
-                toggle.setAttribute("aria-label", "Expand editor for " + member.name);
+                toggle.setAttribute("aria-label", "Expand details for " + member.name);
                 if (activeClose === closeEditor) activeClose = null;
                 return true;
             }
@@ -574,9 +610,9 @@ export function createMemberTree({
                     },
                     onCancel: () => closeEditor(false),
                 }));
-                toggle.textContent = "−";
+                toggle.textContent = "▾";
                 toggle.setAttribute("aria-expanded", "true");
-                toggle.setAttribute("aria-label", "Collapse editor for " + member.name);
+                toggle.setAttribute("aria-label", "Collapse details for " + member.name);
                 row.after(editRow);
             }
 
@@ -587,7 +623,22 @@ export function createMemberTree({
             );
             const actions = document.createElement("td");
             actions.className = "member-tree-actions";
-            actions.appendChild(createButton("Delete", () => {
+            const check = document.createElement("input");
+            check.type = "checkbox";
+            check.className = "member-row-checkbox";
+            check.setAttribute("aria-label", "Select " + member.name);
+            check.checked = false;
+            check.addEventListener("change", () => {
+                if (check.checked) selectedPaths.add(index);
+                else selectedPaths.delete(index);
+                syncSelection();
+            });
+            checkboxes.set(index, check);
+            const rowCommands = document.createElement("span");
+            rowCommands.className = "member-row-commands";
+            rowCommands.hidden = true;
+            actionsByPath.set(index, rowCommands);
+            rowCommands.appendChild(createButton("Delete", () => {
                 if (!confirm('Delete member "' + member.name + '"?')) return;
                 mutate(path, (target) => target.splice(index, 1));
             }));
@@ -596,18 +647,20 @@ export function createMemberTree({
                     [target[index], target[index - 1]];
             }));
             up.disabled = index === 0;
-            actions.appendChild(up);
+            rowCommands.appendChild(up);
             const down = createButton("Move down", () => mutate(path, (target) => {
                 [target[index + 1], target[index]] =
                     [target[index], target[index + 1]];
             }));
             down.disabled = index === list.length - 1;
-            actions.appendChild(down);
+            rowCommands.appendChild(down);
+            actions.append(check, rowCommands);
             row.appendChild(actions);
             body.appendChild(row);
             if (openPaths?.has(memberKey)) openEditor();
         });
-        host.appendChild(table);
+        host.append(table, selectionToolbar);
+        syncSelection();
         const addArea = document.createElement("div");
         addArea.className = "member-add-area";
         addArea.hidden = true;
