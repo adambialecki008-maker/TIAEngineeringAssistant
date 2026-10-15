@@ -200,6 +200,9 @@ jobs:
       - name: Verify unified Overview profile, TIA and Active PLC context
         run: node tests/overview_context_browser.cjs
 
+      - name: Download dependency-ordered offline SCL ZIP from GUI
+        run: node tests/scl_bundle_browser.cjs
+
       - name: Upload Playwright evidence on failure
         if: failure()
         uses: actions/upload-artifact@v7
