@@ -60,15 +60,26 @@ export function describeSourceImport(item) {
         if (/Inconsistent blocks and PLC data types \(UDT\) cannot be exported/i
             .test(rawReason)) {
             return {...common,
-                problem: "TIA nie może wyeksportować " + what + ".",
-                cause: "Siemens TIA Portal zgłasza niespójność bloku lub "
-                    + "typu danych PLC (UDT). Eksport nie został wykonany, "
-                    + "więc nie można porównać struktury ani atrybutów tego obiektu.",
-                action: "Sprawdź diagnostykę i spójność " + what
-                    + " oraz używanych przez niego UDT. Skompiluj wymagane "
-                    + "bloki i typy, usuń zgłoszone błędy i ponownie uruchom "
-                    + "Check target. Preflight nie wskazuje, który z tych "
-                    + "obiektów jest źródłem niespójności.",
+                problem: "Nie można zweryfikować " + what
+                    + " — TIA odrzucił eksport XML.",
+                cause: "TIA Openness zgłasza niespójność bloku lub typu danych "
+                    + "PLC (UDT). Nie oznacza to automatycznie błędu kompilacji. "
+                    + "Bez eksportu XML preflight nie może wskazać, czy różnią się "
+                    + "deklaracje, wartości czy atrybuty HMI.",
+                checklist: true,
+                issueLines: [
+                    "Deklaracje DB i powiązanego UDT (także pól zagnieżdżonych).",
+                    "Visible in HMI.",
+                    "Accessible from HMI/OPC UA.",
+                    "Writable from HMI/OPC UA.",
+                    "Retain i Start values.",
+                ],
+                action: "Porównaj powyższe ustawienia tych samych pól w aplikacji "
+                    + "i TIA Portal. W edytorze aplikacji 'TIA default' oznacza "
+                    + "brak jawnego ustawienia, a nie automatycznie FALSE. "
+                    + "Jeśli ustawienia są zgodne, sprawdź diagnostykę spójności "
+                    + "DB i referencyjnych UDT w TIA i ponów Check target. "
+                    + "Żaden istniejący obiekt nie zostanie nadpisany.",
             };
         }
         return {...common,

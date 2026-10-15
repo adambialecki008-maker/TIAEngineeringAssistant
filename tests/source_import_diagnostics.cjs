@@ -19,8 +19,15 @@ const source = fs.readFileSync(
     const inconsistent = describeSourceImport({...base, reason:raw});
     assert.match(inconsistent.problem, /DB_Motors2/);
     assert.match(inconsistent.cause, /niespójność bloku lub typu danych PLC/);
-    assert.match(inconsistent.action, /skompiluj/i);
-    assert.match(inconsistent.action, /nie wskazuje, który/);
+    assert.match(inconsistent.cause, /Nie oznacza to automatycznie błędu kompilacji/);
+    assert.equal(inconsistent.checklist, true);
+    for (const name of ["Visible in HMI", "Accessible from HMI/OPC UA",
+        "Writable from HMI/OPC UA", "Retain", "Start values"]) {
+        assert.ok(inconsistent.issueLines.some(item => item.includes(name)), name);
+    }
+    assert.match(inconsistent.action, /Porównaj powyższe ustawienia/);
+    assert.match(inconsistent.action, /TIA default/);
+    assert.doesNotMatch(inconsistent.action, /Skompiluj wymagane/i);
     assert.ok(!inconsistent.cause.includes("EngineeringTargetInvocationException"));
     assert.equal(inconsistent.technical,raw);
 
@@ -29,6 +36,8 @@ const source = fs.readFileSync(
     assert.match(generic.problem, /DB_Motors2/);
     assert.match(generic.cause, /odrzucił eksport/);
     assert.match(generic.technical, /Timeout/);
+    assert.equal(generic.issueLines.length, 0);
+    assert.equal(generic.checklist, undefined);
     const retain = describeSourceImport({...base, reason:
         'DB member declarations match, but exported TIA XML does not explicitly confirm Remanence=Retain for Motors.'});
     assert.match(retain.problem, /RETAIN/);

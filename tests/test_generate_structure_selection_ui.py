@@ -81,6 +81,8 @@ def test_preflight_diagnosis_shows_problem_action_and_collapses_stack_trace():
     assert 'paragraph("Problem", diagnosis.problem);' in SOURCE_UI
     assert 'paragraph("Przyczyna", diagnosis.cause);' in SOURCE_UI
     assert 'paragraph("Co zrobić", diagnosis.action);' in SOURCE_UI
+    assert 'if (diagnosis.checklist)' in SOURCE_UI
+    assert 'lista kontrolna, nie potwierdzone różnice' in SOURCE_UI
     assert 'technicalSummary.textContent = "Szczegóły techniczne (TIA / Openness)";' in SOURCE_UI
     assert 'pre.textContent = diagnosis.technical;' in SOURCE_UI
     assert "d.cause" in SOURCE_UI  # CSV includes readable root cause

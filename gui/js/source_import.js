@@ -201,6 +201,12 @@ export function initSourceImportUi() {
         paragraph("Problem", diagnosis.problem);
         paragraph("Przyczyna", diagnosis.cause);
         if (diagnosis.issueLines.length) {
+            if (diagnosis.checklist) {
+                const caption = document.createElement("p");
+                caption.className = "source-import-checklist-caption";
+                caption.textContent = "Co porównać (lista kontrolna, nie potwierdzone różnice):";
+                body.appendChild(caption);
+            }
             const list = document.createElement("ul");
             list.className = "source-import-diagnostic-issues";
             for (const issue of diagnosis.issueLines) {
