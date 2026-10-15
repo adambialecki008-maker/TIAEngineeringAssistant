@@ -40,6 +40,24 @@ function element(tag, text = "") {
     return node;
 }
 
+// Keep all existing controls mounted when a section is closed: their state,
+// event handlers and IndexedDB operations must not be re-initialized.
+function collapsibleCard(card, title, initiallyOpen = false) {
+    const panel = document.createElement("details");
+    panel.className = "card";
+    panel.open = initiallyOpen;
+    const heading = card.querySelector(":scope > h3");
+    if (heading) heading.remove();
+    card.classList.remove("card");
+    const summary = element("summary", title);
+    summary.style.cursor = "pointer";
+    summary.style.fontWeight = "600";
+    summary.style.fontSize = "1.1rem";
+    summary.style.padding = "0.2rem 0";
+    panel.append(summary, card);
+    return panel;
+}
+
 function actionButton(label, handler, primary = false) {
     const node = element("button", label);
     node.type = "button";
@@ -1464,7 +1482,13 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         snapshotDetails,
     );
 
-    root.replaceChildren(profilesCard, libraryCard, transfer, backup, recovery);
+    root.replaceChildren(
+        collapsibleCard(profilesCard, "Local project profiles"),
+        collapsibleCard(libraryCard, "Engineering Library", true),
+        collapsibleCard(transfer, "Import Library"),
+        collapsibleCard(backup, "Project Backup"),
+        collapsibleCard(recovery, "Recovery snapshots"),
+    );
     // Open IndexedDB and read its initial content in sequence. This avoids a
     // cold-start race with the category controls in app.js.
     const ready = (async () => {
