@@ -48,29 +48,11 @@ function createCategorySelect(udt, refresh) {
 }
 
 
-function requirePlc() {
-    if (!projectConfig.plc_family) {
-        alert(
-            "Select PLC family first."
-        );
-
-        return false;
-    }
-
-    return true;
-}
-
-
 export function addUdt(
     nameInput,
     categoryInput,
     refresh
 ) {
-    if (!requirePlc()) {
-        return;
-    }
-
-
     const name =
         nameInput.value.trim();
 
