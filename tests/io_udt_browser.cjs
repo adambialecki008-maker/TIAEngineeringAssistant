@@ -93,6 +93,12 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
   assert.equal(after.device_config.mappings.length,1);
   assert.equal(after.device_config.mappings[0].start_channel_key,
     before.device_config.mappings[0].start_channel_key);
+  // The UDT read must remain valid without selecting a Create PLC family.
+  await page.evaluate(async () => {
+    const {projectConfig,saveProjectConfig} = await import("/gui/js/state.js");
+    projectConfig.plc_family = "";
+    saveProjectConfig();
+  });
   await page.locator('[data-tab="udt"]').click();
   await page.locator("#tia-udt-scan").click();
   await page.locator("#tia-udt-load:not([disabled])").waitFor();
