@@ -22,7 +22,7 @@ does not establish that any TIA XML was imported successfully.
 ## A. Read DB and UDT into the local editor (no TIA write)
 
 1. Start the backend and connect to the open test TIA process.
-2. Select the intended **Active PLC** and matching PLC family.
+2. On **Overview**, select the TIA process and the intended **Active PLC**. No PLC family selection is required for UDT/DB work.
 3. In the UDT tab, use **Read UDT list from TIA** and import one UDT.
 4. In the DB tab, use **Read DB list from TIA**. Only consistent **GlobalDB**
    records are eligible; InstanceDB and inconsistent blocks are excluded.
