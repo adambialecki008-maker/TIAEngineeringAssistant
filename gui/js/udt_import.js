@@ -57,8 +57,6 @@ export function initUdtTiaImportUi(renderAll) {
             const active=activeTarget();
             if(identity(scannedTarget)!==identity(active))
                 throw Error("Active PLC changed. Scan UDTs again.");
-            if(!projectConfig.plc_family)
-                throw Error("Select the matching PLC family before importing UDTs.");
             const selected=available[Number(select.value)];
             if(!selected) throw Error("Select a TIA UDT.");
             const data=await getJson("/api/v1/tia/plc-structure?"+query(active,{
