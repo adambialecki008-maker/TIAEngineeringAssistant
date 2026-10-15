@@ -35,9 +35,9 @@ const test=(name,fn)=>{fn(); executed++;console.log("PASS "+name);};
 test("device major order: Run/Stop/Reset for each device",()=>{
     const p=allocate(basics());
     assert.equal(p.errors.length,0);
-    assert.deepEqual(p.rows.map(x=>x.tag_name),["Run_Motor1","Stop_Motor1","Reset_Motor1",
+    assert.deepEqual(Array.from(p.rows, x=>x.tag_name),["Run_Motor1","Stop_Motor1","Reset_Motor1",
         "Run_Motor2","Stop_Motor2","Reset_Motor2"]);
-    assert.deepEqual(p.rows.map(x=>x.logical_address),
+    assert.deepEqual(Array.from(p.rows, x=>x.logical_address),
         ["%I386.0","%I386.1","%I386.2","%I386.3","%I386.4","%I386.5"]);
 });
 test("one template instance",()=>{const p=allocate(basics({groups:[group("Motor",1)]}));
@@ -87,7 +87,7 @@ test("interleaved DI/DO signals use separate manual anchors and streams",()=>{
  x.mappings.push({group_id:"Motor",signal_id:"@lane:Output:1",
  start_channel_key:key(ch(3200,{io:"Output",mod:"DO1"}))});
  const p=allocate(x);assert.equal(p.errors.length,0);
- assert.deepEqual(p.rows.map(r=>r.tag_name),["Run_Motor1","Stop_Motor1",
+ assert.deepEqual(Array.from(p.rows, r=>r.tag_name),["Run_Motor1","Stop_Motor1",
  "Run_Motor2","Stop_Motor2","Enable_Motor1","Reset_Motor1",
  "Enable_Motor2","Reset_Motor2"]);
 });
@@ -108,7 +108,7 @@ test("non-boolean signals must match physical width, including 16/32 bits",()=>{
  x.mappings=[{group_id:"Motor",signal_id:"@lane:Input:16",
  start_channel_key:key(ch(3072,{width:16}))}];
  const p=allocate(x);assert.equal(p.errors.length,0);
- assert.deepEqual(p.rows.map(r=>r.logical_address),["%IW384","%IW386"]);
+ assert.deepEqual(Array.from(p.rows, r=>r.logical_address),["%IW384","%IW386"]);
 });
 test("reject safety channel width mismatch instead of treating it as ordinary DI",()=>{
  const x=basics();x.channels=Array.from({length:8},(_,i)=>ch(3088+i,{width:8}));
