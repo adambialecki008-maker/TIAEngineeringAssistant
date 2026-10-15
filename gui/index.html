@@ -2313,6 +2313,34 @@
 
             </div>
 
+            <div class="card">
+                <h3>Import DB from TIA (read-only)</h3>
+                <p class="hint">
+                    Read a consistent global DB from the Active PLC into the local
+                    editor. Referenced UDTs are fetched automatically when missing
+                    locally. Instance DBs and unsupported definitions are blocked.
+                    Nothing is written back to TIA Portal.
+                </p>
+                <div class="form-row">
+                    <button type="button" id="tia-db-scan">Read DB list from TIA</button>
+                    <label for="tia-db-select">TIA DB:</label>
+                    <select id="tia-db-select" aria-label="Global DB from active PLC"></select>
+                    <label for="tia-db-retain">Whole DB retain:</label>
+                    <select id="tia-db-retain">
+                        <option value="auto">Detect from TIA XML (recommended)</option>
+                        <option value="retain">RETAIN — manually verified in TIA</option>
+                        <option value="nonretain">NON_RETAIN — manually verified in TIA</option>
+                    </select>
+                    <button type="button" id="tia-db-load" disabled>Import DB into editor</button>
+                </div>
+                <p class="hint">If XML does not explicitly report remanence,
+                    verify the DB in TIA and select RETAIN or NON_RETAIN.
+                    Mixed per-member retentivity is not supported.</p>
+                <p id="tia-db-import-status" class="status-box">
+                    Select an Active PLC in TIA Portal, then read available global DBs.
+                </p>
+            </div>
+
         </section>
 
 
