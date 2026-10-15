@@ -22,27 +22,38 @@ function normalizeProfileName(value) {
     return name;
 }
 function initializeProjectProfiles() {
-    let profiles = null;
-    try { profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "null"); }
-    catch { /* do not erase the legacy project */ }
-    if (!Array.isArray(profiles) || !profiles.some(p => p?.id === DEFAULT_PROFILE)) {
-        profiles = [{id: DEFAULT_PROFILE, name: "Default project"}];
-        // First copy the old project to its own profile. Do not remove
-        // or overwrite the legacy key (emergency recovery).
-        if (localStorage.getItem(PROFILE_PREFIX + DEFAULT_PROFILE) === null) {
-            const legacy = localStorage.getItem(STORAGE_KEY);
-            if (legacy !== null && localStorage.getItem(LEGACY_BACKUP_KEY) === null)
-                localStorage.setItem(LEGACY_BACKUP_KEY, legacy);
-            localStorage.setItem(PROFILE_PREFIX + DEFAULT_PROFILE,
-                legacy || JSON.stringify(emptyProject()));
+    // localStorage is not transactional. Migration therefore writes the
+    // recoverable Default payload before exposing it in the profile index.
+    const rawIndex = localStorage.getItem(PROFILES_KEY);
+    let profiles = [];
+    if (rawIndex !== null) {
+        try { profiles = JSON.parse(rawIndex); }
+        catch { throw Error("Project profile index is corrupt. Restore the index from a backup; no profiles were overwritten."); }
+        if (!Array.isArray(profiles) || profiles.some(entry =>
+            !entry || typeof entry.id !== "string" || !entry.id ||
+            typeof entry.name !== "string" || !entry.name.trim()) ||
+            new Set(profiles.map(entry => entry.id)).size !== profiles.length) {
+            throw Error("Project profile index is invalid. No profile data was changed.");
         }
+    }
+
+    // An interrupted migration may have written the index but not the
+    // Default payload, or may have created the payload before the index.
+    // Repair either case without dropping unrelated user-created profiles.
+    if (localStorage.getItem(PROFILE_PREFIX + DEFAULT_PROFILE) === null) {
+        const legacy = localStorage.getItem(STORAGE_KEY);
+        if (legacy !== null && localStorage.getItem(LEGACY_BACKUP_KEY) === null)
+            localStorage.setItem(LEGACY_BACKUP_KEY, legacy);
+        localStorage.setItem(PROFILE_PREFIX + DEFAULT_PROFILE,
+            legacy !== null ? legacy : JSON.stringify(emptyProject()));
+    }
+    if (!profiles.some(profile => profile.id === DEFAULT_PROFILE)) {
+        profiles = [{id: DEFAULT_PROFILE, name: "Default project"}, ...profiles];
         localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
-        localStorage.setItem(ACTIVE_PROFILE_KEY, DEFAULT_PROFILE);
     }
     const active = localStorage.getItem(ACTIVE_PROFILE_KEY);
-    if (!profiles.some(p => p.id === active)) {
+    if (!profiles.some(profile => profile.id === active))
         localStorage.setItem(ACTIVE_PROFILE_KEY, DEFAULT_PROFILE);
-    }
     return profiles;
 }
 export function listProjectProfiles() {
