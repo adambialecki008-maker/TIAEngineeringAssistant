@@ -207,7 +207,7 @@ def test_reviewed_xml_distinguishes_verified_import_from_followup_scan_failure()
     assert 'completed?.state === "verified_refresh_failed"' in queue
     assert 'completed?.state === "prewrite_rejected"' in queue
     assert 'hmiReviewQueueBlockedLists.add(reviewListName)' in queue
-    assert 'const refreshed = await scanHmiTextLists()' in queue
+    assert 'refreshed = await scanHmiTextLists()' in queue
     assert 'completed?.detail' in queue
     # The shared review queue chooses the format dynamically: Project texts
     # are XLSX, Text lists are XML. Verify that a confirmed import followed

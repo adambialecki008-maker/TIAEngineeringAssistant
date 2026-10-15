@@ -260,13 +260,14 @@ def test_review_mode_can_switch_an_active_review_queue_to_automatic():
     listener = JS.split('hmiReviewEachBatch?.addEventListener("change", () => {', 1)[1].split(
         'const changeHmiScope', 1
     )[0]
-    assert 'hmiReviewQueueAutoContinue = true;' in listener
-    assert 'void approveReviewedHmiQueueBatch({automatic: true});' in listener
-    assert 'current safe operation will finish' in listener
+    # The listener and completion paths share one boundary. Actual asynchronous
+    # behavior, importers and buttons are exercised by the runtime suite.
+    assert 'hmiReviewQueueAutoContinue = !hmiReviewEachBatch.checked;' in listener
+    assert 'void continueReviewedQueueAutomatically();' in listener
     queue = JS.split('async function prepareNextReviewedHmiBatch()', 1)[1].split(
         'async function approveReviewedHmiQueueBatch()', 1
     )[0]
-    assert 'await approveReviewedHmiQueueBatch({automatic: true});' in queue
+    assert 'await continueReviewedQueueAutomatically();' in queue
     approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
@@ -274,7 +275,9 @@ def test_review_mode_can_switch_an_active_review_queue_to_automatic():
     continuation = JS.split('async function continueReviewedQueueAutomatically()', 1)[1].split(
         'async function skipReviewedHmiQueueBatch()', 1
     )[0]
-    assert 'confirmed: true, preserveRunReport: true, carriedVerified: verified,' in continuation
+    assert 'await approveReviewedHmiQueueBatch({automatic: true});' in continuation
+    assert 'await prepareNextReviewedHmiBatch();' in continuation
+    assert 'await translateAllSelectedHmi(' not in continuation
     assert 'if (hmiReviewQueuePaused)' in continuation
     assert 'if (!automatic && !confirm(' in JS
 
@@ -503,6 +506,9 @@ def test_review_queue_does_not_exhaust_xlsx_after_fully_rejected_qa_batch():
     queue = JS.split("async function prepareNextReviewedHmiBatch()", 1)[1].split(
         "async function approveReviewedHmiQueueBatch()", 1
     )[0]
+    boundary = JS.split("async function continueReviewedQueueAutomatically()", 1)[1].split(
+        "async function skipReviewedHmiQueueBatch()", 1
+    )[0]
     script = r"""
 const assert = require("node:assert/strict");
 let hmiReviewQueueActive = true, hmiReviewQueuePending = false;
@@ -536,7 +542,8 @@ async function translateSelectedHmi() {
     return true;  // A later eligible group is safe.
 }
 async function prepareHmiTextList() {throw Error("Unexpected XML preparation");}
-async function prepareNextReviewedHmiBatch()""" + queue + """
+    async function continueReviewedQueueAutomatically()""" + boundary + """
+    async function prepareNextReviewedHmiBatch()""" + queue + """
 (async () => {
     await prepareNextReviewedHmiBatch();
     assert.equal(prepareCalls, 2);
