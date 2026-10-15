@@ -9,6 +9,7 @@ const PRIMITIVES = new Set([
     "sint", "usint", "int", "uint", "dint", "udint", "lint", "ulint",
     "real", "lreal", "time", "ltime", "s5time", "date", "time_of_day",
     "ltime_of_day", "date_and_time", "l_date_and_time", "dtl",
+    "tod", "ltod", "dt", "ldt",
     "timer", "counter", "any", "variant", "void", "string", "wstring",
 ]);
 function isPrimitive(value) {
@@ -50,7 +51,7 @@ function targetIdentity() {
     const selected = projectConfig.tia_target;
     if (!Number.isInteger(process) || process < 1 || !selected?.device_name ||
         !selected?.plc_name) throw Error("Select a TIA process and Active PLC first.");
-    if (!projectConfig.plc_family) throw Error("Select the matching PLC family first.");
+    // The active TIA target, not the Create PLC family selector, identifies the source.
     return {process_id:String(process), device_name:selected.device_name,
         plc_name:selected.plc_name, profile_id:getActiveProjectProfileId(),
         plc_family:projectConfig.plc_family};
