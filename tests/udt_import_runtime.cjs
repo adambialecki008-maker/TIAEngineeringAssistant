@@ -24,7 +24,7 @@ test("preserve scalar names, comments and HMI tri-state",()=>{
 test("nested Struct retains order, nesting and defaults",()=>{
  const x=convert(detail([row("Cmd","Struct"),row("Cmd.Run","Bool"),row("Cmd.Stop","Bool"),
  row("Cmd.Inner","Struct"),row("Cmd.Inner.Reset","Bool")]));
- assert.deepEqual(x.fields[0].struct_members.map(m=>m.name),["Run","Stop","Inner"]);
+ assert.deepEqual(Array.from(x.fields[0].struct_members,m=>m.name),["Run","Stop","Inner"]);
  assert.equal(x.fields[0].struct_members[2].struct_members[0].name,"Reset");
 });
 test("array of UDT correctly decodes signed bounds",()=>{
