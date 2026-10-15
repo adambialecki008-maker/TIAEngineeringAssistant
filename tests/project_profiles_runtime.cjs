@@ -19,7 +19,7 @@ vm.createContext(env);
 vm.runInContext(raw + `
 globalThis.api = {
     projectConfig, loadProjectConfig, saveProjectConfig, listProjectProfiles,
-    getActiveProjectProfileId, createProjectProfile, switchProjectProfile,
+    getActiveProjectProfileId, createProjectProfile, duplicateProjectProfile, switchProjectProfile,
     renameProjectProfile, deleteProjectProfile,
 };`, env);
 const a = env.api;
@@ -38,6 +38,15 @@ a.projectConfig.plc_family = "S7-1200";
 a.projectConfig.udts.push({name: "Other", fields: []});
 a.saveProjectConfig();
 assert.equal(JSON.parse(localStorage.getItem("tiaEngineeringAssistant.projectConfig")).udts[0].name, "LEGACY_Motor");
+const copy = a.duplicateProjectProfile(second.id, "Machine 2 copy");
+assert.equal(JSON.parse(localStorage.getItem("tiaEngineeringAssistant.projectConfig.profile." + copy.id)).tia_target, null);
+a.switchProjectProfile(copy.id);
+assert.equal(a.projectConfig.udts[0].name, "Other");
+a.projectConfig.udts.push({name: "Only In Copy", fields: []});
+a.saveProjectConfig();
+a.switchProjectProfile(second.id);
+assert.equal(a.projectConfig.udts.length, 1, "Duplicate must not share UDT arrays");
+assert.throws(() => a.duplicateProjectProfile(second.id, "Machine 2 copy"), /already exists/);
 a.renameProjectProfile(second.id, "Machine B");
 a.switchProjectProfile("default");
 assert.equal(a.projectConfig.udts[0].name, "LEGACY_Motor");
@@ -48,6 +57,7 @@ assert.equal(a.projectConfig.plc_family, "S7-1200");
 assert.throws(() => a.deleteProjectProfile(second.id), /Switch projects/);
 a.switchProjectProfile("default");
 a.deleteProjectProfile(second.id);
+a.deleteProjectProfile(copy.id);
 assert.equal(a.listProjectProfiles().length, 1);
 assert.throws(() => a.deleteProjectProfile("default"), /cannot be deleted/);
 assert.equal(JSON.parse(localStorage.getItem(
