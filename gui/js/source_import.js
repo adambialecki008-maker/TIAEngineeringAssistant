@@ -184,7 +184,7 @@ export function initSourceImportUi() {
         const details = document.createElement("details");
         details.className = "source-import-details";
         const summary = document.createElement("summary");
-        summary.textContent = "Szczegóły";
+        summary.textContent = "Details";
         const body = document.createElement("div");
         body.className = "source-import-details-body";
 
@@ -199,12 +199,12 @@ export function initSourceImportUi() {
             body.appendChild(section);
         }
         paragraph("Problem", diagnosis.problem);
-        paragraph("Przyczyna", diagnosis.cause);
+        paragraph("Cause", diagnosis.cause);
         if (diagnosis.issueLines.length) {
             if (diagnosis.checklist) {
                 const caption = document.createElement("p");
                 caption.className = "source-import-checklist-caption";
-                caption.textContent = "Co porównać (lista kontrolna, nie potwierdzone różnice):";
+                caption.textContent = "Properties to compare (checklist, not confirmed differences):";
                 body.appendChild(caption);
             }
             const list = document.createElement("ul");
@@ -216,13 +216,13 @@ export function initSourceImportUi() {
             }
             body.appendChild(list);
         }
-        paragraph("Co zrobić", diagnosis.action);
+        paragraph("What to check", diagnosis.action);
 
         if (diagnosis.technical) {
             const technical = document.createElement("details");
             technical.className = "source-import-technical";
             const technicalSummary = document.createElement("summary");
-            technicalSummary.textContent = "Szczegóły techniczne (TIA / Openness)";
+            technicalSummary.textContent = "Technical details (TIA / Openness)";
             const pre = document.createElement("pre");
             pre.textContent = diagnosis.technical;
             technical.append(technicalSummary, pre);
@@ -304,8 +304,8 @@ export function initSourceImportUi() {
     reportDownload?.addEventListener("click", () => {
         if (!lastReport) return;
         const rows = [
-            ["Typ", "Nazwa", "Status", "Problem", "Przyczyna",
-                "Co zrobić", "Szczegóły techniczne"],
+            ["Type", "Name", "Status", "Problem", "Cause",
+                "What to check", "Technical details"],
             ...(lastReport.items || []).map(x => {
                 const d = describeSourceImport(x);
                 return [x.kind.toUpperCase(), x.name, x.status, d.problem,
