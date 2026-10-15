@@ -8,13 +8,16 @@ Import only missing objects after user confirmation and a fresh token recheck.
 from __future__ import annotations
 
 import hashlib
+import io
 from decimal import Decimal, InvalidOperation
 import json
+import zipfile
 import re
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from engine.project import ProjectSpecification
@@ -731,6 +734,102 @@ def preview_selected_plc_sources(request: SelectedProjectPreviewRequest) -> dict
                        and item["name"].casefold() in auto_udts}
                   for item in definitions],
     }
+
+
+@router.post("/plc-structure-import/export")
+def export_selected_plc_sources(request: SelectedProjectPreviewRequest) -> Response:
+    """Create a portable, read-only SCL package for the selected UDTs/DBs.
+
+    This route NEVER runs the Openness adapter. It uses the same dependency
+    closure and topological source generation as preview and preflight.
+    """
+    selected = _selected_project(request)
+    selected, auto_udts = _include_required_udts(
+        request.project, selected, set()
+    )
+    definitions = _definitions(
+        selected, known_udts=[udt.name for udt in request.project.udts]
+    )
+    # Keep the exported manifest tied to the exact generated files.
+    known_udts = {udt.name.casefold(): udt.name for udt in selected.udts}
+    manifest = {
+        "format": "TIAEngineeringAssistant",
+        "kind": "plc_structure_source_bundle",
+        "schema_version": 1,
+        "safety": {
+            "tia_modified": False,
+            "tia_compilation_verified": False,
+            "write_requires_test_project_and_explicit_approval": True,
+        },
+        "requested": {
+            "udts": request.selected_udts,
+            "dbs": request.selected_dbs,
+        },
+        "auto_dependencies": [
+            item["name"] for item in definitions
+            if item["kind"] == "udt"
+            and item["name"].casefold() in auto_udts
+        ],
+        "files": [],
+        "external_type_references": [],
+    }
+    external = set()
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for index, definition in enumerate(definitions, start=1):
+            kind = definition["kind"]
+            name = definition["name"]
+            extension = "udt" if kind == "udt" else "db"
+            filename = f"{index:03d}_{name}.{extension}"
+            data = (definition["source"] + "\n").encode("ascii")
+            object_spec = definition["spec"]
+            members = object_spec.fields if kind == "udt" else object_spec.members
+            references = sorted({
+                _reference_type(reference)
+                for reference in _references(members)
+                if _reference_type(reference) not in _BUILTIN_TYPES
+            })
+            dependencies = [known_udts[key] for key in references if key in known_udts]
+            external.update(ref for ref in references if ref not in known_udts)
+            archive.writestr(filename, data)
+            manifest["files"].append({
+                "order": index,
+                "file": filename,
+                "kind": kind,
+                "name": name,
+                "auto_dependency": kind == "udt"
+                    and name.casefold() in auto_udts,
+                "requires_udts": dependencies,
+                "external_udts_or_types": [
+                    ref for ref in references if ref not in known_udts
+                ],
+                "sha256": hashlib.sha256(data).hexdigest(),
+            })
+        manifest["external_type_references"] = sorted(external)
+        archive.writestr(
+            "manifest.json",
+            json.dumps(manifest, indent=2, ensure_ascii=True) + "\n"
+        )
+        archive.writestr(
+            "README.txt",
+            "TIAEngineeringAssistant - offline SCL source bundle\n\n"
+            "The numbered files are in UDT dependency order, followed by DBs.\n"
+            "No connection or write to TIA Portal was performed.\n"
+            "Review every source and external type reference before importing.\n"
+            "A successful ZIP export does NOT mean TIA Portal will compile it.\n"
+            "To write to TIA, use a backed-up test project, read-only preflight,\n"
+            "and explicit approval for every import operation.\n"
+        )
+    content = output.getvalue()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(413, "Generated SCL bundle exceeds the 20 MB limit.")
+    return Response(
+        content=content, media_type="application/zip",
+        headers={"Content-Disposition":
+                 'attachment; filename="TIAEngineeringAssistant_UDT_DB_SCL.zip"',
+                 "Cache-Control": "no-store",
+                 "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.post("/plc-structure-import/plan")

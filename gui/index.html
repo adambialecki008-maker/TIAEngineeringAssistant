@@ -2248,13 +2248,22 @@
                     </p>
                 </div>
 
-                <button
-                    id="generate-preview-button"
-                    type="button"
-                    class="primary-button"
-                >
-                    Generate source
-                </button>
+                <div class="action-row">
+                    <button
+                        id="generate-preview-button"
+                        type="button"
+                        class="primary-button"
+                    >
+                        Generate source
+                    </button>
+                    <button
+                        id="source-export-bundle-button"
+                        type="button"
+                        disabled
+                    >
+                        Download UDT/DB SCL (ZIP)
+                    </button>
+                </div>
 
             </div>
 
@@ -2279,6 +2288,11 @@
                 </div>
                 <p id="source-selection-status" class="hint" aria-live="polite">
                     Select at least one object to generate or import.
+                </p>
+                <p id="source-export-bundle-status" class="hint" role="status"
+                   aria-live="polite">
+                    Offline export includes selected definitions and required UDTs,
+                    without connecting to TIA. Generated files are not compiler-verified.
                 </p>
             </div>
 

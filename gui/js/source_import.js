@@ -4,6 +4,8 @@ import { describeSourceImport } from "./source_import_diagnostics.js";
 
 // Read-only compare / create-only multi-object UDT and DB import.
 export function initSourceImportUi() {
+    const exportButton = document.getElementById("source-export-bundle-button");
+    const exportStatus = document.getElementById("source-export-bundle-status");
     const planButton = document.getElementById("source-import-plan-button");
     const applyButton = document.getElementById("source-import-apply-button");
     const backupCheck = document.getElementById("source-import-backup-confirmed");
@@ -24,6 +26,7 @@ export function initSourceImportUi() {
     const knownDbs = new Set();
     if (!planButton || !applyButton || !backupCheck || !status) return;
 
+    let exportBusy = false;
     let prepared = null;
     let lastReport = null;
     let plannedSnapshot = "";
@@ -101,6 +104,7 @@ export function initSourceImportUi() {
                 : "No structures selected. Select at least one UDT or DB.";
         }
         planButton.disabled = !total;
+        if (exportButton && !exportBusy) exportButton.disabled = !total;
         return total;
     }
 
@@ -111,6 +115,49 @@ export function initSourceImportUi() {
             selectedDbs, knownDbs, "DB");
         showSelectionSummary();
     }
+
+    exportButton?.addEventListener("click", async () => {
+        if (exportBusy) return;
+        const choice = selection();
+        if (!choice.selected_udts.length && !choice.selected_dbs.length) return;
+        exportBusy = true;
+        exportButton.disabled = true;
+        if (exportStatus) exportStatus.textContent =
+            "Generating dependency-ordered SCL package locally…";
+        try {
+            const response = await fetch("/api/v1/tia/plc-structure-import/export", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({project: projectConfig, ...choice}),
+            });
+            if (!response.ok) {
+                let message = "HTTP " + response.status;
+                try {
+                    const body = await response.json();
+                    message = body.detail || message;
+                } catch { /* Preserve the HTTP error if no JSON is available. */ }
+                throw Error(message);
+            }
+            const blob = await response.blob();
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = "TIAEngineeringAssistant_UDT_DB_SCL.zip";
+            document.body.append(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
+            if (exportStatus) exportStatus.textContent =
+                "Downloaded SCL files and manifest. No TIA changes made. "
+                + "Compilation in TIA V21 is not verified.";
+        } catch (error) {
+            if (exportStatus) exportStatus.textContent =
+                "SCL export failed: " + error.message;
+        } finally {
+            exportBusy = false;
+            showSelectionSummary();
+        }
+    });
 
     async function generateSelectionPreview() {
         const generation = ++previewGeneration;

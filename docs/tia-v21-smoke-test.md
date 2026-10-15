@@ -36,6 +36,18 @@ does not establish that any TIA XML was imported successfully.
    profile. Repeat the import and confirm the existing local DB is not
    overwritten. Verify TIA XML and project contents are **unchanged**.
 
+## Offline SCL package (no TIA connection)
+
+In **Source preview**, select UDTs and/or DBs and click **Download UDT/DB SCL (ZIP)**.
+The archive contains one numbered `.udt` or `.db` file per definition, with
+required configured UDTs included automatically in dependency order.
+`manifest.json` lists source file hashes (SHA-256), dependencies and
+unresolved external type references. This is an offline export only: it does
+not connect to Siemens Openness or guarantee compilable SCL.
+
+Review the exported sources and resolve external types before a manually
+approved create-only import into an archived test project.
+
 ## B. UDT → DB create-only write with dependencies
 
 1. Prepare a new UDT (with Struct, Array and nested UDT reference), plus a
