@@ -39,6 +39,8 @@ jobs:
           done
           node tests/io_mapping_runtime.cjs
           node tests/udt_import_runtime.cjs
+          node tests/library_store_runtime.cjs
+          node tests/project_profiles_runtime.cjs
 
       - name: Run HMI review/automatic state regressions
         run: node tests/hmi_review_checkbox_runtime.cjs
@@ -181,6 +183,9 @@ jobs:
 
       - name: Run I/O template and TIA UDT import browser regression
         run: node tests/io_udt_browser.cjs
+
+      - name: Round-trip Engineering Libraries across isolated browser profiles
+        run: node tests/library_transfer_browser.cjs
 
       - name: Upload Playwright evidence on failure
         if: failure()
