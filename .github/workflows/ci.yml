@@ -95,3 +95,63 @@ jobs:
 
       - name: Run full Python test suite
         run: python -m pytest -q
+
+  browser_gui:
+    name: GUI editor (Playwright Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      APP_URL: http://127.0.0.1:8765/
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install backend and Playwright
+        run: |
+          python -m pip install -r requirements.txt
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Start isolated FastAPI for browser test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m uvicorn engine.main:app --host 127.0.0.1 --port 8765 \
+            > "${RUNNER_TEMP}/tia-browser-backend.log" 2>&1 &
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:8765/health > /dev/null; then
+              echo "Isolated FastAPI is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "FastAPI did not become ready"
+          cat "${RUNNER_TEMP}/tia-browser-backend.log"
+          exit 1
+
+      - name: Run existing UDT/DB browser regression
+        run: node tests/member_editor_browser.cjs
+
+      - name: Save backend log when browser test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-browser-backend-log
+          path: ${{ runner.temp }}/tia-browser-backend.log
+          if-no-files-found: ignore
+          retention-days: 7

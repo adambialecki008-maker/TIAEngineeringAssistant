@@ -1,7 +1,7 @@
 # Continuous integration (GitHub Actions)
 
 Workflow: `.github/workflows/ci.yml`, triggered by pushes, pull requests
-and manual `workflow_dispatch`. It runs two independent jobs on pinned **Ubuntu 24.04** runners
+and manual `workflow_dispatch`. It runs three independent jobs on pinned **Ubuntu 24.04** runners
 (to avoid unexpected changes during GitHub's Ubuntu 26 rollout):
 
 1. **JavaScript**: Node 24 checks syntax of every `gui/js/*.js` and
@@ -14,6 +14,17 @@ and manual `workflow_dispatch`. It runs two independent jobs on pinned **Ubuntu 
    service provides the required `tia_engineering_assistant` database and
    `tia_user` role. The password is test-only, created in an ephemeral runner,
    and is not a project or production secret.
+
+3. **Browser GUI (Playwright)**: a separate Chromium job starts the real
+   FastAPI application on loopback and runs the existing
+   `tests/member_editor_browser.cjs` browser regression. It edits nested
+   UDT/DB members, tests array bounds, saving/cancelling, validation, source
+   generation, rename/delete and local browser persistence.
+   Playwright is installed in CI only (`1.56.1`); no production npm
+   dependencies are added. Siemens endpoints are intercepted by the browser
+   test, and no Siemens software or actual device connection is required.
+   The local FastAPI server has no PostgreSQL-dependent operations in this
+   browser test. Backend startup logs are retained as an artifact on failure.
 
 **Not covered:** real Siemens TIA V21 / Openness adapter compilation, PLC/HMI
 imports, TIA saves, independent re-export against an open TIA project, or an
@@ -29,6 +40,8 @@ Local equivalents (project root):
 ```powershell
 node --check gui/js/tia.js
 node tests/hmi_review_checkbox_runtime.cjs
+# For the browser regression: install Playwright and Chromium, start FastAPI
+# on localhost:8765, then run node tests/member_editor_browser.cjs
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
