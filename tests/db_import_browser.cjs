@@ -87,6 +87,24 @@ const item = (pathName, data_type, remanence = undefined) => ({
             "#tia-db-select option").length === 3);
         assert.equal(await page.locator("#tia-db-select option").count(), 3);
         await page.locator("#tia-db-select").selectOption("0");
+        // A same-named local UDT with an incompatible structure is never reused.
+        await page.evaluate(async () => {
+            const {projectConfig,saveProjectConfig} = await import("/gui/js/state.js");
+            projectConfig.udts.push({name:"UDT_Parent",
+                fields:[{name:"Different",data_type:"Bool"}]});
+            saveProjectConfig();
+        });
+        await page.locator("#tia-db-load").click();
+        await page.waitForFunction(() => /differs from the active TIA/.test(
+            document.getElementById("tia-db-import-status").textContent));
+        let blocked = await page.evaluate(async () => {
+            const {projectConfig,saveProjectConfig} = await import("/gui/js/state.js");
+            const dbCount = projectConfig.dbs.length;
+            projectConfig.udts.pop();
+            saveProjectConfig();
+            return dbCount;
+        });
+        assert.equal(blocked, 0, "UDT conflict must abort the entire DB import");
         await page.locator("#tia-db-load").click();
         await page.waitForFunction(() => document.getElementById(
             "tia-db-import-status").textContent.includes("imported into the local editor"));
