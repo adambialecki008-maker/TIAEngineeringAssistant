@@ -45,7 +45,7 @@ test("unknown type blocked",()=>fails([row("X","Array of ??")],"array declaratio
 test("invalid array bounds blocked",()=>fails([row("X","Array[4..1] of Bool")],"bounds"));
 test("out of range bounds blocked",()=>fails([row("X","Array[-33000..2] of Bool")],"bounds"));
 test("nested Array expansion rejected instead of silently discarded",()=>{
- fails([row("Signals","Array[0..3] of Bool"),row("Signals[0]","Bool")],"path|nesting");
+ fails([row("Signals","Array[0..3] of Bool"),row("Signals[0]","Bool")],"expanded Array");
 });
 test("UDT arrays with child expansion are never treated as editable Struct",()=>{
  fails([row("Motors",'Array[0..1] of "UDT_Motor"'),
