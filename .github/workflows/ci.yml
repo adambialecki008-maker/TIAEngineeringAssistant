@@ -39,6 +39,7 @@ jobs:
           done
           node tests/io_mapping_runtime.cjs
           node tests/udt_import_runtime.cjs
+          node tests/db_import_runtime.cjs
           node tests/library_store_runtime.cjs
           node tests/project_profiles_runtime.cjs
 
