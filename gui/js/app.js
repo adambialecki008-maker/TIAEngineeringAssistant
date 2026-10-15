@@ -15,6 +15,7 @@ import {
 } from "./udt.js";
 
 import { initUdtTiaImportUi } from "./udt_import.js";
+import { initDbTiaImportUi } from "./db_import.js";
 
 import {
     addDb,
@@ -354,6 +355,7 @@ window.addEventListener("library-categories-changed", event => {
     applyLibraryCategoryOptions(event.detail || []);
 });
 initUdtTiaImportUi(renderAll);
+initDbTiaImportUi(renderAll);
 const dataLibrariesUi = initDataLibrariesUi(() => {
     if (plcFamilySelect) plcFamilySelect.value = projectConfig.plc_family;
     sourceImportUi?.refreshSelection();
