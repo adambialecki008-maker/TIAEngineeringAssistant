@@ -5,7 +5,9 @@ from engine.udt import UdtSpecification
 
 
 class ProjectSpecification(BaseModel):
-    # CPU family belongs to PLC creation, not UDT/DB declarations or source generation.\n    # Keep optional for backward-compatible project payloads.\n    plc_family: str = ""
+    # CPU family is needed for PLC creation, not for UDT/DB definitions.
+    # Existing project payloads may still carry it; empty is valid.
+    plc_family: str = ""
 
     udts: list[UdtSpecification] = []
     dbs: list[DataBlockSpecification] = []
