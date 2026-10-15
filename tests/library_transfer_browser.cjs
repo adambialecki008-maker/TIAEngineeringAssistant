@@ -108,8 +108,14 @@ const primitive = (name, data_type) => ({name, data_type});
             // Explicit SemVer revision and Replace preserve all prior snapshots.
             await store.applySelectiveLibraryImport(destination.id, [sourceMotor.id],
                 pkg.objects, {[sourceMotor.id]: {action: "version", version: "2.0.0"}});
+            // Replacement must actually differ: an identical payload should
+            // correctly auto-skip rather than manufacture a duplicate revision.
+            const revisedSource = pkg.objects.map(item => item.id === sourceMotor.id
+                ? {...item, payload: {...item.payload, fields: [
+                    ...item.payload.fields, {name: "ReplacementFlag", data_type: "Bool"},
+                ]}} : item);
             await store.applySelectiveLibraryImport(destination.id, [sourceMotor.id],
-                pkg.objects, {[sourceMotor.id]: {action: "replace", version: "3.0.0"}});
+                revisedSource, {[sourceMotor.id]: {action: "replace", version: "3.0.0"}});
             const versions = (await store.listLibraryObjects(destination.id))
                 .find(item => item.name === "UDT_Motor").versions;
             if (versions.length !== 3 ||
