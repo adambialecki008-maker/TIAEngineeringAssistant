@@ -1,108 +1,125 @@
-const STORAGE_KEY =
-    "tiaEngineeringAssistant.projectConfig";
+// Local profiles isolate project configuration; the original legacy key is
+// retained unmodified as a recovery copy after one-way migration.
+const STORAGE_KEY = "tiaEngineeringAssistant.projectConfig";
+const PROFILES_KEY = "tiaEngineeringAssistant.projectProfiles";
+const ACTIVE_PROFILE_KEY = "tiaEngineeringAssistant.activeProjectProfile";
+const PROFILE_PREFIX = "tiaEngineeringAssistant.projectConfig.profile.";
+const DEFAULT_PROFILE = "default";
 
+function emptyProject() {
+    return {
+        plc_family: "", udts: [], dbs: [],
+        device_config: {templates: [], groups: [], mappings: [], mapping_mode: "device"},
+        tia_target: null,
+    };
+}
+export const projectConfig = emptyProject();
 
-export const projectConfig = {
-    plc_family: "",
-    udts: [],
-    dbs: [],
-    device_config: {
-        templates: [],
-        groups: [],
-        mappings: [],
-        mapping_mode: "device",
-    },
-    tia_target: null,
-};
-
-
+function normalizeProfileName(value) {
+    const name = String(value || "").trim().slice(0, 128);
+    if (!name) throw Error("Profile name is required.");
+    return name;
+}
+function initializeProjectProfiles() {
+    let profiles = null;
+    try { profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "null"); }
+    catch { /* do not erase the legacy project */ }
+    if (!Array.isArray(profiles) || !profiles.some(p => p?.id === DEFAULT_PROFILE)) {
+        profiles = [{id: DEFAULT_PROFILE, name: "Default project"}];
+        // First copy the old project to its own profile. Do not remove
+        // or overwrite the legacy key (emergency recovery).
+        if (localStorage.getItem(PROFILE_PREFIX + DEFAULT_PROFILE) === null) {
+            localStorage.setItem(PROFILE_PREFIX + DEFAULT_PROFILE,
+                localStorage.getItem(STORAGE_KEY) || JSON.stringify(emptyProject()));
+        }
+        localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+        localStorage.setItem(ACTIVE_PROFILE_KEY, DEFAULT_PROFILE);
+    }
+    const active = localStorage.getItem(ACTIVE_PROFILE_KEY);
+    if (!profiles.some(p => p.id === active)) {
+        localStorage.setItem(ACTIVE_PROFILE_KEY, DEFAULT_PROFILE);
+    }
+    return profiles;
+}
+export function listProjectProfiles() {
+    return initializeProjectProfiles().map(p => ({id: p.id, name: p.name}));
+}
+export function getActiveProjectProfileId() {
+    initializeProjectProfiles();
+    return localStorage.getItem(ACTIVE_PROFILE_KEY) || DEFAULT_PROFILE;
+}
 export function saveProjectConfig() {
-    localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(
-            projectConfig
-        )
-    );
+    const key = PROFILE_PREFIX + getActiveProjectProfileId();
+    localStorage.setItem(key, JSON.stringify(projectConfig));
 }
-
-
+function assignProject(parsed) {
+    projectConfig.plc_family = typeof parsed?.plc_family === "string" ? parsed.plc_family : "";
+    projectConfig.udts = Array.isArray(parsed?.udts) ? parsed.udts : [];
+    projectConfig.dbs = Array.isArray(parsed?.dbs) ? parsed.dbs : [];
+    projectConfig.device_config = normalizeDeviceConfig(parsed?.device_config);
+    // An open Siemens project is never portable between local profiles.
+    projectConfig.tia_target = null;
+}
 export function loadProjectConfig() {
-    const saved =
-        localStorage.getItem(
-            STORAGE_KEY
-        );
-
-
-    if (!saved) {
-        return;
-    }
-
-
+    const key = PROFILE_PREFIX + getActiveProjectProfileId();
+    const saved = localStorage.getItem(key);
     try {
-        const parsed =
-            JSON.parse(
-                saved
-            );
-
-
-        projectConfig.plc_family =
-            parsed.plc_family
-            ?? "";
-
-
-        projectConfig.udts =
-            Array.isArray(
-                parsed.udts
-            )
-                ? parsed.udts
-                : [];
-
-
-        projectConfig.dbs =
-            Array.isArray(
-                parsed.dbs
-            )
-                ? parsed.dbs
-                : [];
-
-
-        projectConfig.device_config =
-            normalizeDeviceConfig(
-                parsed.device_config
-            );
-
-
-        projectConfig.tia_target =
-            normalizeTiaTarget(
-                parsed.tia_target
-            );
-
+        assignProject(saved ? JSON.parse(saved) : emptyProject());
     } catch (error) {
-        console.error(
-            "Cannot load project configuration:",
-            error
-        );
+        console.error("Cannot load local project profile:", error);
+        throw Error("Project profile is invalid. Export/recover it before continuing.");
     }
 }
-
-
-// Used only by an explicitly confirmed local backup restore. It reuses the
-// same normalizers as legacy localStorage loading and never talks to TIA.
-export function replaceProjectConfig(parsed) {
-    if (!parsed || typeof parsed !== "object") {
-        throw new Error("Invalid project backup.");
-    }
-    projectConfig.plc_family = typeof parsed.plc_family === "string"
-        ? parsed.plc_family : "";
-    projectConfig.udts = Array.isArray(parsed.udts) ? parsed.udts : [];
-    projectConfig.dbs = Array.isArray(parsed.dbs) ? parsed.dbs : [];
-    projectConfig.device_config = normalizeDeviceConfig(parsed.device_config);
-    // Restored hardware targets are intentionally cleared: a portable backup
-    // must be re-confirmed against the locally open TIA project.
+export function createProjectProfile(value) {
+    const name = normalizeProfileName(value);
+    const profiles = initializeProjectProfiles();
+    if (profiles.some(p => p.name.toLocaleLowerCase() === name.toLocaleLowerCase()))
+        throw Error("A project profile with this name already exists.");
+    const entry = {id: "profile-" + crypto.randomUUID(), name};
+    // Write configuration first; the index is updated only after success.
+    localStorage.setItem(PROFILE_PREFIX + entry.id, JSON.stringify(emptyProject()));
+    localStorage.setItem(PROFILES_KEY, JSON.stringify([...profiles, entry]));
+    return entry;
+}
+export function renameProjectProfile(id, value) {
+    const name = normalizeProfileName(value);
+    const profiles = initializeProjectProfiles();
+    if (!profiles.some(p => p.id === id)) throw Error("Project profile not found.");
+    if (profiles.some(p => p.id !== id && p.name.toLocaleLowerCase() === name.toLocaleLowerCase()))
+        throw Error("A project profile with this name already exists.");
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles.map(p =>
+        p.id === id ? {...p, name} : p)));
+}
+export function switchProjectProfile(id) {
+    const profiles = initializeProjectProfiles();
+    if (!profiles.some(p => p.id === id)) throw Error("Project profile not found.");
+    if (id === getActiveProjectProfileId()) return;
+    // Parse destination first, preventing loss of the currently open project.
+    const saved = localStorage.getItem(PROFILE_PREFIX + id);
+    const next = saved ? JSON.parse(saved) : emptyProject();
+    if (!next || typeof next !== "object" || Array.isArray(next))
+        throw Error("Destination project profile is corrupt.");
     projectConfig.tia_target = null;
     saveProjectConfig();
+    localStorage.setItem(ACTIVE_PROFILE_KEY, id);
+    assignProject(next);
+    saveProjectConfig();
 }
-
+export function deleteProjectProfile(id) {
+    const profiles = initializeProjectProfiles();
+    if (id === DEFAULT_PROFILE) throw Error("Default project cannot be deleted.");
+    if (id === getActiveProjectProfileId()) throw Error("Switch projects before deleting the active profile.");
+    if (!profiles.some(p => p.id === id)) throw Error("Project profile not found.");
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles.filter(p => p.id !== id)));
+    localStorage.removeItem(PROFILE_PREFIX + id);
+}
+// Full restore changes only the active profile, never another project.
+export function replaceProjectConfig(parsed) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        throw Error("Invalid project backup.");
+    assignProject(parsed);
+    saveProjectConfig();
+}
 
 function normalizeTiaTarget(
     value

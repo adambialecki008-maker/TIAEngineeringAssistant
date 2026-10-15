@@ -778,7 +778,7 @@ export function objectVersions(item) {
     return (item?.versions || []).map(record => normalizedRevision(record, item))
         .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
 }
-export async function createSnapshot(reason, project) { const db = await openLibraryStore(); const snapshot = {id: id("snapshot"), reason: text(reason, 256) || "Project change", created_at: new Date().toISOString(), project: jsonClone(project)}; const tx = db.transaction("snapshots", "readwrite"); tx.objectStore("snapshots").add(snapshot); await transactionDone(tx); return snapshot; }
+export async function createSnapshot(reason, project, profileId = "default") { const db = await openLibraryStore(); const snapshot = {id: id("snapshot"), profile_id: profileId, reason: text(reason, 256) || "Project change", created_at: new Date().toISOString(), project: jsonClone(project)}; const tx = db.transaction("snapshots", "readwrite"); tx.objectStore("snapshots").add(snapshot); await transactionDone(tx); return snapshot; }
 export async function listSnapshots() { const db = await openLibraryStore(); const tx = db.transaction("snapshots", "readonly"); return request(tx.objectStore("snapshots").getAll()); }
 export async function getSnapshot(snapshotId) { const db = await openLibraryStore(); const tx = db.transaction("snapshots", "readonly"); return request(tx.objectStore("snapshots").get(snapshotId)); }
 export function exportPackage(library, selectedIds, objects) {

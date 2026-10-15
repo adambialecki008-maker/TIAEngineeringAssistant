@@ -1,4 +1,4 @@
-import {projectConfig, replaceProjectConfig, saveProjectConfig} from "./state.js";
+import {projectConfig, replaceProjectConfig, saveProjectConfig, listProjectProfiles, getActiveProjectProfileId, createProjectProfile, renameProjectProfile, switchProjectProfile, deleteProjectProfile} from "./state.js";
 import {
     LIBRARY_CATEGORIES,
     analyzeDependencies,
@@ -19,6 +19,8 @@ import {
     listCategories,
     listLibraryObjects,
     listSnapshots,
+    planSelectiveLibraryImport,
+    applySelectiveLibraryImport,
     normalizeLibraryName,
     objectVersions,
     parsePackage,
@@ -353,7 +355,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         if (!confirm(confirmation)) return;
         // The library remains local, but retain a recovery point before it
         // changes the in-browser project configuration.
-        await createSnapshot("Before adding library objects to project", projectConfig);
+        await createSnapshot("Before adding library objects to project", projectConfig, getActiveProjectProfileId());
         for (const item of additions) {
             projectCollection(item.object_type).push(projectDefinitionFromLibrary(item, library));
         }
@@ -764,6 +766,73 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         renderRows();
     };
 
+    const profilesCard = element("div");
+    profilesCard.className = "card";
+    profilesCard.id = "project-profiles-card";
+    profilesCard.append(element("h3", "Local project profiles"),
+        element("p", "Each profile has independent UDTs, DBs and device configuration. Libraries remain shared. Switching clears the active TIA target."));
+    const profileActions = element("div");
+    profileActions.className = "action-row";
+    const profileSelector = document.createElement("select");
+    profileSelector.id = "project-profile-selector";
+    const profileName = document.createElement("input");
+    profileName.placeholder = "New project name";
+    const profileStatus = element("p", "");
+    profileStatus.className = "status-box";
+    const renderProfiles = () => {
+        profileSelector.replaceChildren();
+        for (const item of listProjectProfiles()) {
+            selectOption(profileSelector, item.id, item.name);
+        }
+        profileSelector.value = getActiveProjectProfileId();
+    };
+    profileSelector.addEventListener("change", async () => {
+        try {
+            if (!confirm("Switch the local project? The current profile will be saved and the TIA target disconnected.")) {
+                renderProfiles(); return;
+            }
+            switchProjectProfile(profileSelector.value);
+            refreshProject();
+            profileStatus.textContent = "Active project: " + profileSelector.selectedOptions[0]?.textContent + ". TIA target must be selected again.";
+            await renderSnapshots();
+        } catch (error) { profileStatus.textContent = error.message; renderProfiles(); }
+    });
+    profileActions.append(profileSelector, profileName,
+        actionButton("Create project", () => {
+            try {
+                const created = createProjectProfile(profileName.value);
+                profileName.value = "";
+                renderProfiles();
+                profileStatus.textContent = "Created " + created.name + ". Select it to switch.";
+            } catch (error) { profileStatus.textContent = error.message; }
+        }, true),
+        actionButton("Rename project", () => {
+            try {
+                const active = listProjectProfiles().find(p => p.id === getActiveProjectProfileId());
+                const name = prompt("New project name:", active?.name);
+                if (name === null) return;
+                renameProjectProfile(active.id, name);
+                renderProfiles();
+                profileStatus.textContent = "Project renamed.";
+            } catch (error) { profileStatus.textContent = error.message; }
+        }),
+        actionButton("Delete project", () => {
+            try {
+                const id = profileSelector.value;
+                if (id === "default") throw Error("The default project cannot be deleted.");
+                if (!confirm("Delete this local project profile and its configuration? This cannot be undone. Export a backup first.")) return;
+                // Active profiles cannot be removed without first switching.
+                switchProjectProfile("default");
+                deleteProjectProfile(id);
+                renderProfiles();
+                refreshProject();
+                renderSnapshots().catch(console.error);
+                profileStatus.textContent = "Profile deleted; switched to Default project.";
+            } catch (error) { profileStatus.textContent = error.message; renderProfiles(); }
+        }));
+    profilesCard.append(profileActions, profileStatus);
+    renderProfiles();
+
     const libraryCard = element("div");
     libraryCard.className = "card";
     libraryCard.append(element("h3", "Engineering Library"));
@@ -1110,7 +1179,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             if (!backupPreview) throw Error("Preview a project backup first.");
             if (backupPreview.metadata?.partial) throw Error("A partial backup cannot replace a complete project. Use Merge instead.");
             if (!confirm("Replace current project configuration? A recovery snapshot will be created first.")) return;
-            await createSnapshot("Before project backup restore", projectConfig);
+            await createSnapshot("Before project backup restore", projectConfig, getActiveProjectProfileId());
             replaceProjectConfig(backupPreview.project);
             refreshProject();
             await renderSnapshots();
@@ -1122,7 +1191,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             if (!backupPreview) throw Error("Preview a project backup first.");
             const sections = backupSectionsOf(backupPreview);
             if (!confirm("Merge only missing project objects? Existing objects will never be overwritten. A snapshot will be created first.")) return;
-            await createSnapshot("Before project backup merge", projectConfig);
+            await createSnapshot("Before project backup merge", projectConfig, getActiveProjectProfileId());
             const result = mergeProjectBackup(backupPreview.project, sections);
             refreshProject();
             await renderSnapshots();
@@ -1190,7 +1259,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     snapshotDetails.append(snapshotSummary, snapshots);
     const renderSnapshots = async () => {
         snapshots.replaceChildren();
-        const entries = (await listSnapshots()).sort((left, right) => right.created_at.localeCompare(left.created_at));
+        const entries = (await listSnapshots()).filter(item => (item.profile_id || "default") === getActiveProjectProfileId()).sort((left, right) => right.created_at.localeCompare(left.created_at));
         snapshotSummary.textContent = `Saved snapshots (${entries.length})`;
         if (!entries.length) snapshots.append(element("p", "No local snapshots yet."));
         for (const snapshot of entries) {
@@ -1217,7 +1286,8 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
                 actionButton("Restore", async () => {
                     if (!confirm("Restore this snapshot? The current configuration will be snapshotted first.")) return;
                     const source = await getSnapshot(snapshot.id);
-                    await createSnapshot("Before snapshot restore", projectConfig);
+                    if ((source?.profile_id || "default") !== getActiveProjectProfileId()) throw Error("Snapshot belongs to another project profile.");
+                    await createSnapshot("Before snapshot restore", projectConfig, getActiveProjectProfileId());
                     replaceProjectConfig(source.project);
                     refreshProject();
                     await renderSnapshots();
@@ -1230,7 +1300,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         actionButton("Create snapshot", async () => {
             const reason = prompt("Snapshot reason:", "Manual project snapshot");
             if (reason === null) return;
-            await createSnapshot(reason, projectConfig);
+            await createSnapshot(reason, projectConfig, getActiveProjectProfileId());
             await renderSnapshots();
         }, true),
         actionButton("Refresh snapshots", () => renderSnapshots().catch(error => {
@@ -1239,7 +1309,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         snapshotDetails,
     );
 
-    root.replaceChildren(libraryCard, transfer, backup, recovery);
+    root.replaceChildren(profilesCard, libraryCard, transfer, backup, recovery);
     // Open IndexedDB and read its initial content in sequence. This avoids a
     // cold-start race with the category controls in app.js.
     const ready = (async () => {

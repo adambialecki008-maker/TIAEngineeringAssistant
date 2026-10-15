@@ -354,7 +354,11 @@ window.addEventListener("library-categories-changed", event => {
     applyLibraryCategoryOptions(event.detail || []);
 });
 initUdtTiaImportUi(renderAll);
-const dataLibrariesUi = initDataLibrariesUi(renderAll);
+const dataLibrariesUi = initDataLibrariesUi(() => {
+    if (plcFamilySelect) plcFamilySelect.value = projectConfig.plc_family;
+    sourceImportUi?.refreshSelection();
+    renderAll();
+});
 if (dataLibrariesUi?.ready) {
     dataLibrariesUi.ready.then(refreshLibraryCategoryOptions);
 } else {
