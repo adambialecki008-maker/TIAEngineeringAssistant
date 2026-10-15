@@ -169,8 +169,6 @@ def _has_unverifiable_attributes(definition: dict) -> bool:
     Never falsely label complex objects identical based on names/fields alone.
     """
     spec = definition["spec"]
-    if definition["kind"] == "db" and spec.retain:
-        return True
 
     def special(members):
         for m in members:
@@ -253,6 +251,55 @@ def _udt_metadata_notes(spec, members):
     return notes
 
 
+def _db_retain_comparison(spec, members) -> dict | None:
+    """Require explicit exported remanence before declaring a RETAIN DB identical.
+
+    TIA may omit the Remanence attribute. Missing data is *not* proof of
+    NonRetain or Retain. Compare top-level declarations because nested members
+    can inherit the parent section/member's remanence settings.
+    """
+    top_level = [member for member in members if "." not in member.path]
+    explicit = {
+        member.path: member.metadata.get("remanence", "").strip().casefold()
+        for member in top_level
+    }
+    nonretain = {"nonretain", "non_retain", "non-retain", "noretain"}
+    conflicting = [
+        path for path, value in explicit.items()
+        if (spec.retain and value in nonretain)
+        or (not spec.retain and value == "retain")
+    ]
+    if conflicting:
+        desired = "RETAIN" if spec.retain else "NON_RETAIN"
+        return {"status": "conflict", "reason":
+                "DB retention mismatch: application requests " + desired
+                + " but TIA reports different remanence for "
+                + ", ".join(conflicting) + ". No overwrite."}
+    if spec.retain:
+        not_confirmed = [
+            path for path, value in explicit.items() if value != "retain"
+        ]
+        if not_confirmed:
+            return {"status": "unknown", "reason":
+                    "DB member declarations match, but exported TIA XML does "
+                    "not explicitly confirm Remanence=Retain for "
+                    + ", ".join(not_confirmed)
+                    + ". Manual verification required; no import or overwrite."}
+        # An explicit child override would make whole-DB RETAIN unverifiable.
+        overrides = [
+            member.path for member in members
+            if "." in member.path
+            and member.metadata.get("remanence", "").strip().casefold()
+                in nonretain
+        ]
+        if overrides:
+            return {"status": "unknown", "reason":
+                    "Nested DB members override RETAIN: "
+                    + ", ".join(overrides)
+                    + ". Manual verification required; no overwrite."}
+    return None
+
+
 def _compare_existing(request, definition: dict, existing) -> dict:
     kind = definition["kind"]
     if kind == "db" and (
@@ -306,9 +353,12 @@ def _compare_existing(request, definition: dict, existing) -> dict:
                        "No local member definition requested; DB uses the verified "
                        "live type by name. ")
                     + "Existing defaults, comments and HMI/retain settings are retained."}
+        retain_issue = _db_retain_comparison(spec, members)
+        if retain_issue:
+            return {**result, **retain_issue}
         if _has_unverifiable_attributes(definition):
             return {**result, "status": "unknown", "reason":
-                    "DB structure matches, but requested RETAIN/start values/HMI "
+                    "DB structure matches, but requested start values/HMI "
                     "metadata are not fully compared. Review the existing DB in "
                     "TIA; no import or overwrite."}
         if any(m.comment or m.metadata.get("start_value") for m in members):
@@ -316,8 +366,11 @@ def _compare_existing(request, definition: dict, existing) -> dict:
                     "DB structure matches; existing comments/start values require "
                     "manual review. No import or overwrite."}
         return {**result, "status": "identical", "reason":
-                "Declared DB structure matches. No import or overwrite. "
-                "Review DB retention/optimization in TIA if relevant."}
+                "Declared DB structure matches"
+                + ("; explicit RETAIN confirmed in TIA XML"
+                   if spec.retain else "")
+                + ". Identical — skip. No import or overwrite. "
+                "Review DB optimization in TIA if relevant."}
     except Exception as exc:
         return {"status": "unknown", "metadata_warnings": [], "reason":
                 "Existing structure export unavailable: " + str(exc)

@@ -714,3 +714,93 @@ def test_live_multidimensional_array_resolves_nested_udt(monkeypatch):
     assert report["will_create"] == ["DB_Motors"]
     assert report["counts"]["compatible"] == 2
     assert {c[6] for c in calls if c[0] == "export-structure"} == {"UDT_Motor", "UDT_Inner"}
+
+
+def test_retain_db_with_confirmed_tia_remanence_is_identical_skip(monkeypatch):
+    """An explicit RETAIN match must not be permanently classified unknown."""
+    calls = []
+    xml = {
+        "DB_Motors": (
+            '<Document><Section Name="Static"><Member Name="Motors" '
+            'Datatype="Array[1..10] of UDT_Motor" Remanence="Retain"/>'
+            '</Section></Document>'
+        )
+    }
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=[
+            "PLC_UDT||UDT_Motor|PlcType|True",
+            "PLC_DB||DB_Motors|1|GlobalDB|True",
+        ], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["dbs"][0]["retain"] = True
+    plan_response = preflight(payload)
+    assert plan_response.status_code == 200, plan_response.text
+    plan = plan_response.json()
+    db = next(item for item in plan["items"] if item["name"] == "DB_Motors")
+    assert db["status"] == "identical"
+    assert "explicit RETAIN confirmed" in db["reason"]
+    assert plan["counts"]["identical"] == 1
+    assert plan["will_create"] == []
+    assert apply(payload, plan).status_code == 409
+    assert not any(call[0] == "import-plc-structure-batch" for call in calls)
+
+
+@pytest.mark.parametrize(("requested_retain", "xml_remanence", "expected"), [
+    (True, "", "unknown"),         # XML omitted the attribute; cannot prove.
+    (True, "NonRetain", "conflict"),
+    (False, "Retain", "conflict"),
+])
+def test_db_retain_preflight_never_claims_identical_for_mismatch_or_unknown(
+    monkeypatch, requested_retain, xml_remanence, expected
+):
+    calls = []
+    retain_attribute = (' Remanence="' + xml_remanence + '"'
+                        if xml_remanence else "")
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static"><Member Name="Motors" '
+        'Datatype="Array[1..10] of UDT_Motor"' + retain_attribute
+        + '/></Section></Document>'
+    )}
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=[
+            "PLC_UDT||UDT_Motor|PlcType|True",
+            "PLC_DB||DB_Motors|1|GlobalDB|True",
+        ], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["dbs"][0]["retain"] = requested_retain
+    report = preflight(payload).json()
+    db = next(item for item in report["items"] if item["name"] == "DB_Motors")
+    assert db["status"] == expected
+    assert report["counts"]["identical"] == 0
+    assert report["will_create"] == []
+    assert apply(payload, report).status_code == 409
+    assert not any(call[0] == "import-plc-structure-batch" for call in calls)
+
+
+def test_nested_explicit_nonretain_stays_unknown_for_retained_db(monkeypatch):
+    """A retained parent may not silently hide a nested remanence override."""
+    calls = []
+    xml = {"DB_Motors": (
+        '<Document><Section Name="Static">'
+        '<Member Name="Motor" Datatype="Struct" Remanence="Retain">'
+        '<Member Name="Start" Datatype="Bool" Remanence="NonRetain"/>'
+        '</Member></Section></Document>'
+    )}
+    monkeypatch.setattr(facade, "_run_adapter", mock_adapter(
+        calls, existing=["PLC_DB||DB_Motors|1|GlobalDB|True"], xml=xml
+    ))
+    payload = request_data()
+    payload["project"]["udts"] = []
+    payload["project"]["dbs"][0] = {
+        "name": "DB_Motors", "retain": True,
+        "members": [{"name": "Motor", "data_type": "Struct",
+                     "struct_members": [{"name": "Start", "data_type": "Bool"}]}]
+    }
+    report = preflight(payload).json()
+    db = next(item for item in report["items"] if item["name"] == "DB_Motors")
+    assert db["status"] == "unknown"
+    assert "Nested DB members override RETAIN" in db["reason"]
+    assert report["will_create"] == []
+    assert not any(call[0] == "import-plc-structure-batch" for call in calls)
