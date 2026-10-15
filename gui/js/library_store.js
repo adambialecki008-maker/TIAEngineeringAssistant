@@ -1,4 +1,6 @@
 /* Local, portable engineering-library persistence. No TIA/API calls. */
+import {isBuiltInSystemType} from "./plc-types.js";
+
 export const LIBRARY_SCHEMA_VERSION = 1;
 export const LIBRARY_CATEGORIES = ["Motors & Drives", "Pneumatics", "Hydraulics", "Safety", "Analog Signals", "Communication", "Diagnostics & Alarms", "General"];
 const DB_NAME = "tiaEngineeringAssistant.libraries";
@@ -214,18 +216,13 @@ export function dependencyPlan(selectedIds, objects) {
     function visit(objectId) { if (included.has(objectId)) return; if (visiting.has(objectId)) throw Error("Circular library dependency."); const item = byId.get(objectId); if (!item) throw Error("Missing library dependency."); visiting.add(objectId); for (const child of graph.get(objectId) || []) visit(child); visiting.delete(objectId); included.add(objectId); ordered.push(item); }
     for (const objectId of selectedIds) visit(objectId); return ordered;
 }
-const BUILTIN_DATA_TYPES = new Set([
-    "bool", "byte", "word", "dword", "lword", "char", "wchar", "string", "wstring",
-    "sint", "usint", "int", "uint", "dint", "udint", "lint", "ulint", "real", "lreal",
-    "time", "ltime", "date", "time_of_day", "ltime_of_day", "date_and_time", "l_date_and_time",
-    "dtl", "timer", "counter", "any", "variant", "void", "array", "struct",
-]);
 function findMissingReferences(items, knownTypes, missing) {
     for (const item of items || []) {
         for (const dataType of [item.data_type, item.array_element_type]) {
             const raw = String(dataType || "").trim();
             const key = raw.toLocaleLowerCase();
-            if (raw && !BUILTIN_DATA_TYPES.has(key) && !knownTypes.has(key)) missing.add(raw);
+            if (raw && !isBuiltInSystemType(key) && !["any", "variant", "void", "array", "struct"].includes(key)
+                && !knownTypes.has(key)) missing.add(raw);
         }
         findMissingReferences(item.struct_members, knownTypes, missing);
     }

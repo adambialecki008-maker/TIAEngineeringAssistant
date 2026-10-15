@@ -1,264 +1,69 @@
-export const PLC_DATA_TYPES = {
-    "S7-1200": [
-        "Bool",
+import registry from "../data/siemens-type-registry.json" with {type: "json"};
 
-        "Byte",
-        "Word",
-        "DWord",
+export const SIEMENS_TYPE_REGISTRY = Object.freeze(registry);
 
-        "SInt",
-        "USInt",
-        "Int",
-        "UInt",
-        "DInt",
-        "UDInt",
+function normalized(value) {
+    return String(value ?? "").trim().toLocaleLowerCase();
+}
 
-        "Real",
-        "LReal",
+function knownEntry(value) {
+    const key = normalized(value);
+    return registry.types.find(entry => normalized(entry.name) === key
+        || (entry.aliases || []).some(alias => normalized(alias) === key)) || null;
+}
 
-        "Time",
+export function isBuiltInSystemType(value) {
+    return knownEntry(value) !== null;
+}
 
-        "Date",
-        "TOD",
-        "DTL",
-
-        "Char",
-        "WChar",
-        "String",
-        "WString",
-    ],
-
-    "S7-1200-G2": [
-        "Bool",
-
-        "Byte",
-        "Word",
-        "DWord",
-        "LWord",
-
-        "SInt",
-        "USInt",
-        "Int",
-        "UInt",
-        "DInt",
-        "UDInt",
-        "LInt",
-        "ULInt",
-
-        "Real",
-        "LReal",
-
-        "Time",
-        "LTime",
-
-        "Date",
-        "TOD",
-        "LTOD",
-        "LDT",
-        "DTL",
-
-        "Char",
-        "WChar",
-        "String",
-        "WString",
-    ],
-
-    "S7-1500": [
-        "Bool",
-
-        "Byte",
-        "Word",
-        "DWord",
-        "LWord",
-
-        "SInt",
-        "USInt",
-        "Int",
-        "UInt",
-        "DInt",
-        "UDInt",
-        "LInt",
-        "ULInt",
-
-        "Real",
-        "LReal",
-
-        "Time",
-        "LTime",
-        "S5Time",
-
-        "Date",
-        "TOD",
-        "LTOD",
-        "DT",
-        "LDT",
-        "DTL",
-
-        "Char",
-        "WChar",
-        "String",
-        "WString",
-    ],
-};
-
-
-// Editing and reading an existing UDT/DB must not depend on the
-// "Create PLC" selector. Without a selected family offer the union of
-// supported scalar types. Once a family is known, keep its strict set.
-const GENERIC_PLC_DATA_TYPES = [...new Set(
-    Object.values(PLC_DATA_TYPES).flat()
-)];
+export function getTypeMetadata(value) {
+    return knownEntry(value);
+}
 
 export function getPlcDataTypes(plcFamily) {
-    return plcFamily
-        ? (PLC_DATA_TYPES[plcFamily] ?? [])
-        : GENERIC_PLC_DATA_TYPES;
+    return registry.types
+        .filter(entry => entry.declarable && (!plcFamily || entry.families.includes(plcFamily)))
+        .map(entry => entry.name);
 }
 
+// Compatibility export, derived from the canonical registry.
+export const PLC_DATA_TYPES = Object.freeze(Object.fromEntries(
+    registry.families.map(family => [family, getPlcDataTypes(family)])
+));
 
-function checkDataType(
-    dataType,
-    path,
-    allowedTypes,
-    udtNames,
-    problems
-) {
-    const normalized =
-        dataType.toLowerCase();
-
-
-    if (
-        normalized === "array"
-        || normalized === "struct"
-    ) {
-        return;
-    }
-
-
-    if (
-        !allowedTypes.has(normalized)
-        &&
-        !udtNames.has(normalized)
-    ) {
-        problems.push(
-            `${path}: ${dataType}`
-        );
+function checkDataType(dataType, path, allowedTypes, udtNames, problems) {
+    const type = normalized(dataType);
+    if (type === "array" || type === "struct") return;
+    const entry = knownEntry(type);
+    if (entry && !entry.declarable) {
+        problems.push(`${path}: ${dataType} is a native ${entry.kind.replaceAll("_", " ")} and has no verified declaration syntax.`);
+    } else if (!allowedTypes.has(type) && !udtNames.has(type)) {
+        problems.push(`${path}: ${dataType}`);
     }
 }
 
-
-function checkMember(
-    member,
-    path,
-    allowedTypes,
-    udtNames,
-    problems
-) {
-    const memberPath =
-        `${path}.${member.name}`;
-
-
-    if (
-        member.data_type === "Array"
-    ) {
-        if (
-            member.array_element_type
-        ) {
-            checkDataType(
-                member.array_element_type,
-                `${memberPath}[]`,
-                allowedTypes,
-                udtNames,
-                problems
-            );
-        }
-
+function checkMember(member, path, allowedTypes, udtNames, problems) {
+    const memberPath = `${path}.${member.name}`;
+    if (member.data_type === "Array") {
+        if (member.array_element_type) checkDataType(member.array_element_type, `${memberPath}[]`, allowedTypes, udtNames, problems);
         return;
     }
-
-
-    if (
-        member.data_type === "Struct"
-    ) {
-        for (
-            const child
-            of member.struct_members ?? []
-        ) {
-            checkMember(
-                child,
-                memberPath,
-                allowedTypes,
-                udtNames,
-                problems
-            );
-        }
-
+    if (member.data_type === "Struct") {
+        for (const child of member.struct_members ?? []) checkMember(child, memberPath, allowedTypes, udtNames, problems);
         return;
     }
-
-
-    checkDataType(
-        member.data_type,
-        memberPath,
-        allowedTypes,
-        udtNames,
-        problems
-    );
+    checkDataType(member.data_type, memberPath, allowedTypes, udtNames, problems);
 }
 
-
-export function findIncompatibleDataTypes(
-    config,
-    targetPlcFamily
-) {
-    const allowedTypes =
-        new Set(
-            getPlcDataTypes(
-                targetPlcFamily
-            ).map(
-                (type) =>
-                    type.toLowerCase()
-            )
-        );
-
-
-    const udtNames =
-        new Set(
-            config.udts.map(
-                (udt) =>
-                    udt.name.toLowerCase()
-            )
-        );
-
-
+export function findIncompatibleDataTypes(config, targetPlcFamily) {
+    const allowedTypes = new Set(getPlcDataTypes(targetPlcFamily).map(normalized));
+    const udtNames = new Set(config.udts.map(udt => normalized(udt.name)));
     const problems = [];
-
-
     for (const udt of config.udts) {
-        for (const field of udt.fields) {
-            checkMember(
-                field,
-                udt.name,
-                allowedTypes,
-                udtNames,
-                problems
-            );
-        }
+        for (const field of udt.fields) checkMember(field, udt.name, allowedTypes, udtNames, problems);
     }
-
-
     for (const db of config.dbs) {
-        for (const member of db.members) {
-            checkMember(
-                member,
-                db.name,
-                allowedTypes,
-                udtNames,
-                problems
-            );
-        }
+        for (const member of db.members) checkMember(member, db.name, allowedTypes, udtNames, problems);
     }
-
-
     return problems;
 }

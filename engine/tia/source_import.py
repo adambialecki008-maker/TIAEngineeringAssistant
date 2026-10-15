@@ -24,6 +24,7 @@ from engine.project import ProjectSpecification
 from engine.tia.compat import run_adapter
 from engine.tia.project import get_project_context
 from engine.tia.structures import get_plc_structure, get_plc_structures
+from engine.tia.type_registry import is_builtin_type
 from functions.tia_source_generator import (
     generate_db_source, generate_udt_source, sanitize_comment,
 )
@@ -522,15 +523,6 @@ def _compare_existing(request, definition: dict, existing) -> dict:
                 "Export/repair the type in TIA and run preflight again."}
 
 
-_BUILTIN_TYPES = {
-    "bool", "byte", "word", "dword", "lword", "sint", "usint", "int",
-    "uint", "dint", "udint", "lint", "ulint", "real", "lreal",
-    "char", "wchar", "string", "wstring", "date", "time", "ltime",
-    "tod", "time_of_day", "ltod", "date_and_time", "dt", "dtl",
-    "s5time", "s5_time", "timer", "counter",
-}
-
-
 def _selected_project(request: PlcStructureImportRequest) -> ProjectSpecification:
     # A subset selection must not conceal ambiguous identities elsewhere in
     # the configured project. The dependency resolver indexes by folded name;
@@ -601,7 +593,7 @@ def _include_required_udts(
     def inspect(members):
         for reference in _references(members):
             key = _reference_type(reference)
-            if key in _BUILTIN_TYPES:
+            if is_builtin_type(key):
                 continue
             udt = configured_udts.get(key)
             if udt is None:
@@ -700,7 +692,7 @@ def _make_plan(request: PlcStructureImportRequest) -> dict:
         blockers = []
         for reference in references:
             ref_key = _reference_type(reference)
-            if ref_key in _BUILTIN_TYPES:
+            if is_builtin_type(ref_key):
                 continue
             dependency = selected_state.get(ref_key)
             if dependency is not None:
@@ -834,7 +826,7 @@ def export_selected_plc_sources(request: SelectedProjectPreviewRequest) -> Respo
             references = sorted({
                 _reference_type(reference)
                 for reference in _references(members)
-                if _reference_type(reference) not in _BUILTIN_TYPES
+                if not is_builtin_type(_reference_type(reference))
             })
             dependencies = [known_udts[key] for key in references if key in known_udts]
             external.update(ref for ref in references if ref not in known_udts)

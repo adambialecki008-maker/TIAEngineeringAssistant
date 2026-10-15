@@ -10,8 +10,11 @@ const boundary = source.indexOf("function request(");
 const packageBoundary = source.indexOf("export function exportPackage(");
 assert.ok(boundary > 0, "Expected IndexedDB boundary in library_store.js");
 assert.ok(packageBoundary > boundary, "Expected package boundary in library_store.js");
-const production = (source.slice(0, boundary) + source.slice(packageBoundary)).replace(/\bexport\s+/g, "");
-const context = {assert, console, crypto: require("node:crypto").webcrypto, TextEncoder};
+const production = (source.slice(0, boundary) + source.slice(packageBoundary))
+    .replace(/^import[^;]+;\s*/m, "")
+    .replace(/\bexport\s+/g, "");
+const context = {assert, console, crypto: require("node:crypto").webcrypto, TextEncoder,
+    isBuiltInSystemType: type => new Set(["bool", "time", "ltime", "tod", "ltod", "date_and_time", "ldt", "dtl", "ton", "ton_time", "iec_timer", "ctu", "iec_counter"]).has(String(type).toLowerCase())};
 vm.createContext(context);
 vm.runInContext(`${production}\n
 globalThis.runLibraryStoreTests = async () => {
@@ -33,6 +36,12 @@ globalThis.runLibraryStoreTests = async () => {
         payload: {members: [{name: "Value", data_type: "UDT_NotInLibrary"}]}
     });
     assert.deepEqual(analyzeDependencies([missingDb.id], [missingDb]).missing, ["UDT_NotInLibrary"]);
+    const nativeTimer = sanitizeLibraryObject({
+        id: "db-native-timer", object_type: "db", name: "DB_NativeTimer",
+        payload: {members: [{name: "Timer", data_type: "TON_TIME"}]}
+    });
+    assert.deepEqual(analyzeDependencies([nativeTimer.id], [nativeTimer]).missing, [],
+        "Native timer types must never become missing library UDT dependencies");
     const packageData = exportPackage({name: "Motors"}, [dbMotors.id], [dbMotors, udtMotor]);
     assert.deepEqual(packageData.metadata.categories, ["Custom machinery", "General"]);
     assert.equal(parsePackage(JSON.stringify(packageData)).objects.length, 2);
