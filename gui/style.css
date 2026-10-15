@@ -2771,28 +2771,29 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .member-tree-toggle[aria-expanded="true"] {
     color: #82c8ff;
 }
-.member-selection-toolbar {
+.member-tree-actions { min-width: 250px; white-space: nowrap; }
+.member-tree-actions button { margin-right: 5px; }
+.member-flag {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    min-width: 190px;
+}
+.member-flag-label {
+    display: flex;
     gap: 8px;
-    margin: 4px 0 12px;
+    align-items: center;
+    cursor: pointer;
+    font-size: 13px;
 }
-.member-tree-actions {
-    min-width: 220px;
-    white-space: normal;
+.member-flag-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #69b9ff;
 }
-.member-row-checkbox {
-    vertical-align: middle;
-    margin: 0 8px 0 0;
-    accent-color: #67b2e9;
-}
-.member-row-commands {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    vertical-align: middle;
-}
-.member-row-commands[hidden] {
-    display: none !important;
-}
+.member-flag-status { color: var(--ui-text-muted, #a7b7c3); font-size: 11px; }
+.member-flag-reset { padding: 2px 7px; font-size: 11px; }
+.member-flag-reset[hidden] { display: none; }
+

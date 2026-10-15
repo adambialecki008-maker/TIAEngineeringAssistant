@@ -208,7 +208,7 @@ const seed = {
         await duplicateForm.locator(':scope > .action-row')
             .getByRole("button", { name: "Cancel", exact: true }).click();
 
-        // Selection checkboxes expose member actions; expansion uses arrows.
+        // Row actions are immediately available; expansion uses arrows.
         assert.equal((await stsRow.locator(".member-tree-toggle").innerText()).trim(), "▾");
         // Add/delete/reorder works within a draft Struct.
         const tree = stsForm.locator(".member-tree").first();
@@ -222,12 +222,10 @@ const seed = {
         const selectedDelete = stsForm.locator(
             'tr[data-member-path="udt-field-0-edit-1-struct:3"]'
         );
-        await selectedDelete.locator("input.member-row-checkbox").check();
         await selectedDelete.getByRole("button", { name: "Delete", exact: true }).click();
         const selectedMove = stsForm.locator(
             'tr[data-member-path="udt-field-0-edit-1-struct:2"]'
         );
-        await selectedMove.locator("input.member-row-checkbox").check();
         await selectedMove.getByRole("button", { name: "Move up" }).click();
         await save(stsForm);
         config = await page.evaluate((key) =>

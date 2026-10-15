@@ -196,25 +196,42 @@ function labeledControl(text, control) {
     return label;
 }
 
-function optionalBooleanSelect(id, value) {
-    const select = document.createElement("select");
-    select.id = id;
-    for (const [key, text] of [
-        ["", "TIA default"],
-        ["true", "Enabled"],
-        ["false", "Disabled"],
-    ]) {
-        const option = document.createElement("option");
-        option.value = key;
-        option.textContent = text;
-        select.appendChild(option);
+// A native checkbox represents Enabled/Disabled. Indeterminate means that the
+// optional TIA attribute is NOT specified, preserving existing project data.
+// The small Default action restores the unspecified state after editing.
+function optionalBooleanCheckbox(id, value, title) {
+    const container = document.createElement("div");
+    container.className = "member-flag";
+    const label = document.createElement("label");
+    label.className = "member-flag-label";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.id = id;
+    label.append(box, document.createTextNode(title));
+    const status = document.createElement("span");
+    status.className = "member-flag-status";
+    const reset = createButton("Default", () => {
+        set(null);
+        // An explicit user action changes a draft (no mutation until Save).
+        box.dispatchEvent(new Event("input", {bubbles: true}));
+    });
+    reset.className = "member-flag-reset";
+    reset.title = "Leave this TIA attribute unspecified";
+    let current = value == null ? null : value === true;
+    function set(next) {
+        current = next;
+        box.checked = next === true;
+        box.indeterminate = next === null;
+        box.setAttribute("aria-checked", next === null ? "mixed" : String(next));
+        status.textContent = next === null ? "TIA default" : next ? "On" : "Off";
+        reset.hidden = next === null;
     }
-    select.value = value == null ? "" : String(value);
-    return select;
-}
-
-function optionalBooleanValue(select) {
-    return select.value === "" ? null : select.value === "true";
+    box.addEventListener("change", () => {
+        set(box.checked);
+    });
+    container.append(label, status, reset);
+    set(current);
+    return {element:container, value:() => current, set};
 }
 
 function selectStoredType(select, value) {
@@ -265,28 +282,26 @@ export function createMemberEditor({
     const startValueInput = createInput(prefix + "-start-value", "Start value");
     startValueInput.value = member?.start_value ?? "";
     const startValueLabel = labeledControl("Start value (optional)", startValueInput);
-    const visibleSelect = optionalBooleanSelect(
-        prefix + "-visible", member?.hmi_visible
+    const visibleFlag = optionalBooleanCheckbox(
+        prefix + "-visible", member?.hmi_visible, "Visible in HMI"
     );
-    const accessibleSelect = optionalBooleanSelect(
-        prefix + "-accessible", member?.hmi_accessible
+    const accessibleFlag = optionalBooleanCheckbox(
+        prefix + "-accessible", member?.hmi_accessible, "Accessible from HMI/OPC UA"
     );
-    const writableSelect = optionalBooleanSelect(
-        prefix + "-writable", member?.hmi_writable
+    const writableFlag = optionalBooleanCheckbox(
+        prefix + "-writable", member?.hmi_writable, "Writable from HMI/OPC UA"
     );
     optionsRow.append(
-        startValueLabel,
-        labeledControl("Visible in HMI", visibleSelect),
-        labeledControl("Accessible from HMI/OPC UA", accessibleSelect),
-        labeledControl("Writable from HMI/OPC UA", writableSelect)
+        startValueLabel, visibleFlag.element, accessibleFlag.element,
+        writableFlag.element
     );
     root.appendChild(optionsRow);
     const optionsNote = document.createElement("p");
     optionsNote.className = "hint";
-    optionsNote.textContent = "TIA default leaves this attribute unspecified. "
-        + "Start values currently support Bool, integer and Real/LReal scalar "
-        + "members. Retain applies to the whole DB in this version; Setpoint "
-        + "(FB only) and Supervision require separate engineering support.";
+    optionsNote.textContent = "HMI checkboxes: checked = Enabled, unchecked = Disabled, "
+        + "dash = TIA default (unspecified). Use Default to restore the original "
+        + "unspecified state. Start values support Bool, integer and Real/LReal "
+        + "scalars. Retain is set at DB level; Setpoint and Supervision are not editable.";
     root.appendChild(optionsNote);
 
     const complexArea = document.createElement("div");
@@ -383,9 +398,9 @@ export function createMemberEditor({
             comment: commentInput.value.trim() || null,
             start_value: startValueInput.disabled
                 ? null : (startValueInput.value.trim() || null),
-            hmi_visible: optionalBooleanValue(visibleSelect),
-            hmi_accessible: optionalBooleanValue(accessibleSelect),
-            hmi_writable: optionalBooleanValue(writableSelect),
+            hmi_visible: visibleFlag.value(),
+            hmi_accessible: accessibleFlag.value(),
+            hmi_writable: writableFlag.value(),
             array_element_type: null,
             array_lower_bound: null,
             array_upper_bound: null,
@@ -419,9 +434,9 @@ export function createMemberEditor({
             nameInput.value = "";
             commentInput.value = "";
             startValueInput.value = "";
-            visibleSelect.value = "";
-            accessibleSelect.value = "";
-            writableSelect.value = "";
+            visibleFlag.set(null);
+            accessibleFlag.set(null);
+            writableFlag.set(null);
             typeSelect.value = "";
             structMembers = [];
             arrayElement = "";
@@ -493,46 +508,10 @@ export function createMemberTree({
         table.className = "member-tree-table";
         const head = document.createElement("thead");
         head.innerHTML = "<tr><th>Name</th><th>Data type</th>"
-            + "<th>Comment</th><th>Select / actions</th></tr>";
+            + "<th>Comment</th><th>Actions</th></tr>";
         table.appendChild(head);
         const body = document.createElement("tbody");
         table.appendChild(body);
-
-        // Select individual members with checkboxes; unsafe commands are only
-        // offered for explicitly selected rows (same behavior for UDT and DB).
-        const selectedPaths = new Set();
-        const checkboxes = new Map();
-        const actionsByPath = new Map();
-        const selectionToolbar = document.createElement("div");
-        selectionToolbar.className = "member-selection-toolbar";
-        const selectionInfo = document.createElement("span");
-        selectionInfo.className = "hint";
-        const bulkDelete = createButton("Delete selected", () => {
-            if (!selectedPaths.size) return;
-            const names = [...selectedPaths].map(index => list[index]?.name)
-                .filter(Boolean);
-            if (!confirm("Delete " + names.length + " selected member(s): "
-                + names.join(", ") + "?")) return;
-            mutate(path, target => {
-                const indices = [...selectedPaths].sort((a, b) => b - a);
-                for (const index of indices) target.splice(index, 1);
-            });
-        });
-        bulkDelete.className = "member-delete-selected";
-        const clearSelection = createButton("Clear selection", () => {
-            for (const checkbox of checkboxes.values()) checkbox.checked = false;
-            selectedPaths.clear();
-            syncSelection();
-        });
-        function syncSelection() {
-            selectionInfo.textContent = selectedPaths.size + " selected";
-            bulkDelete.disabled = selectedPaths.size === 0;
-            clearSelection.disabled = selectedPaths.size === 0;
-            for (const [index, buttons] of actionsByPath) {
-                buttons.hidden = !selectedPaths.has(index);
-            }
-        }
-        selectionToolbar.append(selectionInfo, bulkDelete, clearSelection);
 
         list.forEach((member, index) => {
             const memberPath = [...path, index];
@@ -623,22 +602,7 @@ export function createMemberTree({
             );
             const actions = document.createElement("td");
             actions.className = "member-tree-actions";
-            const check = document.createElement("input");
-            check.type = "checkbox";
-            check.className = "member-row-checkbox";
-            check.setAttribute("aria-label", "Select " + member.name);
-            check.checked = false;
-            check.addEventListener("change", () => {
-                if (check.checked) selectedPaths.add(index);
-                else selectedPaths.delete(index);
-                syncSelection();
-            });
-            checkboxes.set(index, check);
-            const rowCommands = document.createElement("span");
-            rowCommands.className = "member-row-commands";
-            rowCommands.hidden = true;
-            actionsByPath.set(index, rowCommands);
-            rowCommands.appendChild(createButton("Delete", () => {
+            actions.appendChild(createButton("Delete", () => {
                 if (!confirm('Delete member "' + member.name + '"?')) return;
                 mutate(path, (target) => target.splice(index, 1));
             }));
@@ -647,20 +611,18 @@ export function createMemberTree({
                     [target[index], target[index - 1]];
             }));
             up.disabled = index === 0;
-            rowCommands.appendChild(up);
+            actions.appendChild(up);
             const down = createButton("Move down", () => mutate(path, (target) => {
                 [target[index + 1], target[index]] =
                     [target[index], target[index + 1]];
             }));
             down.disabled = index === list.length - 1;
-            rowCommands.appendChild(down);
-            actions.append(check, rowCommands);
+            actions.appendChild(down);
             row.appendChild(actions);
             body.appendChild(row);
             if (openPaths?.has(memberKey)) openEditor();
         });
-        host.append(table, selectionToolbar);
-        syncSelection();
+        host.appendChild(table);
         const addArea = document.createElement("div");
         addArea.className = "member-add-area";
         addArea.hidden = true;
