@@ -108,7 +108,8 @@ export function switchProjectProfile(id) {
     const next = saved ? JSON.parse(saved) : emptyProject();
     if (!next || typeof next !== "object" || Array.isArray(next))
         throw Error("Destination project profile is corrupt.");
-    projectConfig.tia_target = null;
+    // Preserve the outgoing profile exactly before changing the active pointer.
+    // The destination TIA target is cleared independently upon activation.
     saveProjectConfig();
     localStorage.setItem(ACTIVE_PROFILE_KEY, id);
     assignProject(next, true);
