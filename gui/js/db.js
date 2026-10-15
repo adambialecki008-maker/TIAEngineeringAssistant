@@ -48,29 +48,11 @@ function createCategorySelect(db, refresh) {
 }
 
 
-function requirePlc() {
-    if (!projectConfig.plc_family) {
-        alert(
-            "Select PLC family first."
-        );
-
-        return false;
-    }
-
-    return true;
-}
-
-
 export function addDb(
     nameInput,
     categoryInput,
     refresh
 ) {
-    if (!requirePlc()) {
-        return;
-    }
-
-
     const name =
         nameInput.value.trim();
 
