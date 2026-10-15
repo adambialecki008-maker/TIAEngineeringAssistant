@@ -61,7 +61,7 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
     "I/O Engineering");
   await page.locator("#device-mapping-mode").waitFor();
   assert.equal(await page.locator("#device-mapping-mode").inputValue(),"device");
-  await page.locator("#tia-process option[value='123']").waitFor();
+  await page.locator("#tia-process option[value='123']").waitFor({state:"attached"});
   await page.locator("#tia-process").selectOption("123");
   await page.locator("#refresh-hardware-button").click();
   await page.locator("#device-io-mapping-body select").first().selectOption({index:1});
