@@ -36,6 +36,32 @@ globalThis.runLibraryStoreTests = async () => {
     const packageData = exportPackage({name: "Motors"}, [dbMotors.id], [dbMotors, udtMotor]);
     assert.deepEqual(packageData.metadata.categories, ["Custom machinery", "General"]);
     assert.equal(parsePackage(JSON.stringify(packageData)).objects.length, 2);
+    const existingConflicting = sanitizeLibraryObject({
+        id: "existing-motor", object_type: "udt", name: "UDT_Motor",
+        payload: {fields: [{name: "Running", data_type: "Int"}]}
+    });
+    const proposedConflict = planSelectiveLibraryImport([dbMotors.id], [dbMotors, udtMotor], [existingConflicting]);
+    assert.equal(proposedConflict.unresolved.length, 1, "Conflicts require an explicit decision");
+    assert.throws(() => planSelectiveLibraryImport([dbMotors.id], [dbMotors, udtMotor],
+        [existingConflicting], {[udtMotor.id]: {action: "rename", name: "UDT_Motor"}}), /different name/);
+    const proposedRenamed = planSelectiveLibraryImport([dbMotors.id], [dbMotors, udtMotor],
+        [existingConflicting], {[udtMotor.id]: {action: "rename", name: "UDT_Motor_Custom"}});
+    assert.equal(proposedRenamed.unresolved.length, 0);
+    assert.equal(proposedRenamed.candidates.find(item => item.source.id === dbMotors.id).payload.members[0].data_type,
+        "UDT_Motor_Custom", "Renames rewrite incoming DB references");
+    const proposedKeep = planSelectiveLibraryImport([dbMotors.id], [dbMotors, udtMotor],
+        [existingConflicting], {[udtMotor.id]: {action: "keep"}});
+    assert.equal(proposedKeep.candidates.length, 1, "Keep existing only imports the DB");
+    assert.throws(() => planSelectiveLibraryImport([dbMotors.id], [dbMotors, udtMotor],
+        [existingConflicting], {[udtMotor.id]: {action: "version", version: "bad"}}), /SemVer/);
+    const versionPlan = planSelectiveLibraryImport([dbMotors.id], [dbMotors, udtMotor],
+        [existingConflicting], {[udtMotor.id]: {action: "version", version: "2.0.0"}});
+    assert.equal(versionPlan.candidates.length, 2);
+    assert.equal(versionPlan.candidates[0].version, "2.0.0");
+    const untouched = JSON.stringify(existingConflicting);
+    planSelectiveLibraryImport([dbMotors.id], [dbMotors, udtMotor],
+        [existingConflicting], {[udtMotor.id]: {action: "replace", version: "3.0.0"}});
+    assert.equal(JSON.stringify(existingConflicting), untouched, "Planning never mutates persisted objects");
     const firstHash = await contentHash({b: 2, a: 1});
     const secondHash = await contentHash({a: 1, b: 2});
     assert.equal(firstHash, secondHash, "Object hashing must be key-order independent");

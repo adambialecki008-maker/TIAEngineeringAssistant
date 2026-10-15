@@ -245,6 +245,94 @@ export function analyzeDependencies(selectedIds, objects) {
         missing: [...missing].sort((left, right) => left.localeCompare(right)),
     };
 }
+
+/**
+ * Read-only import plan. Decisions are indexed by source object ID.
+ * Conflicts require an explicit resolution. Dependencies are included before
+ * dependants and a renamed UDT is rewritten throughout the imported subset.
+ */
+export function planSelectiveLibraryImport(selectedIds, sourceObjects, targetObjects = [], decisions = {}) {
+    if (!Array.isArray(selectedIds) || !selectedIds.length) throw Error("Select at least one object to import.");
+    const selected = [...new Set(selectedIds)];
+    const analysis = analyzeDependencies(selected, sourceObjects);
+    if (analysis.missing.length) throw Error("Missing source dependency: " + analysis.missing.join(", "));
+    const targets = new Map(targetObjects.map(item => [item.object_type + ":" + item.name.toLocaleLowerCase(), item]));
+    const names = new Set(targets.keys());
+    const importedIds = new Set(analysis.plan.map(item => item.id));
+    const renamed = new Map();
+    const rows = [];
+    for (const source of analysis.plan) {
+        const key = source.object_type + ":" + source.name.toLocaleLowerCase();
+        const target = targets.get(key) || null;
+        const same = target && JSON.stringify(canonical(target.payload)) === JSON.stringify(canonical(source.payload));
+        const choice = decisions[source.id] || {};
+        let action = target ? (same ? "skip" : (choice.action || "unresolved")) : "add";
+        const allowed = ["skip", "keep", "rename", "version", "replace"];
+        if (target && !same && !allowed.includes(action) && action !== "unresolved") throw Error("Unknown import conflict resolution.");
+        if (!target && choice.action && choice.action !== "add") throw Error("Resolution specified for a new object: " + source.name);
+        let name = source.name;
+        let version = source.version;
+        if (action === "rename") {
+            name = text(choice.name, 128);
+            if (!name || name.toLocaleLowerCase() === source.name.toLocaleLowerCase()) {
+                throw Error("Provide a different name for imported " + source.name + ".");
+            }
+            if (source.object_type === "udt") renamed.set(source.name.toLocaleLowerCase(), name);
+        }
+        if (action === "version" || action === "replace") {
+            version = text(choice.version, 32);
+            if (!SEMVER.test(version)) throw Error("Provide a valid SemVer version for " + source.name + ".");
+            if ((target.versions || []).some(v => v.version === version) || target.version === version) {
+                throw Error("Version " + version + " already exists for " + source.name + ".");
+            }
+        }
+        const destinationKey = source.object_type + ":" + name.toLocaleLowerCase();
+        if (action === "add" || action === "rename") {
+            if (names.has(destinationKey)) throw Error("Import name collision: " + name + ".");
+            names.add(destinationKey);
+        }
+        rows.push({source, target, action, name, version, is_dependency: !selected.includes(source.id)});
+    }
+    const candidates = rows.filter(row => ["add", "rename", "version", "replace"].includes(row.action))
+        .map(row => {
+            let payload = jsonClone(row.source.payload);
+            for (const [oldName, newName] of renamed) {
+                payload = renameTypeReferencesInPayload(row.source.object_type, payload, oldName, newName).payload;
+            }
+            payload.name = row.name;
+            return {...row, payload};
+        });
+    // Missing dependencies may be provided by an existing destination library,
+    // but never by an object which will be skipped without being present.
+    const destinationTypes = new Map(targetObjects.filter(item => item.object_type === "udt")
+        .map(item => [item.name.toLocaleLowerCase(), item]));
+    for (const candidate of candidates.filter(item => item.source.object_type === "udt")) {
+        destinationTypes.set(candidate.name.toLocaleLowerCase(), candidate);
+    }
+    const missing = new Set();
+    for (const row of candidates) {
+        if (row.source.object_type === "udt") findMissingReferences(row.payload.fields, destinationTypes, missing);
+        if (row.source.object_type === "db") findMissingReferences(row.payload.members, destinationTypes, missing);
+    }
+    if (missing.size) throw Error("Import would leave missing UDT references: " + [...missing].join(", "));
+    // Detect cycles involving imported UDTs and already-existing target UDTs.
+    const proposed = targetObjects.map(item => {
+        const update = candidates.find(row => row.target && row.target.id === item.id &&
+            (row.action === "version" || row.action === "replace"));
+        return update ? {...item, payload: update.payload} : item;
+    });
+    for (const row of candidates.filter(item => !item.target || item.action === "rename")) {
+        const freshId = "import-preview-" + row.source.id;
+        proposed.push({...row.source, id: freshId, name: row.name, payload: row.payload});
+    }
+    const proposedImports = candidates.map(row => row.target && (row.action === "version" || row.action === "replace")
+        ? row.target.id : "import-preview-" + row.source.id);
+    // A missing source dependency is checked above; the proposed model checks
+    // the destination graph after all approved renames/replacements.
+    dependencyPlan(proposedImports, proposed);
+    return {rows, candidates, dependencies: analysis.dependencies, unresolved: rows.filter(row => row.action === "unresolved")};
+}
+
 function request(value) { return new Promise((resolve, reject) => { value.onsuccess = () => resolve(value.result); value.onerror = () => reject(value.error || Error("IndexedDB operation failed.")); }); }
 function transactionDone(tx) { return new Promise((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onabort = tx.onerror = () => reject(tx.error || Error("IndexedDB transaction failed.")); }); }
 let database;
@@ -394,7 +482,7 @@ export async function createLibraryWithObjects(metadata, inputs) {
             description: text(metadata?.description), created_at: now, modified_at: now};
         await requireAvailableLibraryName(library.name);
         const objects = await Promise.all(inputs.map(async raw => {
-            const item = sanitizeLibraryObject(raw, library.id); item.content_hash = await contentHash(item.payload);
+            const item = sanitizeLibraryObject({...raw, id: id("object")}, library.id); if (item.object_type === "device_template") item.payload.id = item.id; item.content_hash = await contentHash(item.payload);
             item.created_at = raw.created_at || now; item.modified_at = now;
         item.versions = Array.isArray(raw.versions) && raw.versions.length
             ? raw.versions.map(version => normalizedRevision(version, item))
@@ -425,6 +513,73 @@ export async function createLibraryWithObjects(metadata, inputs) {
         await transactionDone(tx); return {library, objects};
     });
 }
+
+/**
+ * Import into an existing library as one IndexedDB transaction. All hashing
+ * and graph validation finish before the write transaction begins.
+ */
+export async function applySelectiveLibraryImport(libraryId, selectedIds, sourceObjects, decisions = {}) {
+    return serializeLibraryWrite(async () => {
+        const db = await openLibraryStore();
+        const existingTx = db.transaction(["libraries", "objects"], "readonly");
+        const library = await request(existingTx.objectStore("libraries").get(libraryId));
+        if (!library) throw Error("Destination library no longer exists.");
+        const before = await request(existingTx.objectStore("objects").index("library_id").getAll(libraryId));
+        const plan = planSelectiveLibraryImport(selectedIds, sourceObjects, before, decisions);
+        if (plan.unresolved.length) throw Error("Resolve all import conflicts before confirming.");
+        const now = new Date().toISOString();
+        const written = [];
+        for (const row of plan.candidates) {
+            const validated = sanitizeLibraryObject({
+                ...row.source, name: row.name, payload: row.payload,
+                id: (row.action === "replace" || row.action === "version") ? row.target.id : id("object"),
+            }, libraryId);
+            validated.payload.name = validated.name;
+            if (validated.object_type === "device_template") validated.payload.id = validated.id;
+            validated.content_hash = await contentHash(validated.payload);
+            if (row.action === "replace" || row.action === "version") {
+                const old = row.target;
+                validated.created_at = old.created_at;
+                validated.modified_at = now;
+                validated.version = row.version;
+                validated.versions = [
+                    ...(old.versions || []).map(entry => normalizedRevision(entry, old)),
+                    revisionRecord(validated, now, row.action === "version" ? "Imported as new version." : "Explicitly replaced by library import."),
+                ];
+            } else {
+                validated.created_at = now;
+                validated.modified_at = now;
+                validated.versions = [revisionRecord(validated, now, "Imported from portable library.")];
+            }
+            written.push(validated);
+        }
+        const tx = db.transaction(["libraries", "objects", "categories"], "readwrite");
+        const store = tx.objectStore("objects");
+        const current = await request(store.index("library_id").getAll(libraryId));
+        const destination = await request(tx.objectStore("libraries").get(libraryId));
+        if (!destination || JSON.stringify(before) !== JSON.stringify(current)) {
+            tx.abort();
+            throw Error("Destination library changed during import. Refresh preview before trying again.");
+        }
+        const catStore = tx.objectStore("categories");
+        const known = new Set((await request(catStore.getAll())).map(item => item.key));
+        for (const item of written) {
+            const key = normalizeCategoryName(item.category);
+            if (!known.has(key)) {
+                catStore.add({key, name: item.category, built_in: false});
+                known.add(key);
+            }
+            store.put(item);
+        }
+        if (written.length) tx.objectStore("libraries").put({...destination, modified_at: now});
+        await transactionDone(tx);
+        return {added: written.filter(item => !before.some(old => old.id === item.id)).length,
+            revised: written.filter(item => before.some(old => old.id === item.id)).length,
+            skipped: plan.rows.length - written.length,
+            written};
+    });
+}
+
 export async function deleteLibrary(libraryId) {
     const db = await openLibraryStore();
     const read = db.transaction("libraries", "readonly");
@@ -451,7 +606,7 @@ export async function putLibraryObjects(libraryId, inputs, {skipConflicts = fals
     if (!library) throw Error("Library not found.");
     const now = new Date().toISOString();
     const candidates = await Promise.all(inputs.map(async raw => {
-        const item = sanitizeLibraryObject(raw, libraryId); item.content_hash = await contentHash(item.payload);
+        const item = sanitizeLibraryObject({...raw, id: id("object")}, libraryId); if (item.object_type === "device_template") item.payload.id = item.id; item.content_hash = await contentHash(item.payload);
         item.created_at = raw.created_at || now; item.modified_at = now;
         item.versions = Array.isArray(raw.versions) && raw.versions.length
             ? raw.versions.map(version => normalizedRevision(version, item))
