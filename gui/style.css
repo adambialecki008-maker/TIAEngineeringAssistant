@@ -2756,3 +2756,43 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 @media (max-width: 900px) {
     .header-context { margin-left: 0; justify-content: flex-start; }
 }
+
+/* Unified TIA-style engineering trees: consistent chevron toggles for UDT/DB. */
+.member-tree-toggle {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 1px 4px;
+    font-size: 18px;
+    line-height: 1;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+.member-tree-toggle[aria-expanded="true"] {
+    color: #82c8ff;
+}
+.member-selection-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 12px;
+}
+.member-tree-actions {
+    min-width: 220px;
+    white-space: normal;
+}
+.member-row-checkbox {
+    vertical-align: middle;
+    margin: 0 8px 0 0;
+    accent-color: #67b2e9;
+}
+.member-row-commands {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    vertical-align: middle;
+}
+.member-row-commands[hidden] {
+    display: none !important;
+}
