@@ -251,7 +251,7 @@ const seed = {
         // getByText("Running", {exact:true}) cannot match "+ Running".
         assert.match(
             await persistedMember.locator("td").first().innerText(),
-            /\\bRunning\\b/
+            /Running/
         );
         await persistedForm.locator(':scope > .action-row')
             .getByRole("button", { name: "Cancel", exact: true }).click();
