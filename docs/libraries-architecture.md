@@ -54,7 +54,7 @@ transaction. Category/object/library updates commit together or abort together.
 Importing a renamed UDT rewrites references in the incoming dependency set.
 No local user object is silently overwritten.
 
-## Limitations
+## Engineering UI consistency\n\nOverview owns the active local profile, TIA connection and Active PLC selection.\nUDT and DB tabs share the same read-only import pattern and TIA-style\nmember trees: `▸`/`▾` chevrons expand declaration details, while member\ncheckboxes reveal edit actions (Delete, Move up, Move down). Bulk deletion\nrequires selection and explicit confirmation. The DB import has no independent\nRETAIN/NON_RETAIN override; XML ambiguity is rejected.\n\n## Limitations
 
 The library is not a TIA Global Library and does not preserve every Siemens
 proprietary XML attribute. Import from live TIA is intentionally conservative:
