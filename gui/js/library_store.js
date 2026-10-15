@@ -34,7 +34,7 @@ function member(input, depth = 0) {
     for (const key of ["comment", "start_value", "array_element_type"]) {
         if (input[key] != null) result[key] = text(input[key], 5000);
     }
-    for (const key of ["hmi_visible", "hmi_accessible", "hmi_writable"]) {
+    for (const key of ["hmi_visible", "hmi_accessible", "hmi_writable", "retain"]) {
         const value = bool(input[key]); if (value !== null) result[key] = value;
     }
     if (dataType === "Array") {

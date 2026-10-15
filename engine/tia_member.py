@@ -24,6 +24,9 @@ class TiaMember(BaseModel):
     hmi_visible: bool | None = None
     hmi_accessible: bool | None = None
     hmi_writable: bool | None = None
+    # Optimized global DB top-level declaration retain override.
+    # None means inherit DB-wide legacy setting (or inherited parent).
+    retain: bool | None = None
 
     # ARRAY
     array_element_type: str | None = None

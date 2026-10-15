@@ -77,29 +77,35 @@ def generate_db_source(
         "{ S7_Optimized_Access := 'TRUE' }",
         "VERSION : 0.1",
     ]
-    # RETAIN belongs to the DB variable declaration in SCL.  A standalone
-    # RETAIN directive is rejected by TIA during GenerateBlocksFromSource.
-    if retain:
-        lines.append("VAR RETAIN")
+    # V21 optimized global DB: consecutive variables with the same retain
+    # mode are emitted in separate VAR / VAR RETAIN declaration sections.
+    # The previous whole-DB syntax is preserved for legacy configurations.
+    effective = [(member, member.retain if member.retain is not None else retain)
+                 for member in members]
+    modes = {mode for _, mode in effective}
+    if len(modes) <= 1:
+        mode = next(iter(modes), retain)
+        if mode:
+            lines.append("VAR RETAIN")
+        else:
+            lines.extend(("NON_RETAIN", "VAR"))
+        for member, _ in effective:
+            lines.extend(generate_member_lines(
+                member, indent="   ", udt_names=udt_names))
+        lines.append("END_VAR")
     else:
-        lines.extend(("NON_RETAIN", "VAR"))
+        current = None
+        for member, mode in effective:
+            if current is None or current != mode:
+                if current is not None:
+                    lines.append("END_VAR")
+                lines.append("VAR RETAIN" if mode else "VAR")
+                current = mode
+            lines.extend(generate_member_lines(
+                member, indent="   ", udt_names=udt_names))
+        lines.append("END_VAR")
 
-    for member in members:
-        lines.extend(
-            generate_member_lines(
-                member,
-                indent="   ",
-                udt_names=udt_names,
-            )
-        )
-
-    lines.extend(
-        [
-            "END_VAR",
-            "BEGIN",
-            "END_DATA_BLOCK",
-        ]
-    )
+    lines.extend(["BEGIN", "END_DATA_BLOCK"])
 
     return "\n".join(lines)
 

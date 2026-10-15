@@ -235,50 +235,53 @@ def _udt_metadata_notes(spec, members):
 
 
 def _db_retain_comparison(spec, members) -> dict | None:
-    """Require explicit exported remanence before declaring a RETAIN DB identical.
+    """Fail closed when V21 XML does not confirm requested per-variable RETAIN.
 
-    TIA may omit the Remanence attribute. Missing data is *not* proof of
-    NonRetain or Retain. Compare top-level declarations because nested members
-    can inherit the parent section/member's remanence settings.
+    Nested Struct/UDT children inherit top-level retentivity; an explicit
+    contradictory nested remanence is never treated as identical.
     """
-    top_level = [member for member in members if "." not in member.path]
-    explicit = {
-        member.path: member.metadata.get("remanence", "").strip().casefold()
-        for member in top_level
-    }
-    nonretain = {"nonretain", "non_retain", "non-retain", "noretain"}
-    conflicting = [
-        path for path, value in explicit.items()
-        if (spec.retain and value in nonretain)
-        or (not spec.retain and value == "retain")
-    ]
-    if conflicting:
-        desired = "RETAIN" if spec.retain else "NON_RETAIN"
+    top_level = [m for m in members if "." not in m.path]
+    declared = {m.name.casefold(): m for m in spec.members}
+    nonretain = {"nonretain", "non_retain", "non-retain", "noretain", "false"}
+    retentive = {"retain", "true"}
+    conflicts, unknowns = [], []
+    for row in top_level:
+        expected_member = declared.get(row.path.casefold())
+        if expected_member is None:
+            continue
+        requested = (expected_member.retain if expected_member.retain is not None
+                     else spec.retain)
+        raw = row.metadata.get("remanence", "").strip().casefold()
+        if raw in nonretain | retentive:
+            actual = raw in retentive
+            if actual != requested:
+                conflicts.append(row.path)
+        elif raw:
+            unknowns.append(row.path + " (unrecognized remanence " + raw + ")")
+        elif requested:
+            unknowns.append(row.path + " (Remanence=Retain not explicitly confirmed)")
+    if conflicts:
         return {"status": "conflict", "reason":
-                "DB retention mismatch: application requests " + desired
-                + " but TIA reports different remanence for "
-                + ", ".join(conflicting) + ". No overwrite."}
-    if spec.retain:
-        not_confirmed = [
-            path for path, value in explicit.items() if value != "retain"
-        ]
-        if not_confirmed:
+                "DB retention mismatch for " + ", ".join(conflicts)
+                + ". No overwrite."}
+    if unknowns:
+        return {"status": "unknown", "reason":
+                "Exported TIA XML does not explicitly confirm Retain: "
+                + ", ".join(unknowns) + ". Manual verification required; no overwrite."}
+
+    for row in members:
+        if "." not in row.path:
+            continue
+        top = row.path.split(".", 1)[0].casefold()
+        declared_member = declared.get(top)
+        if declared_member is None:
+            continue
+        parent_retain = (declared_member.retain if declared_member.retain is not None
+                         else spec.retain)
+        raw = row.metadata.get("remanence", "").strip().casefold()
+        if raw in nonretain | retentive and (raw in retentive) != parent_retain:
             return {"status": "unknown", "reason":
-                    "DB member declarations match, but exported TIA XML does "
-                    "not explicitly confirm Remanence=Retain for "
-                    + ", ".join(not_confirmed)
-                    + ". Manual verification required; no import or overwrite."}
-        # An explicit child override would make whole-DB RETAIN unverifiable.
-        overrides = [
-            member.path for member in members
-            if "." in member.path
-            and member.metadata.get("remanence", "").strip().casefold()
-                in nonretain
-        ]
-        if overrides:
-            return {"status": "unknown", "reason":
-                    "Nested DB members override RETAIN: "
-                    + ", ".join(overrides)
+                    "Nested DB members override RETAIN: " + row.path
                     + ". Manual verification required; no overwrite."}
     return None
 
