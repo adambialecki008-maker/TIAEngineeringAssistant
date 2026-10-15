@@ -61,13 +61,19 @@ const seed = {
                 dialog.accept();
             }
         });
-        await page.route("**/api/v1/tia/**", (route) =>
-            route.fulfill({
+        await page.route("**/api/v1/tia/**", (route) => {
+            // This endpoint generates SCL offline from configured UDTs/DBs;
+            // no Siemens process, import, or device is contacted.
+            if (new URL(route.request().url()).pathname
+                === "/api/v1/tia/plc-structure-import/preview") {
+                return route.continue();
+            }
+            return route.fulfill({
                 status: 503,
                 contentType: "application/json",
                 body: '{"detail":"Mocked for editor test"}',
-            })
-        );
+            });
+        });
         await page.addInitScript(({ key, seed }) => {
             if (!localStorage.getItem(key)) {
                 localStorage.setItem(key, JSON.stringify(seed));
