@@ -925,7 +925,7 @@ def test_hmi_confirmation_and_import_have_separate_states():
     assert '"Confirmation required — "' in approval
     assert 'hmiReviewQueueOperation = "importing / verifying";' in project
     assert '"Importing Project texts (XLSX) into TIA and verifying by "' in project
-    assert '"Backend verification complete. Refreshing the "' in project
+    assert '" Backend verification complete. Refreshing the "' in project
     assert 'hmiReviewQueueOperation = "importing / verifying";' in xml
     assert '"TIA VERIFIED "' in xml
 
