@@ -546,6 +546,9 @@ export function initTiaUi(
     let hmiCombinedApprovedCount = 0;
     let hmiUnifiedRunning = false;
     let hmiUnifiedPauseRequested = false;
+    // An automatic run may be switched to review mode only after its current
+    // batch has completed and has been verified by TIA.
+    let hmiUnifiedReviewHandoffRequested = false;
     let hmiUnifiedQuota = 0;
     let hmiUnifiedCarryVerified = 0;
     let hmiUnifiedXlsxVerified = 0;
@@ -2119,6 +2122,14 @@ export function initTiaUi(
                 retry = false;
                 lastJob = job;
                 showHmiBatchJob(job);
+                // Review can be enabled while this automatic batch is being
+                // written. Do not interrupt that write. A "ready" response
+                // is already a safe verified boundary, so stop this client
+                // loop before it requests the next batch and hand the
+                // remaining quota to the reviewed queue.
+                if (hmiUnifiedReviewHandoffRequested) {
+                    break;
+                }
                 if (job.status === "completed" || job.status === "paused") {
                     break;
                 }
@@ -2156,6 +2167,7 @@ export function initTiaUi(
         const preserveRunReport = options.preserveRunReport === true;
         const carriedVerified = confirmed && preserveRunReport
             ? Math.max(0, Number(options.carriedVerified) || 0) : 0;
+        let reviewHandoff = false;
         const selection = hmiTranslationSelection();
         const useProject = hmiScopeEnabled("project");
         const useXml = hmiScopeEnabled("text_lists");
@@ -2214,6 +2226,7 @@ export function initTiaUi(
         hmiUnifiedRunning = true;
         hmiUnifiedStopRequested = false;
         hmiUnifiedPauseRequested = false;
+        hmiUnifiedReviewHandoffRequested = false;
         // Switching from a reviewed queue keeps the original 10-text goal:
         // 5 verified + 5 remaining must be displayed as 5/10, not 0/5.
         hmiUnifiedCarryVerified = carriedVerified;
@@ -2231,6 +2244,11 @@ export function initTiaUi(
                 const job = await startHmiBatchImport(
                     {confirmed: true, forceAll: true}
                 );
+                if (hmiUnifiedReviewHandoffRequested
+                    && Number(job?.completed_unique) > 0) {
+                    reviewHandoff = true;
+                    return;
+                }
                 if (!job || job.status !== "completed" || hmiUnifiedPauseRequested) {
                     if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
                         "Stopped after XLSX: "
@@ -2279,6 +2297,22 @@ export function initTiaUi(
         } finally {
             if (useProject && hmiBatchJobId) await collectHmiXlsxRunSkips();
             hmiUnifiedRunning = false;
+            const handoffToReview = reviewHandoff
+                && !hmiUnifiedStopRequested;
+            const verifiedForHandoff = hmiUnifiedCarryVerified
+                + hmiUnifiedXlsxVerified + hmiXmlAutoVerified;
+            const handoffQuota = hmiUnifiedQuota;
+            if (handoffToReview && verifiedForHandoff < handoffQuota) {
+                void startReviewedHmiQueue({
+                    useProject,
+                    useXml,
+                    quota: handoffQuota,
+                    initialVerified: verifiedForHandoff,
+                    preserveRunReport: true,
+                    skipConfirmation: true,
+                });
+            }
+            hmiUnifiedReviewHandoffRequested = false;
             const wasStopped = hmiUnifiedStopRequested;
             hmiUnifiedStopRequested = false;
             hmiUnifiedPauseRequested = false;
@@ -2584,10 +2618,13 @@ export function initTiaUi(
         updateHmiTranslateButtonState();
     }
 
-    async function startReviewedHmiQueue({useProject, useXml, quota}) {
+    async function startReviewedHmiQueue({
+        useProject, useXml, quota, initialVerified = 0,
+        preserveRunReport = false, skipConfirmation = false,
+    }) {
         // No writes here: each step uses prepare-translations or text-lists/prepare.
         if (hmiReviewQueueActive || !quota) return;
-        if (!confirm(
+        if (!skipConfirmation && !confirm(
             "PREPARE REVIEWED HMI TRANSLATION QUEUE?\n\n"
             + "Review/edit each batch in Step 2; approve its import in Step 3.\n"
             + "After every verified import the next batch will be prepared.\n"
@@ -2604,16 +2641,16 @@ export function initTiaUi(
         hmiReviewQueueAutoContinue = false;
         hmiReviewQueuePaused = false;
         hmiReviewQueueQuota = quota;
-        hmiReviewQueueStartApproved = hmiCombinedApprovedCount;
+        hmiReviewQueueStartApproved = hmiCombinedApprovedCount - initialVerified;
         hmiReviewQueueTypes = {project: useProject, text_lists: useXml};
         hmiReviewQueueProjectExhausted = false;
         hmiReviewQueueExcludedProject.clear();
         hmiReviewQueuePendingSkippedList = null;
         hmiReviewQueueBlockedLists.clear();
         hmiReviewQueueExcludedXml.clear();
-        startHmiRunReport();
+        if (!preserveRunReport) startHmiRunReport();
         if (hmiEditDetails) hmiEditDetails.open = true;
-        renderHmiBatchProgress(0, quota);
+        renderHmiBatchProgress(initialVerified, quota);
         updateHmiTranslateButtonState();
         await prepareNextReviewedHmiBatch();
     }
@@ -9835,8 +9872,15 @@ export function initTiaUi(
     hmiBatchAutoRepeat?.addEventListener("change", renderHmiBatchPlan);
     hmiReviewEachBatch?.addEventListener("change", () => {
         if (!hmiReviewQueueActive) {
-            // Switching mode during an already-automatic run applies only
-            // to the NEXT run; it must never spawn another import.
+            if (hmiUnifiedRunning) {
+                hmiUnifiedReviewHandoffRequested = hmiReviewEachBatch.checked;
+                if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                    hmiReviewEachBatch.checked
+                        ? "Review requested. The current automatic TIA batch will finish "
+                            + "and verify; the next batch will await approval."
+                        : "Automatic mode restored. The current batch continues and "
+                            + "the queue will continue automatically.";
+            }
             updateHmiTranslateButtonState();
             return;
         }

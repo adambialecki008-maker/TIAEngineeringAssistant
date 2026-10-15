@@ -248,8 +248,11 @@ scenario("XLSX QA-only rejected batch advances without prematurely exhausting sc
     await b.flush();assert.equal(b.c.prepares.length,2);await b.prepare();
     assert.equal(b.state().pending,true);assert.equal(b.c.imports.length,0);b.clean();
 });
-scenario("Already Automatic: checkbox configures next run only",async()=>{
-    const b=browser();b.run("hmiUnifiedRunning=true");b.change(false);b.change(true);
+scenario("Already Automatic: ON requests a reviewed handoff at the verified boundary",async()=>{
+    const b=browser();b.run("hmiUnifiedRunning=true");b.change(true);
+    assert.equal(b.run("hmiUnifiedReviewHandoffRequested"),true);
+    assert.match(b.c.hmiUnifiedStatus.textContent,/next batch will await approval/);
+    b.change(false);assert.equal(b.run("hmiUnifiedReviewHandoffRequested"),false);
     assert.equal(b.c.imports.length,0);assert.equal(b.c.prepares.length,0);b.clean();
 });
 // Keep Node alive until every scenario finishes; unresolved promises must fail.
