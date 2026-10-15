@@ -7458,6 +7458,13 @@ export function initTiaUi(
             nameCell.appendChild(nameContainer);
             const dataType = document.createElement("td");
             dataType.textContent = member.data_type || "—";
+            if (member.system_instance) {
+                const marker = document.createElement("small");
+                marker.className = "plc-system-instance";
+                marker.textContent = "System instance — Read-only";
+                dataType.append(document.createElement("br"), marker);
+                row.classList.add("plc-system-instance-row");
+            }
             const offset = document.createElement("td");
             offset.textContent = member.offset || "—";
             const comment = document.createElement("td");

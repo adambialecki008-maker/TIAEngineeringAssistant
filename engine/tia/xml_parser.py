@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 from engine.tia.models import (
     PlcStructureMemberInfo,
 )
+from engine.tia.type_registry import type_entry
 
 
 def xml_local_name(
@@ -166,17 +167,15 @@ def parse_structure_xml(
         )
 
 
+        data_type = xml_attribute(
+            member, "Datatype", "DataType", "Type",
+        )
         result.append(
             PlcStructureMemberInfo(
                 section=section,
                 path=path,
                 name=name,
-                data_type=xml_attribute(
-                    member,
-                    "Datatype",
-                    "DataType",
-                    "Type",
-                ),
+                data_type=data_type,
                 level=level,
                 offset=xml_attribute(
                     member,
@@ -185,6 +184,8 @@ def parse_structure_xml(
                 ),
                 comment=xml_comment(member),
                 metadata=member_metadata(member),
+                system_instance=bool(type_entry(data_type)
+                    and type_entry(data_type).get("kind", "").endswith("instance")),
             )
         )
 
