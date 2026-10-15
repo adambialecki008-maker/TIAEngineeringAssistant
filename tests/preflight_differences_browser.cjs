@@ -73,7 +73,7 @@ const artifacts = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwrig
         assert.equal(await page.locator("#source-import-apply-button").isDisabled(),
             true, "Conflicts must never enable the TIA write action");
         const row = page.locator("#source-import-report-rows tr").first();
-        await row.locator("summary").click();
+        await row.locator("details.source-import-details > summary").click();
         const table = row.locator("table.source-declaration-differences");
         assert.equal(await table.locator("tbody tr").count(),3);
         assert.match(await table.innerText(),/cmd\.start/);
