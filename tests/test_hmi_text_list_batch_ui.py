@@ -436,9 +436,17 @@ def test_queue_marks_items_awaiting_approval_only_while_review_queue_is_active()
     queue = JS.split('function renderHmiTranslationQueue()', 1)[1].split(
         'function renderHmiBatchPlan()', 1
     )[0]
-    assert 'const reviewing = hmiReviewQueueActive && hmiReviewQueuePending' in queue
-    assert ': ready ? "Ready to translate" : "Scan required"' in queue
-    assert ': "hmi-queue-ready");' in queue
+    assert 'const reviewing = running && hmiReviewQueuePending;' in queue
+    assert 'const currentItem = type === "project"' in queue
+    assert 'operation === "awaiting confirmation"' in queue
+    assert 'operation === "importing / verifying"' in queue
+    assert 'const quotaReached = ready && requested > 0' in queue
+    assert 'ready ? "Ready to translate" : "Scan required"' in queue
+    assert 'quotaReached ? "Limit reached — run complete"' in queue
+    state = JS.split('function updateHmiTranslateButtonState()', 1)[1].split(
+        'async function refreshHmiOllamaModels()', 1
+    )[0]
+    assert 'renderHmiBatchPlan();' in state
 
 
 def test_xlsx_backend_verification_is_not_confused_with_followup_ui_scan():
@@ -821,3 +829,100 @@ assert.ok(!("source_text" in snapshot));
     assert "URL.createObjectURL(blob)" in exporter
     assert "anchor.click();" in exporter
     assert "postJson(" not in exporter and "getJson(" not in exporter
+
+
+def test_hmi_status_phase_changes_are_visible_during_import_and_after_completion():
+    """An import cannot continue to display its confirmation prompt or stale queue."""
+    import shutil
+    import subprocess
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js needed for HMI live queue regression")
+    queue = JS.split("function renderHmiTranslationQueue()", 1)[1].split(
+        "function renderHmiBatchPlan()", 1
+    )[0]
+    plan = JS.split("function renderHmiBatchPlan()", 1)[1].split(
+        "function showHmiBatchJob(job)", 1
+    )[0]
+    script = r"""
+const assert = require("node:assert/strict");
+class Element {
+    constructor() {
+        this.children = []; this.textContent = "";
+        this.className = ""; this.attributes = {};
+    }
+    append(...items) {this.children.push(...items);}
+    appendChild(item) {this.children.push(item);}
+    replaceChildren() {this.children = [];}
+    setAttribute(name,value) {this.attributes[name] = value;}
+}
+const document = {
+    createElement() {return new Element();},
+    createTextNode(s) {return s;}
+};
+let hmiReviewQueueActive = true, hmiReviewQueuePending = true;
+let hmiReviewQueueOperation = "awaiting confirmation";
+let hmiReviewQueueCurrentScope = "project", hmiReviewQueuePaused = false;
+let hmiUnifiedRunning = false, hmiXmlAutoRunning = false;
+let hmiCombinedApprovedCount = 5;
+let verifiedHmiScanKey = "valid", verifiedHmiTextListsScanKey = null;
+const latestHmiScan = {missingUnique: 178};
+const hmiTranslationQueue = new Element();
+const hmiBatchPlan = new Element();
+const hmiBatchSizeInput = {value:"5"};
+const hmiBatchTotalInput = {value:"10"};
+const hmiTextListSelect = {value:""};
+function hmiTranslationSelection() {return {hmi_name:"HMI_RT_1"};}
+function hmiScanKey() {return "valid";}
+function hmiScopeEnabled(scope) {return scope === "project";}
+function addHmiTextCell(row,value) {
+    const cell = new Element(); cell.textContent = String(value);
+    row.appendChild(cell); return cell;
+}
+function combinedMissingCount() {return 178;}
+function eligibleXmlEntries() {return 0;}
+function renderHmiTranslationQueue()""" + queue + r"""
+function renderHmiBatchPlan()""" + plan + r"""
+function queueStatus() {
+    return hmiTranslationQueue.children[0].children[4].children[0].textContent;
+}
+renderHmiBatchPlan();
+assert.equal(queueStatus(), "Confirm import");
+assert.match(hmiBatchPlan.textContent, /remaining 5/);
+hmiReviewQueueOperation = "importing / verifying";
+renderHmiBatchPlan();
+assert.equal(queueStatus(), "Importing / verifying in TIA");
+hmiCombinedApprovedCount = 10;
+hmiReviewQueuePending = false;
+hmiReviewQueueActive = false;
+hmiReviewQueueOperation = null;
+renderHmiBatchPlan();
+assert.equal(queueStatus(), "Limit reached — run complete");
+assert.match(hmiBatchPlan.textContent, /10 \/ 10/);
+assert.match(hmiBatchPlan.textContent, /178 missing targets remain/);
+assert.doesNotMatch(queueStatus(), /Awaiting approval/);
+"""
+    result = subprocess.run([node, "-e", script], capture_output=True,
+                            text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_hmi_confirmation_and_import_have_separate_states():
+    approval = JS.split('async function approveReviewedHmiQueueBatch()', 1)[1].split(
+        'async function skipReviewedHmiQueueBatch()', 1
+    )[0]
+    project = JS.split('async function importReviewedHmiTexts()', 1)[1].split(
+        'async function refreshProjectLanguages(', 1
+    )[0]
+    xml = JS.split('async function importReviewedHmiTextList()', 1)[1].split(
+        'async function startAutomaticXmlBatches(', 1
+    )[0]
+    assert 'automatic\n            ? "importing / verifying" : "awaiting confirmation"' in approval
+    assert '"Confirmation required — "' in approval
+    assert 'hmiReviewQueueOperation = "importing / verifying";' in project
+    assert '"Importing Project texts (XLSX) into TIA and verifying by "' in project
+    assert '"Backend verification complete. Refreshing the "' in project
+    assert 'hmiReviewQueueOperation = "importing / verifying";' in xml
+    assert '"TIA VERIFIED "' in xml

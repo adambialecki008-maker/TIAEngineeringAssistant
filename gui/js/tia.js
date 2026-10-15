@@ -1699,6 +1699,11 @@ export function initTiaUi(
             hmiViewPathRootSelect, hmiOllamaModelSelect]) {
             if (control) control.disabled = hmiReviewQueueActive;
         }
+        // State changes (including asynchronous verified-import completion)
+        // must update the queue table, not just the buttons. The table was
+        // previously re-rendered only by Scan/settings, leaving stale
+        // "Awaiting approval" cells visible after a completed run.
+        renderHmiBatchPlan();
         syncHmiReviewPreview();
     }
 
@@ -1864,17 +1869,41 @@ export function initTiaUi(
             addHmiTextCell(tr, String(count));
             const stateCell = document.createElement("td");
             const state = document.createElement("span");
-            const reviewing = hmiReviewQueueActive && hmiReviewQueuePending
+            // During XML review, only the currently selected Text list owns
+            // the review token; other rows must not all say "Awaiting approval".
+            const currentItem = type === "project"
+                || label === (hmiTextListSelect?.value || "");
+            const running = hmiReviewQueueActive && currentItem
                 && hmiReviewQueueCurrentScope === type;
-            const running = hmiReviewQueueActive
-                && hmiReviewQueueCurrentScope === type;
+            const reviewing = running && hmiReviewQueuePending;
+            const operation = running ? hmiReviewQueueOperation : null;
+            const importing = running && operation === "importing / verifying";
+            const confirming = reviewing && operation === "awaiting confirmation";
+            const awaiting = reviewing && !operation;
+            const preparing = running && operation === "preparing";
+            const paused = running && hmiReviewQueuePaused && !reviewing;
+            const automatic = !hmiReviewQueueActive && (
+                type === "project" ? hmiUnifiedRunning
+                    && !hmiXmlAutoRunning : hmiXmlAutoRunning
+            );
+            const requested = Number(hmiBatchTotalInput?.value);
+            const quotaReached = ready && requested > 0
+                && hmiCombinedApprovedCount >= requested;
             const empty = ready && count === 0;
+            const active = importing || confirming || awaiting
+                || preparing || paused || automatic;
             state.className = "hmi-queue-status "
-                + (reviewing ? "hmi-queue-reviewing"
-                    : running ? "hmi-queue-running"
-                    : empty ? "hmi-queue-done" : "hmi-queue-ready");
-            state.textContent = reviewing ? "Awaiting approval"
-                : running ? "Preparing" : empty ? "Done"
+                + (awaiting || confirming ? "hmi-queue-reviewing"
+                    : active ? "hmi-queue-running"
+                    : empty || quotaReached ? "hmi-queue-done" : "hmi-queue-ready");
+            state.textContent = importing ? "Importing / verifying in TIA"
+                : confirming ? "Confirm import"
+                : awaiting ? "Ready for approval"
+                : preparing ? "Translating / preparing"
+                : paused ? "Paused"
+                : automatic ? "Automatic translation / import"
+                : quotaReached ? "Limit reached — run complete"
+                : empty ? "No missing targets"
                 : ready ? "Ready to translate" : "Scan required";
             stateCell.appendChild(state);
             tr.appendChild(stateCell);
@@ -1933,6 +1962,19 @@ export function initTiaUi(
         const selectedTotal = requested ?? (eligible + hmiCombinedApprovedCount);
         const remaining = requested === null ? eligible
             : Math.min(eligible, Math.max(0, requested - hmiCombinedApprovedCount));
+        // A shared quota can be complete while many HMI targets remain
+        // untranslated. Report that explicitly instead of "No remaining
+        // translations", which misleadingly sounds like the entire HMI is done.
+        if (requested !== null && remaining === 0 && eligible > 0) {
+            hmiBatchPlan.textContent = "Selected limit reached: "
+                + Math.min(requested, hmiCombinedApprovedCount) + " / "
+                + requested + " translations verified in TIA. "
+                + eligible + " missing targets remain in the selected scopes. "
+                + (hmiReviewQueueActive || hmiUnifiedRunning
+                    ? "Finishing the current operation before closing the run."
+                    : "Increase Total to translate, or scan again for a new run.");
+            return;
+        }
         const project = hmiScopeEnabled("project")
             && hmiScanKey(hmiTranslationSelection()) === verifiedHmiScanKey
                 ? latestHmiScan?.missingUnique || 0 : 0;
@@ -2656,11 +2698,14 @@ export function initTiaUi(
         const before = hmiCombinedApprovedCount;
         const reviewListName = hmiReviewQueueCurrentScope === "text_lists"
             ? hmiTextListSelect?.value || "Text list" : "Project texts";
-        hmiReviewQueueOperation = "importing / verifying";
-        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
-            "Approve clicked for " + reviewListName
-            + ". Check the confirmation dialog; no import begins until "
-            + "you confirm the TIA write.";
+        hmiReviewQueueOperation = automatic
+            ? "importing / verifying" : "awaiting confirmation";
+        if (hmiUnifiedStatus) hmiUnifiedStatus.textContent = automatic
+            ? "Automatic import approved — " + reviewListName
+                + ". Validating the prepared batch before TIA write and verification."
+            : "Confirmation required — " + reviewListName
+                + ". Approve the import in the confirmation dialog. "
+                + "Nothing is written until confirmed.";
         updateHmiTranslateButtonState();
         let completed;
         try {
@@ -3281,14 +3326,17 @@ export function initTiaUi(
         }
         const token = hmiTextListReviewToken;
         const batchIdentity = textListBatchIdentity();
+        if (hmiReviewQueueActive) {
+            hmiReviewQueueOperation = "importing / verifying";
+        }
         // Keep editable proposals visible during server-side QA; only the
         // server consumes the review token once all pre-write checks pass.
         hmiTextListBusy = true;
         if (hmiUnifiedStatus && hmiReviewQueueActive) {
             hmiUnifiedStatus.textContent =
                 "Sending reviewed XML import for " + listName + " ("
-                + selected.length + " entries). Awaiting TIA write and "
-                + "independent re-export verification.";
+                + selected.length + " entries). Validating, writing into "
+                + "TIA and verifying by independent re-export.";
         }
         updateHmiTranslateButtonState();
         if (hmiTextListStatus)
@@ -3311,6 +3359,11 @@ export function initTiaUi(
             }
             hmiTextListImportedCount += result.verified_entries;
             hmiCombinedApprovedCount += result.verified_entries;
+            if (hmiReviewQueueActive && hmiUnifiedStatus) {
+                hmiUnifiedStatus.textContent = "TIA VERIFIED "
+                    + result.verified_entries + " Text list entries in "
+                    + listName + ". Refreshing the read-only XML scan.";
+            }
             discardHmiTextListReview();
             // Refresh the selected list after a confirmed import to prepare
             // the next manual batch from currently empty targets only.
@@ -4602,6 +4655,12 @@ export function initTiaUi(
             return "cancelled";
         }
 
+        if (hmiReviewQueueActive) {
+            hmiReviewQueueOperation = "importing / verifying";
+            if (hmiUnifiedStatus) hmiUnifiedStatus.textContent =
+                "Importing Project texts (XLSX) into TIA and verifying by "
+                + "independent re-export. Please do not interrupt the operation.";
+        }
         hmiReviewInProgress = true;
         updateHmiTranslateButtonState();
         setHmiTranslationStatus(
@@ -4663,6 +4722,11 @@ export function initTiaUi(
                     ? " Import log: " + result.import_log : ""),
                 "success"
             );
+            if (hmiReviewQueueActive && hmiUnifiedStatus) {
+                hmiUnifiedStatus.textContent = verifiedText
+                    + " Backend verification complete. Refreshing the "
+                    + "read-only HMI scan before continuing.";
+            }
 
             try {
                 await refreshProjectLanguages(true);
