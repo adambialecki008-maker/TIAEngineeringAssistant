@@ -2185,6 +2185,24 @@
 
 
             <div class="card">
+                <h3>Import existing UDT from TIA (read-only)</h3>
+                <p class="hint">
+                    Read the UDT from the active PLC into the local editor.
+                    Existing TIA types will not be overwritten. To publish an edited
+                    version, rename it and use the create-only UDT/DB preflight.
+                </p>
+                <div class="form-row">
+                    <button type="button" id="tia-udt-scan">Read UDT list from TIA</button>
+                    <label for="tia-udt-select">TIA UDT:</label>
+                    <select id="tia-udt-select" aria-label="UDT from active PLC"></select>
+                    <button type="button" id="tia-udt-load" disabled>Import UDT into editor</button>
+                </div>
+                <p id="tia-udt-import-status" class="status-box">
+                    Select an Active PLC in TIA Portal, then read available UDTs.
+                </p>
+            </div>
+
+            <div class="card">
 
                 <div class="form-row">
 

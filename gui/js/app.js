@@ -13,6 +13,8 @@ import {
     renderUdts,
 } from "./udt.js";
 
+import { initUdtTiaImportUi } from "./udt_import.js";
+
 import {
     addDb,
     renderDbs,
@@ -290,6 +292,7 @@ if (
  * Render the original engineering editors.
  */
 renderAll();
+initUdtTiaImportUi(renderAll);
 
 
 /*

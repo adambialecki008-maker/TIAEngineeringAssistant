@@ -38,6 +38,7 @@ jobs:
             node --check "$file"
           done
           node tests/io_mapping_runtime.cjs
+          node tests/udt_import_runtime.cjs
 
       - name: Run HMI review/automatic state regressions
         run: node tests/hmi_review_checkbox_runtime.cjs
