@@ -4,6 +4,7 @@ const STORAGE_KEY = "tiaEngineeringAssistant.projectConfig";
 const PROFILES_KEY = "tiaEngineeringAssistant.projectProfiles";
 const ACTIVE_PROFILE_KEY = "tiaEngineeringAssistant.activeProjectProfile";
 const PROFILE_PREFIX = "tiaEngineeringAssistant.projectConfig.profile.";
+const LEGACY_BACKUP_KEY = "tiaEngineeringAssistant.projectConfig.legacyBackup";
 const DEFAULT_PROFILE = "default";
 
 function emptyProject() {
@@ -29,8 +30,11 @@ function initializeProjectProfiles() {
         // First copy the old project to its own profile. Do not remove
         // or overwrite the legacy key (emergency recovery).
         if (localStorage.getItem(PROFILE_PREFIX + DEFAULT_PROFILE) === null) {
+            const legacy = localStorage.getItem(STORAGE_KEY);
+            if (legacy !== null && localStorage.getItem(LEGACY_BACKUP_KEY) === null)
+                localStorage.setItem(LEGACY_BACKUP_KEY, legacy);
             localStorage.setItem(PROFILE_PREFIX + DEFAULT_PROFILE,
-                localStorage.getItem(STORAGE_KEY) || JSON.stringify(emptyProject()));
+                legacy || JSON.stringify(emptyProject()));
         }
         localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
         localStorage.setItem(ACTIVE_PROFILE_KEY, DEFAULT_PROFILE);
@@ -49,8 +53,12 @@ export function getActiveProjectProfileId() {
     return localStorage.getItem(ACTIVE_PROFILE_KEY) || DEFAULT_PROFILE;
 }
 export function saveProjectConfig() {
-    const key = PROFILE_PREFIX + getActiveProjectProfileId();
-    localStorage.setItem(key, JSON.stringify(projectConfig));
+    const active = getActiveProjectProfileId();
+    const value = JSON.stringify(projectConfig);
+    localStorage.setItem(PROFILE_PREFIX + active, value);
+    // Compatibility with existing editor tests and legacy integrations.
+    // The original pre-migration value is preserved at LEGACY_BACKUP_KEY.
+    if (active === DEFAULT_PROFILE) localStorage.setItem(STORAGE_KEY, value);
 }
 function assignProject(parsed) {
     projectConfig.plc_family = typeof parsed?.plc_family === "string" ? parsed.plc_family : "";

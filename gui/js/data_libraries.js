@@ -1127,7 +1127,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             if (!target) throw Error("Destination library no longer exists.");
             const changes = selectivePlan.rows.map(row =>
                 `${row.action.toUpperCase()} ${typeLabel(row.source.object_type)} ${row.source.name}${row.name !== row.source.name ? " -> " + row.name : ""}`);
-            if (!confirm(`Import into "\${target.name}"?\n\n${changes.join("\n")}\n\nReplace/New Version updates existing local objects and preserves their revision history. This does NOT write to TIA Portal. Proceed?`)) return;
+            if (!confirm(`Import into "${target.name}"?\n\n${changes.join("\n")}\n\nReplace/New Version updates existing local objects and preserves their revision history. This does NOT write to TIA Portal. Proceed?`)) return;
             const result = await applySelectiveLibraryImport(
                 selectiveTargetId, [...selectiveSelected], pendingImport.objects, selectiveDecisions);
             selectivePlan = null;

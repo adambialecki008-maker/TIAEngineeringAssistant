@@ -804,6 +804,34 @@ export function parsePackage(raw) {
     const ids = new Set(), names = new Set();
     const objects = data.objects.map(item => {
         const clean = sanitizeLibraryObject(item);
+        // Validate and preserve immutable revisions. The old parser silently
+        // discarded exported version history during transfer to another PC.
+        if (Array.isArray(item.versions)) {
+            if (item.versions.length > 256) throw Error("Too many object revisions.");
+            const seenVersions = new Set();
+            clean.versions = item.versions.map(record => {
+                if (!plain(record) || !plain(record.snapshot) || !SEMVER.test(record.version))
+                    throw Error("Malformed library revision.");
+                if (seenVersions.has(record.version)) throw Error("Duplicate revision version.");
+                seenVersions.add(record.version);
+                const snapshot = sanitizeLibraryObject({
+                    ...record.snapshot,
+                    object_type: clean.object_type,
+                    version: record.version,
+                });
+                if (snapshot.object_type !== clean.object_type)
+                    throw Error("Revision object type mismatch.");
+                return {
+                    version: record.version,
+                    created_at: text(record.created_at, 64),
+                    changelog: text(record.changelog, 2000),
+                    content_hash: text(record.content_hash, 128),
+                    snapshot,
+                };
+            });
+            if (clean.versions.length && !seenVersions.has(clean.version))
+                throw Error("Current version is missing from revision history.");
+        }
         if (ids.has(clean.id)) throw Error("Duplicate library object ID.");
         const name = `${clean.object_type}:${clean.name.toLocaleLowerCase()}`;
         if (names.has(name)) throw Error(`Duplicate imported object name: ${clean.name}.`);
