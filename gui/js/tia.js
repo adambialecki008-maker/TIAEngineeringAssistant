@@ -1644,6 +1644,24 @@ export function initTiaUi(
                 let hint = "";
                 if (!scope || !selection) {
                     hint = "Select a text type, HMI and distinct source/target languages.";
+                } else if (hmiReviewQueueActive) {
+                    if (hmiReviewQueueOperation === "awaiting confirmation") {
+                        hint = "Confirmation required: approve the prepared "
+                            + "TIA import in the dialog, or cancel it safely.";
+                    } else if (hmiReviewQueueOperation === "importing / verifying") {
+                        hint = "TIA import and independent verification in progress. "
+                            + "The next batch will not start before verification.";
+                    } else if (hmiReviewQueueOperation === "preparing") {
+                        hint = "Ollama is preparing and validating the next batch. "
+                            + "TIA has not been modified by this preparation.";
+                    } else if (hmiReviewQueuePending) {
+                        hint = "Batch prepared. Review in Step 2, then approve "
+                            + "or skip in Step 3.";
+                    } else if (hmiReviewQueuePaused) {
+                        hint = "Translation paused. Resume or stop the queue.";
+                    } else {
+                        hint = "Reviewed translation queue is active.";
+                    }
                 } else if (busy) {
                     hint = "An HMI operation is in progress.";
                 } else if (!projectReady || !xmlReady) {

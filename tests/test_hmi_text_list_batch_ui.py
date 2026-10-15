@@ -928,3 +928,24 @@ def test_hmi_confirmation_and_import_have_separate_states():
     assert '"Backend verification complete. Refreshing the "' in project
     assert 'hmiReviewQueueOperation = "importing / verifying";' in xml
     assert '"TIA VERIFIED "' in xml
+
+
+def test_hmi_readiness_uses_active_phase_not_stale_scan_ready():
+    """Readiness must not claim that a queued import is idle."""
+    state = JS.split("function updateHmiTranslateButtonState()", 1)[1].split(
+        "async function refreshHmiOllamaModels()", 1
+    )[0]
+    phase = state.split("if (hmiBatchReadiness) {", 1)[1].split(
+        "hmiBatchReadiness.textContent = hint;", 1
+    )[0]
+    assert phase.index("} else if (hmiReviewQueueActive) {") < phase.index(
+        '} else if (busy) {')
+    for value in (
+        '"awaiting confirmation"',
+        '"importing / verifying"',
+        '"preparing"',
+        '"Batch prepared. Review in Step 2',
+        '"Translation paused. Resume or stop the queue.',
+    ):
+        assert value in phase
+    assert 'renderHmiBatchPlan();' in state
