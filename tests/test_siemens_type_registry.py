@@ -1,4 +1,6 @@
 """The browser and backend must use the same Siemens type definitions."""
+import pytest
+
 from engine.tia.type_registry import (
     declarable_types,
     is_builtin_type,
@@ -23,6 +25,13 @@ def test_timer_counter_symbols_are_native_not_user_udt_dependencies():
     assert type_entry("TON")["kind"] == "timer_instruction"
     assert type_entry("TON_TIME")["kind"] == "timer_instance"
     assert type_entry("CTU")["kind"] == "counter_instruction"
+
+
+def test_system_instances_are_rejected_in_the_current_udt_db_model():
+    from pydantic import ValidationError
+    from engine.tia_member import TiaMember
+    with pytest.raises(ValidationError, match="not a verified UDT/global-DB declaration"):
+        TiaMember(name="Timer", data_type="IEC_TIMER")
 
 
 def test_registry_has_unique_names_and_aliases():

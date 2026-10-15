@@ -9,6 +9,7 @@ import math
 import re
 
 from engine.tia.duration import normalize_duration_literal
+from engine.tia.type_registry import type_entry
 
 ARRAY_MIN_BOUND = -32768
 ARRAY_MAX_BOUND = 32767
@@ -159,6 +160,12 @@ class TiaMember(BaseModel):
     def _validate_simple_type(
         self,
     ) -> None:
+        system_type = type_entry(self.data_type)
+        if system_type and not system_type.get("declarable"):
+            raise ValueError(
+                f"{self.data_type} is a Siemens {system_type['kind'].replace('_', ' ')}. "
+                "It is not a verified UDT/global-DB declaration type."
+            )
         if (
             self.array_element_type is not None
             or self.array_lower_bound is not None
