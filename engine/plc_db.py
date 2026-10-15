@@ -28,4 +28,17 @@ class DataBlockSpecification(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("Member names must be unique " "inside one data block.")
 
+        def validate_nested(members):
+            for member in members:
+                # V21 optimized DB Retain covers a top-level STRUCT/UDT/ARRAY
+                # as a whole; applying it to a child would silently be lost.
+                for nested in member.struct_members or []:
+                    if nested.retain is not None:
+                        raise ValueError(
+                            "Retain can be changed only on a top-level Static DB "
+                            "variable, not inside a Struct.")
+                for nested in member.struct_members or []:
+                    validate_nested([nested])
+
+        validate_nested(self.members)
         return self

@@ -27,4 +27,12 @@ class UdtSpecification(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("Field names must be unique " "inside one UDT.")
 
+        def reject_retain(fields):
+            for field in fields:
+                if field.retain is not None:
+                    raise ValueError(
+                        "Retain belongs to a DB declaration, not to a UDT type.")
+                reject_retain(field.struct_members or [])
+
+        reject_retain(self.fields)
         return self

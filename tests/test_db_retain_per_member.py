@@ -70,3 +70,22 @@ def test_nested_retain_conflict_is_not_treated_as_identical():
     result = _db_retain_comparison(db, actual)
     assert result["status"] == "unknown"
     assert "Nested DB members override RETAIN" in result["reason"]
+
+def test_nested_struct_retain_and_udt_retain_are_rejected():
+    import pytest
+    from pydantic import ValidationError
+    from engine.udt import UdtSpecification
+    with pytest.raises(ValidationError, match="top-level Static"):
+        DataBlockSpecification.model_validate({
+            "name": "Invalid", "members": [
+                {"name": "Struct", "data_type": "Struct", "struct_members": [
+                    {"name": "Child", "data_type": "Bool", "retain": True},
+                ]}
+            ],
+        })
+    with pytest.raises(ValidationError, match="Retain belongs to a DB"):
+        UdtSpecification.model_validate({
+            "name": "Type", "fields": [
+                {"name": "Flag", "data_type": "Bool", "retain": True},
+            ],
+        })
