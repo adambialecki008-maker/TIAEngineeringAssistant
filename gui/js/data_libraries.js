@@ -1,4 +1,4 @@
-import {projectConfig, replaceProjectConfig, saveProjectConfig, listProjectProfiles, getActiveProjectProfileId, createProjectProfile, renameProjectProfile, switchProjectProfile, deleteProjectProfile} from "./state.js";
+import {projectConfig, replaceProjectConfig, saveProjectConfig, listProjectProfiles, getActiveProjectProfileId, createProjectProfile, duplicateProjectProfile, renameProjectProfile, switchProjectProfile, deleteProjectProfile} from "./state.js";
 import {
     LIBRARY_CATEGORIES,
     analyzeDependencies,
@@ -828,6 +828,17 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
                 profileStatus.textContent = "Created " + created.name + ". Select it to switch.";
             } catch (error) { profileStatus.textContent = error.message; }
         }, true),
+        actionButton("Duplicate project", () => {
+            try {
+                const source = listProjectProfiles().find(p => p.id === profileSelector.value);
+                if (!source) throw Error("Select a source project.");
+                const name = prompt("Name for the duplicated project:", source.name + " copy");
+                if (name === null) return;
+                const copy = duplicateProjectProfile(source.id, name);
+                renderProfiles();
+                profileStatus.textContent = "Created " + copy.name + " with its own configuration. Select it to switch; TIA target must be confirmed again.";
+            } catch (error) { profileStatus.textContent = error.message; }
+        }),
         actionButton("Rename project", () => {
             try {
                 const active = listProjectProfiles().find(p => p.id === getActiveProjectProfileId());
