@@ -71,7 +71,7 @@ run("nested Array elements cannot be imported as declarations", () => {
     assert.throws(() => convert(detail([
         row("Motors", "Array[0..2] of Bool", "NonRetain"),
         {...row("Motors", "Bool"), path:"Motors[0]", name:"Motors[0]", level:0},
-    ])), /expanded array|invalid/i);
+    ]), true), /expanded array|invalid/i);
 });
 run("not a DB", () => {
     assert.throws(() => convert({kind:"udt", name:"UDT_X", members:[
