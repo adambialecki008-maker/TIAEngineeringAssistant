@@ -1,7 +1,8 @@
 # Continuous integration (GitHub Actions)
 
 Workflow: `.github/workflows/ci.yml`, triggered by pushes, pull requests
-and manual `workflow_dispatch`. It runs two independent jobs:
+and manual `workflow_dispatch`. It runs two independent jobs on pinned **Ubuntu 24.04** runners
+(to avoid unexpected changes during GitHub's Ubuntu 26 rollout):
 
 1. **JavaScript**: Node 24 checks syntax of every `gui/js/*.js` and
    `tests/*.cjs` file and executes the real HMI review/automatic state
@@ -34,3 +35,19 @@ node tests/hmi_review_checkbox_runtime.cjs
 The database-related Python tests require a running PostgreSQL database with
 appropriate `DB_NAME`, `DB_USER`, `DB_PASSWORD` and `DB_HOST`
 environment settings.
+
+## Runner and action versions
+
+CI uses `ubuntu-24.04` rather than `ubuntu-latest` because GitHub plans
+migration of the latest label to Ubuntu 26.04 starting October 19, 2026.
+Changing runner OS is a separate, deliberately tested maintenance task.
+
+GitHub Actions use the Node 24-capable major versions:
+`actions/checkout@v5`, `actions/setup-node@v5`, and
+`actions/setup-python@v6`. `setup-node` automatic package-manager caching
+is disabled because this project has no npm dependency installation in the
+core regression jobs. Repository credentials are not persisted by checkout.
+
+An older historical GitHub Actions run may still show warnings from previous
+workflow versions, or a failed test that was fixed in later commits. Always
+check the CI result associated with the **current commit SHA**, not an old run.

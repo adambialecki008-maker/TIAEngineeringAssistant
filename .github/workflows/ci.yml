@@ -16,16 +16,19 @@ concurrency:
 jobs:
   javascript:
     name: JavaScript syntax and HMI transitions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24'
+          package-manager-cache: false
 
       - name: Check frontend and test JavaScript syntax
         shell: bash
@@ -43,7 +46,7 @@ jobs:
 
   python:
     name: Python pytest (isolated PostgreSQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -68,19 +71,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
 
       # Several Python regression tests execute Node-based JavaScript harnesses.
       - name: Set up Node.js for pytest harnesses
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24'
+          package-manager-cache: false
 
       - name: Install Python dependencies
         run: |
