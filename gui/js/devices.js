@@ -8,6 +8,11 @@ import {
     postJson,
 } from "./api.js";
 
+import {
+    allocateTemplateByDevice,
+    templateIoLanes,
+} from "./io_mapping_engine.js";
+
 
 const DATA_TYPES = [
     "Bool",
@@ -1032,6 +1037,20 @@ function buildDeviceConfig() {
 function buildPhysicalTags(
     hardwareInventory
 ) {
+    if (projectConfig.device_config.mapping_mode === "device") {
+        return allocateTemplateByDevice({
+            groups: projectConfig.device_config.groups,
+            templates: projectConfig.device_config.templates,
+            mappings: projectConfig.device_config.mappings,
+            channels: hardwareInventory.channels ?? [],
+            widthOf: dataTypeWidthBits,
+            compatible: channelCompatible,
+            keyOf: channelKey,
+            addressOf: formatLogicalAddress,
+            tagNameOf: buildTagName,
+            deviceNameOf: buildDeviceName,
+        });
+    }
     const rows = [];
 
     const errors = [];
@@ -1388,6 +1407,7 @@ export function initDevicesUi() {
         document.getElementById(
             "device-io-mapping-body"
         );
+    const mappingModeSelect = document.getElementById("device-mapping-mode");
 
     const plcTagsBody =
         document.getElementById(
@@ -3011,11 +3031,71 @@ export function initDevicesUi() {
     }
 
 
+    function renderTemplateMappings() {
+        mappingBody.replaceChildren();
+        let count = 0;
+        const channels = sortChannels(hardwareInventory.channels ?? []);
+        for (const group of projectConfig.device_config.groups) {
+            const template = getTemplate(group.template_id);
+            if (!template) continue;
+            for (const lane of templateIoLanes(template.signals, dataTypeWidthBits)) {
+                count++;
+                const row = document.createElement("tr");
+                row.appendChild(createCell(template.name + " / " + group.prefix));
+                row.appendChild(createCell(lane.signals.map(s => s.key).join(" → ")));
+                row.appendChild(createCell(lane.io_type));
+                row.appendChild(createCell(lane.signals.map(s => s.data_type).join(", ")));
+                const cell = document.createElement("td");
+                const select = document.createElement("select");
+                select.className = "hardware-channel-select";
+                select.setAttribute("aria-label", group.prefix + " " + lane.id
+                    + " first physical channel");
+                const placeholder = document.createElement("option");
+                placeholder.value = "";
+                placeholder.textContent = "Select first channel from schematic";
+                select.appendChild(placeholder);
+                for (const channel of channels) {
+                    if (channel.io_type !== lane.io_type ||
+                        channel.channel_width_bits !== lane.width ||
+                        !channelCompatible(channel, lane.signals[0])) continue;
+                    const option = document.createElement("option");
+                    option.value = channelKey(channel);
+                    option.textContent = formatLogicalAddress(channel, lane.signals[0].data_type)
+                        + " | " + (hardwareInventory.profinet_device_names?.[channel.device_name]
+                            || channel.device_name) + " / " + channel.item_name
+                        + " / ch " + channel.channel_number;
+                    select.appendChild(option);
+                }
+                const id = "@lane:" + lane.id;
+                select.value = getMapping(group.id, id)?.start_channel_key || "";
+                select.addEventListener("change", () => {
+                    setMapping(group.id, id, select.value);
+                    renderPlcTags();
+                });
+                cell.appendChild(select);
+                row.appendChild(cell);
+                row.appendChild(createCell(group.quantity + " device(s) × "
+                    + lane.signals.length + " signal(s), in template order"));
+                mappingBody.appendChild(row);
+            }
+        }
+        if (count === 0) {
+            const row = document.createElement("tr");
+            const cell = createCell("No physical Input/Output template signals.");
+            cell.colSpan = 6;
+            row.appendChild(cell);
+            mappingBody.appendChild(row);
+        }
+    }
+
     function renderMappings() {
-        if (!mappingBody) {
+        if (!mappingBody) return;
+        const mode = projectConfig.device_config.mapping_mode || "signal";
+        if (mappingModeSelect) mappingModeSelect.value = mode;
+        if (mode === "device") {
+            renderTemplateMappings();
             return;
         }
-
         mappingBody
             .replaceChildren();
 
@@ -3590,6 +3670,17 @@ export function initDevicesUi() {
         );
     }
 
+
+    if (mappingModeSelect) {
+        mappingModeSelect.addEventListener("change", () => {
+            const mode = mappingModeSelect.value;
+            if (!["device", "signal"].includes(mode)) return;
+            projectConfig.device_config.mapping_mode = mode;
+            persist();
+            renderMappings();
+            renderPlcTags();
+        });
+    }
 
     if (createPlcTagsButton) {
         createPlcTagsButton.addEventListener(

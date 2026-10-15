@@ -10,6 +10,7 @@ export const projectConfig = {
         templates: [],
         groups: [],
         mappings: [],
+        mapping_mode: "device",
     },
     tia_target: null,
 };
@@ -143,6 +144,7 @@ function normalizeDeviceConfig(
             templates: [],
             groups: [],
             mappings: [],
+            mapping_mode: "device",
         };
     }
 
@@ -332,5 +334,10 @@ function normalizeDeviceConfig(
         templates,
         groups,
         mappings,
+        // Existing configurations default to the historic by-signal mode.
+        // New projects default to by-device. Saved anchors are never migrated.
+        mapping_mode: ["device", "signal"].includes(value.mapping_mode)
+            ? value.mapping_mode
+            : (groups.length || templates.length || mappings.length ? "signal" : "device"),
     };
 }

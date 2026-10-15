@@ -77,7 +77,7 @@
             data-tab="devices"
             type="button"
         >
-            Devices
+            I/O Engineering
         </button>
 
         <button
@@ -2007,12 +2007,20 @@
                         </h3>
 
                         <p class="hint">
-                            Select the first physical channel once for each repeated signal.
-                            The following devices are assigned the next compatible channels.
+                            Map each device in template signal order, or keep the original by-signal mode.
+                            Set first channels according to the electrical schematic; the program never picks free addresses.
                         </p>
                     </div>
                 </div>
 
+
+                <div class="field-group" style="max-width: 360px; margin-bottom: 12px;">
+                    <label for="device-mapping-mode">Mapping mode</label>
+                    <select id="device-mapping-mode">
+                        <option value="device">By device / template</option>
+                        <option value="signal">By signal (legacy)</option>
+                    </select>
+                </div>
 
                 <div class="table-wrapper">
                     <table class="management-table">

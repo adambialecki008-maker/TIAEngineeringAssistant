@@ -37,6 +37,7 @@ jobs:
           for file in gui/js/*.js tests/*.cjs; do
             node --check "$file"
           done
+          node tests/io_mapping_runtime.cjs
 
       - name: Run HMI review/automatic state regressions
         run: node tests/hmi_review_checkbox_runtime.cjs
