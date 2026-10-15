@@ -24,7 +24,11 @@ and manual `workflow_dispatch`. It runs three independent jobs on pinned **Ubunt
    dependencies are added. Siemens endpoints are intercepted by the browser
    test, and no Siemens software or actual device connection is required.
    The local FastAPI server has no PostgreSQL-dependent operations in this
-   browser test. Backend startup logs are retained as an artifact on failure.
+   browser test. On failure, an artifact contains a screenshot, Playwright
+   trace, console/page/request errors, exception stack trace and backend log.
+   Before the normal regression, a deliberately failing smoke run confirms
+   that screenshot, trace and logs are generated. Its expected nonzero exit
+   is handled inside the job and does not fail CI.
 
 **Not covered:** real Siemens TIA V21 / Openness adapter compilation, PLC/HMI
 imports, TIA saves, independent re-export against an open TIA project, or an
@@ -64,3 +68,17 @@ core regression jobs. Repository credentials are not persisted by checkout.
 An older historical GitHub Actions run may still show warnings from previous
 workflow versions, or a failed test that was fixed in later commits. Always
 check the CI result associated with the **current commit SHA**, not an old run.
+
+## Playwright failure evidence
+
+On a failed `GUI editor (Playwright Chromium)` job, open GitHub Actions
+and download the `gui-browser-failure-diagnostics` artifact (7-day retention).
+It contains `failure.png`, `trace.zip`, `console-errors.log`,
+`failure.txt`, and the FastAPI backend log.
+Open traces with `npx playwright@1.56.1 show-trace trace.zip`.
+
+`PLAYWRIGHT_DIAGNOSTICS_SMOKE=1` is a test-only switch that intentionally
+fails before editing UDT/DB values. The CI smoke job verifies the evidence
+and deletes its temporary files when successful. Never enable this flag
+for a normal GUI run. Browser evidence may expose onscreen project data;
+do not commit these local files.

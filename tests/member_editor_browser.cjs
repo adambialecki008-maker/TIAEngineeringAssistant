@@ -1,5 +1,11 @@
 const assert = require("node:assert/strict");
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const fs = require("node:fs/promises");
+const path = require("node:path");
+
+// Failure evidence is local to the CI runner, never a project/TIA write.
+const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR
+    || path.join("test-results", "playwright");
 
 const key = "tiaEngineeringAssistant.projectConfig";
 const primitive = (name, type, comment = null) => ({
@@ -49,8 +55,30 @@ const seed = {
         headless: true,
         executablePath: process.env.CHROME_PATH,
     });
+    let context = null;
+    let page = null;
+    let tracingStarted = false;
+    const browserErrors = [];
     try {
-        const page = await browser.newPage();
+        context = await browser.newContext();
+        await context.tracing.start({
+            screenshots: true, snapshots: true, sources: true,
+        });
+        tracingStarted = true;
+        page = await context.newPage();
+        page.on("console", message => {
+            if (message.type() === "error") {
+                browserErrors.push("console.error: " + message.text());
+            }
+        });
+        page.on("pageerror", error => {
+            browserErrors.push("Uncaught page error: " + (error.stack || error));
+        });
+        page.on("requestfailed", request => {
+            browserErrors.push("Request failed: " + request.method()
+                + " " + request.url()
+                + " — " + (request.failure()?.errorText || "unknown"));
+        });
         let promptAnswer = null;
         page.on("dialog", (dialog) => {
             if (dialog.type() === "prompt" && promptAnswer !== null) {
@@ -80,6 +108,12 @@ const seed = {
             }
         }, { key, seed });
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
+        if (process.env.PLAYWRIGHT_DIAGNOSTICS_SMOKE === "1") {
+            // Explicit opt-in smoke test; no actual editor interaction.
+            await page.evaluate(() =>
+                console.error("Intentional Playwright diagnostics smoke error"));
+            throw new Error("Intentional Playwright diagnostics smoke failure");
+        }
         await page.locator('[data-tab="udt"]').click();
         await page.locator("#udt-container > details > summary").click();
         if (process.env.SCREENSHOT_PATH) {
@@ -313,7 +347,47 @@ const seed = {
         await page.getByRole("button", { name: "Validate DB" }).click();
         assert.equal((await dbValidation).status(), 200);
         console.log("UDT/DB browser regression passed");
+    } catch (error) {
+        const artifactErrors = [];
+        try {
+            await fs.mkdir(artifactsDir, {recursive: true});
+            if (page && !page.isClosed()) {
+                try {
+                    await page.screenshot({
+                        path: path.join(artifactsDir, "failure.png"),
+                        fullPage: true,
+                        timeout: 8000,
+                    });
+                } catch (captureError) {
+                    artifactErrors.push("Screenshot: " + captureError.message);
+                }
+            }
+            if (context && tracingStarted) {
+                try {
+                    await context.tracing.stop({
+                        path: path.join(artifactsDir, "trace.zip"),
+                    });
+                    tracingStarted = false;
+                } catch (captureError) {
+                    artifactErrors.push("Trace: " + captureError.message);
+                }
+            }
+            await fs.writeFile(path.join(artifactsDir, "console-errors.log"),
+                [...browserErrors, ...artifactErrors].join("\n")
+                || "No browser console, page or request errors were captured.\n",
+                "utf8");
+            await fs.writeFile(path.join(artifactsDir, "failure.txt"),
+                String(error.stack || error) + "\n", "utf8");
+            console.error("Playwright failure artifacts: " + artifactsDir);
+        } catch (captureError) {
+            console.error("Failed to save Playwright artifacts:", captureError);
+        }
+        throw error;
     } finally {
+        if (context && tracingStarted) {
+            await context.tracing.stop().catch(error =>
+                console.error("Failed to stop Playwright tracing:", error));
+        }
         await browser.close();
     }
 })().catch((error) => {

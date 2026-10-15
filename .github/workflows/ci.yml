@@ -102,6 +102,7 @@ jobs:
     timeout-minutes: 20
     env:
       APP_URL: http://127.0.0.1:8765/
+      PLAYWRIGHT_ARTIFACTS_DIR: test-results/playwright
 
     steps:
       - name: Checkout
@@ -144,14 +145,47 @@ jobs:
           cat "${RUNNER_TEMP}/tia-browser-backend.log"
           exit 1
 
+      - name: Smoke-test Playwright failure artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          PLAYWRIGHT_DIAGNOSTICS_SMOKE=1 \
+          PLAYWRIGHT_ARTIFACTS_DIR=test-results/playwright-smoke \
+            node tests/member_editor_browser.cjs \
+              > "${RUNNER_TEMP}/playwright-diagnostics-smoke.log" 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "Expected the intentional smoke failure to exit nonzero"
+            exit 1
+          fi
+          for name in failure.png trace.zip console-errors.log failure.txt; do
+            test -s "test-results/playwright-smoke/$name" || {
+              echo "Missing Playwright artifact: $name"
+              cat "${RUNNER_TEMP}/playwright-diagnostics-smoke.log"
+              exit 1
+            }
+          done
+          grep -q "Intentional Playwright diagnostics smoke error" \
+            test-results/playwright-smoke/console-errors.log
+          grep -q "Intentional Playwright diagnostics smoke failure" \
+            test-results/playwright-smoke/failure.txt
+          echo "Playwright failure evidence smoke: PASS"
+          rm -r test-results/playwright-smoke
+
       - name: Run existing UDT/DB browser regression
         run: node tests/member_editor_browser.cjs
 
-      - name: Save backend log when browser test fails
+      - name: Upload Playwright evidence on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: gui-browser-backend-log
-          path: ${{ runner.temp }}/tia-browser-backend.log
-          if-no-files-found: ignore
+          name: gui-browser-failure-diagnostics
+          path: |
+            test-results/playwright/
+            test-results/playwright-smoke/
+            ${{ runner.temp }}/tia-browser-backend.log
+            ${{ runner.temp }}/playwright-diagnostics-smoke.log
+          if-no-files-found: warn
           retention-days: 7

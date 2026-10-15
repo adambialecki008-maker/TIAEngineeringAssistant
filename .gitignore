@@ -17,3 +17,6 @@ Desktop.ini
 
 # Local, recoverable TIA HMI translation batch checkpoints
 .local/
+
+# Playwright screenshots, traces and browser logs
+test-results/
