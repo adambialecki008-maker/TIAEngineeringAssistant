@@ -1,0 +1,88 @@
+name: CI — Python and HMI JavaScript
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# The workflow uses no repo secrets and cannot write to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript:
+    name: JavaScript syntax and HMI transitions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check frontend and test JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in gui/js/*.js tests/*.cjs; do
+            node --check "$file"
+          done
+
+      - name: Run HMI review/automatic state regressions
+        run: node tests/hmi_review_checkbox_runtime.cjs
+
+  python:
+    name: Python pytest (isolated PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: tia_engineering_assistant
+          POSTGRES_USER: tia_user
+          POSTGRES_PASSWORD: ci_ephemeral_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tia_user -d tia_engineering_assistant"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DB_NAME: tia_engineering_assistant
+      DB_USER: tia_user
+      DB_PASSWORD: ci_ephemeral_only
+      DB_HOST: 127.0.0.1
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # Several Python regression tests execute Node-based JavaScript harnesses.
+      - name: Set up Node.js for pytest harnesses
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run full Python test suite
+        run: python -m pytest -q

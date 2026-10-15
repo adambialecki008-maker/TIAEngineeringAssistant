@@ -2,7 +2,7 @@ fastapi
 uvicorn
 pydantic
 pytest
-httpx2
+httpx
 psycopg[binary]
 python-dotenv
 openpyxl
