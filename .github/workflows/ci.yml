@@ -38,6 +38,9 @@ jobs:
       - name: Run HMI review/automatic state regressions
         run: node tests/hmi_review_checkbox_runtime.cjs
 
+      - name: Run PLC preflight diagnosis regressions
+        run: node tests/source_import_diagnostics.cjs
+
   python:
     name: Python pytest (isolated PostgreSQL)
     runs-on: ubuntu-latest

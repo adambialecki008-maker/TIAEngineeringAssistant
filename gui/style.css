@@ -2682,3 +2682,59 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
+
+/* Preflight: concise Polish diagnosis; keep full Openness trace opt-in. */
+.source-import-details-body {
+    max-height: min(33rem, 65vh);
+    padding: 0.75rem 0.9rem;
+    margin-top: 0.5rem;
+    border: 1px solid var(--ui-border, #365268);
+    border-radius: var(--ui-radius, 6px);
+    background: var(--ui-surface, #182630);
+    overflow-x: auto;
+    overflow-y: auto;
+    white-space: normal;
+    line-height: 1.48;
+    min-width: min(28rem, 75vw);
+}
+.source-import-diagnostic-section + .source-import-diagnostic-section {
+    margin-top: 0.7rem;
+}
+.source-import-diagnostic-section strong {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--ui-blue-accent, #83caff);
+    margin-bottom: 0.2rem;
+}
+.source-import-diagnostic-section p {
+    margin: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.source-import-diagnostic-issues {
+    margin: 0.45rem 0 0.75rem;
+    padding-left: 1.4rem;
+    line-height: 1.6;
+}
+.source-import-technical {
+    margin-top: 0.9rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--ui-border, #365268);
+}
+.source-import-technical > summary {
+    color: var(--ui-blue-accent, #83caff);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+.source-import-technical pre {
+    padding: 0.65rem;
+    max-height: 14rem;
+    margin: 0.5rem 0 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: auto;
+    color: var(--ui-text-muted, #bac9d5);
+    background: var(--ui-surface-raised, #202e39);
+    border-radius: 4px;
+    font: 12px/1.5 Consolas, monospace;
+}

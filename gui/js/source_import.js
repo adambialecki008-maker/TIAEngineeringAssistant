@@ -1,5 +1,6 @@
 import { postJson } from "./api.js";
 import { projectConfig } from "./state.js";
+import { describeSourceImport } from "./source_import_diagnostics.js";
 
 // Read-only compare / create-only multi-object UDT and DB import.
 export function initSourceImportUi() {
@@ -178,14 +179,49 @@ export function initSourceImportUi() {
     }
 
     function appendDetailsCell(row, value) {
+        const diagnosis = describeSourceImport(value);
         const cell = document.createElement("td");
         const details = document.createElement("details");
         details.className = "source-import-details";
         const summary = document.createElement("summary");
-        summary.textContent = "Details";
+        summary.textContent = "Szczegóły";
         const body = document.createElement("div");
         body.className = "source-import-details-body";
-        body.textContent = String(value ?? "");
+
+        function paragraph(heading, message) {
+            const section = document.createElement("section");
+            section.className = "source-import-diagnostic-section";
+            const title = document.createElement("strong");
+            title.textContent = heading;
+            const text = document.createElement("p");
+            text.textContent = message;
+            section.append(title, text);
+            body.appendChild(section);
+        }
+        paragraph("Problem", diagnosis.problem);
+        paragraph("Przyczyna", diagnosis.cause);
+        if (diagnosis.issueLines.length) {
+            const list = document.createElement("ul");
+            list.className = "source-import-diagnostic-issues";
+            for (const issue of diagnosis.issueLines) {
+                const entry = document.createElement("li");
+                entry.textContent = issue;
+                list.appendChild(entry);
+            }
+            body.appendChild(list);
+        }
+        paragraph("Co zrobić", diagnosis.action);
+
+        if (diagnosis.technical) {
+            const technical = document.createElement("details");
+            technical.className = "source-import-technical";
+            const technicalSummary = document.createElement("summary");
+            technicalSummary.textContent = "Szczegóły techniczne (TIA / Openness)";
+            const pre = document.createElement("pre");
+            pre.textContent = diagnosis.technical;
+            technical.append(technicalSummary, pre);
+            body.appendChild(technical);
+        }
         details.append(summary, body);
         cell.appendChild(details);
         row.appendChild(cell);
@@ -208,9 +244,7 @@ export function initSourceImportUi() {
                 : item.status === "blocked" ? "Blocked dependency — skip"
                 : "Conflict — skip";
             appendCell(row, state);
-            appendDetailsCell(row, item.reason
-                + ((item.metadata_warnings || []).length
-                    ? " Metadata: " + item.metadata_warnings.join(" ") : ""));
+            appendDetailsCell(row, item);
             reportRows.appendChild(row);
         }
         if (reportCounts) reportCounts.textContent =
@@ -264,11 +298,14 @@ export function initSourceImportUi() {
     reportDownload?.addEventListener("click", () => {
         if (!lastReport) return;
         const rows = [
-            ["Kind", "Name", "Decision", "Explanation"],
-            ...(lastReport.items || []).map(x => [
-                x.kind.toUpperCase(), x.name, x.status, x.reason
-                    + " " + (x.metadata_warnings || []).join(" ")
-            ]),
+            ["Typ", "Nazwa", "Status", "Problem", "Przyczyna",
+                "Co zrobić", "Szczegóły techniczne"],
+            ...(lastReport.items || []).map(x => {
+                const d = describeSourceImport(x);
+                return [x.kind.toUpperCase(), x.name, x.status, d.problem,
+                    d.cause + (d.issueLines.length ? "\n" + d.issueLines.join("\n") : ""),
+                    d.action, d.technical];
+            }),
         ];
         const csv = "\ufeff" + rows.map(row => row.map(csvCell).join(";"))
             .join("\r\n");
