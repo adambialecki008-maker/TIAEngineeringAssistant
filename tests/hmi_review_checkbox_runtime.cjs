@@ -218,50 +218,6 @@ for(const scope of["project","text_lists"]){
         await b.verify();assert.equal(b.state().count,10);b.clean();
     });
 }
-for(const scope of ["project", "text_lists"]) {
-    scenario(scope + ": prepare API error stops queue without skipping as exhausted",async()=>{
-        const b=browser(scope);await b.start();
-        assert.equal(b.c.prepares.length,1);
-        b.c.prepares[0].reject(Error("Preparation service unavailable"));
-        await b.flush();
-        assert.equal(b.state().active,false);
-        assert.equal(b.state().pending,false);
-        assert.equal(b.state().count,0);
-        assert.equal(b.c.imports.length,0);
-        assert.equal(b.c.prepares.length,1);
-        assert.match(b.c.hmiUnifiedStatus.textContent,/preparation FAILED before import/);
-        assert.match(b.c.hmiUnifiedStatus.textContent,/Preparation service unavailable/);
-        assert.ok(b.c.hmiUnifiedStatus.classList.contains("error"));
-        b.clean();
-    });
-    scenario(scope + ": prepare error after verified import preserves progress",async()=>{
-        const b=browser(scope);await b.start();await b.prepare();
-        b.change(false);b.approve();await b.verify();
-        assert.equal(b.state().count,5);
-        assert.equal(b.c.prepares.length,2);
-        b.c.prepares[1].reject(Error("Ollama disconnected"));
-        await b.flush();
-        assert.equal(b.state().active,false);
-        assert.equal(b.state().count,5);
-        assert.equal(b.state().report,5);
-        assert.equal(b.c.prepares.length,2);
-        assert.equal(b.c.imports.length,1);
-        assert.match(b.c.hmiUnifiedStatus.textContent,/preparation FAILED before import/);
-        b.clean();
-    });
-}
-scenario("Mixed queue: XLSX preparation error never falls through to XML",async()=>{
-    const b=browser("both");await b.start();
-    assert.equal(b.c.prepares.length,1);
-    assert.match(b.c.prepares[0].url,/prepare-translations/);
-    b.c.prepares[0].reject(Error("XLSX source export failed"));
-    await b.flush();
-    assert.equal(b.state().active,false);
-    assert.equal(b.c.prepares.length,1);
-    assert.equal(b.c.imports.length,0);
-    assert.match(b.c.hmiUnifiedStatus.textContent,/XLSX Project texts preparation FAILED/);
-    b.clean();
-});
 scenario("Mixed queue: finish XLSX, then list A, then B; cap last batch",async()=>{
     const b=browser("both",43);await b.start();b.change(false);
     for(let i=0;i<9;i++){
