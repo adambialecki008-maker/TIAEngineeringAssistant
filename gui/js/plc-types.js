@@ -102,13 +102,17 @@ export const PLC_DATA_TYPES = {
 };
 
 
-export function getPlcDataTypes(
-    plcFamily
-) {
-    return (
-        PLC_DATA_TYPES[plcFamily]
-        ?? []
-    );
+// Editing and reading an existing UDT/DB must not depend on the
+// "Create PLC" selector. Without a selected family offer the union of
+// supported scalar types. Once a family is known, keep its strict set.
+const GENERIC_PLC_DATA_TYPES = [...new Set(
+    Object.values(PLC_DATA_TYPES).flat()
+)];
+
+export function getPlcDataTypes(plcFamily) {
+    return plcFamily
+        ? (PLC_DATA_TYPES[plcFamily] ?? [])
+        : GENERIC_PLC_DATA_TYPES;
 }
 
 
