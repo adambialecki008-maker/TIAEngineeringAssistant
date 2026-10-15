@@ -62,4 +62,41 @@ assert.equal(a.listProjectProfiles().length, 1);
 assert.throws(() => a.deleteProjectProfile("default"), /cannot be deleted/);
 assert.equal(JSON.parse(localStorage.getItem(
     "tiaEngineeringAssistant.projectConfig.legacyBackup")).udts[0].name, "LEGACY_Motor");
+// Crash-safe migration: a persisted profile index with no Default payload
+// must recover legacy data without deleting independently created profiles.
+function scenario(legacy, initial) {
+    const saved = new Map(Object.entries(initial || {}));
+    if (legacy !== null) saved.set("tiaEngineeringAssistant.projectConfig", JSON.stringify(legacy));
+    const localStorage = {
+        getItem: key => saved.has(key) ? saved.get(key) : null,
+        setItem: (key, value) => saved.set(key, String(value)),
+        removeItem: key => saved.delete(key),
+    };
+    const env = {localStorage, crypto: require("node:crypto").webcrypto, console};
+    vm.createContext(env);
+    vm.runInContext(raw + `
+globalThis.api = {loadProjectConfig, listProjectProfiles, getActiveProjectProfileId, projectConfig};`, env);
+    return {api: env.api, saved};
+}
+const indexKey = "tiaEngineeringAssistant.projectProfiles";
+const defaultKey = "tiaEngineeringAssistant.projectConfig.profile.default";
+const interrupted = scenario(seed, {
+    [indexKey]: JSON.stringify([{id: "default", name: "Default project"}, {id: "other", name: "Other"}]),
+    "tiaEngineeringAssistant.projectConfig.profile.other": JSON.stringify({plc_family: "S7-1200"}),
+});
+interrupted.api.loadProjectConfig();
+assert.equal(interrupted.api.projectConfig.udts[0].name, "LEGACY_Motor");
+assert.equal(interrupted.api.listProjectProfiles().length, 2);
+const originalDefault = interrupted.saved.get(defaultKey);
+interrupted.api.loadProjectConfig();
+assert.equal(interrupted.saved.get(defaultKey), originalDefault, "Repeated migration must be idempotent");
+const partialIndex = scenario(seed, {
+    [indexKey]: JSON.stringify([{id: "other", name: "Other"}]),
+    "tiaEngineeringAssistant.projectConfig.profile.other": JSON.stringify({plc_family: "S7-1200"}),
+});
+assert.equal(partialIndex.api.listProjectProfiles().length, 2, "Recover Default without dropping other profiles");
+assert.equal(JSON.parse(partialIndex.saved.get(defaultKey)).udts[0].name, "LEGACY_Motor");
+const badIndex = scenario(seed, {[indexKey]: "{not json"});
+assert.throws(() => badIndex.api.loadProjectConfig(), /index is corrupt/);
+assert.equal(badIndex.saved.get(indexKey), "{not json", "Corrupt index must never be overwritten");
 console.log("project_profiles_runtime: PASS");
