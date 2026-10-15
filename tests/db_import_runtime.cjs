@@ -41,10 +41,19 @@ run("unknown retain is blocked without guessing", () => {
     const source = detail([row("Ready", "Bool")]);
     assert.throws(() => convert(source), /does not clearly establish/i);
 });
-run("mixed member remanence is blocked", () => {
-    assert.throws(() => convert(detail([
+run("mixed top-level member remanence survives importing DB", () => {
+    const result = convert(detail([
         row("A", "Bool", "Retain"), row("B", "Bool", "NonRetain"),
-    ])), /mixed/i);
+    ]));
+    assert.equal(result.retain, false);
+    assert.equal(result.members[0].retain, true);
+    assert.equal(result.members[1].retain, false);
+});
+run("conflicting nested Retain remains blocked", () => {
+    assert.throws(() => convert(detail([
+        row("Machine", "Struct", "Retain"),
+        row("Machine.Ready", "Bool", "NonRetain"),
+    ])), /nested retention differs/i);
 });
 run("mixed explicit and unknown metadata is rejected", () => {
     const source = detail([row("A", "Bool", "Retain"), row("B", "Bool")]);
