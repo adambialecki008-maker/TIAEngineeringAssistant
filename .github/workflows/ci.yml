@@ -191,6 +191,9 @@ jobs:
       - name: Read TIA global DB into local editor (mocked Openness)
         run: node tests/db_import_browser.cjs
 
+      - name: Verify UDT and DB editors without selecting PLC family
+        run: node tests/plc_editor_without_family_browser.cjs
+
       - name: Upload Playwright evidence on failure
         if: failure()
         uses: actions/upload-artifact@v7
