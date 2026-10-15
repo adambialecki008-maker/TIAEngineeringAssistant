@@ -86,6 +86,24 @@ export function loadProjectConfig() {
 }
 
 
+// Used only by an explicitly confirmed local backup restore. It reuses the
+// same normalizers as legacy localStorage loading and never talks to TIA.
+export function replaceProjectConfig(parsed) {
+    if (!parsed || typeof parsed !== "object") {
+        throw new Error("Invalid project backup.");
+    }
+    projectConfig.plc_family = typeof parsed.plc_family === "string"
+        ? parsed.plc_family : "";
+    projectConfig.udts = Array.isArray(parsed.udts) ? parsed.udts : [];
+    projectConfig.dbs = Array.isArray(parsed.dbs) ? parsed.dbs : [];
+    projectConfig.device_config = normalizeDeviceConfig(parsed.device_config);
+    // Restored hardware targets are intentionally cleared: a portable backup
+    // must be re-confirmed against the locally open TIA project.
+    projectConfig.tia_target = null;
+    saveProjectConfig();
+}
+
+
 function normalizeTiaTarget(
     value
 ) {
@@ -173,6 +191,68 @@ function normalizeDeviceConfig(
 
                         name:
                             template.name,
+
+                        category:
+                            typeof template.category
+                            ===
+                            "string"
+                            &&
+                            template.category.trim()
+                            ? template.category.trim()
+                            : "General",
+
+                        compatible_plc_families:
+                            Array.isArray(
+                                template.compatible_plc_families
+                            )
+                                ? template.compatible_plc_families
+                                    .filter(
+                                        (family) =>
+                                            typeof family
+                                            ===
+                                            "string"
+                                            &&
+                                            family.trim()
+                                    )
+                                    .map(
+                                        (family) =>
+                                            family.trim()
+                                    )
+                                : [],
+
+                        library_origin:
+                            template.library_origin
+                            &&
+                            typeof template.library_origin
+                            ===
+                            "object"
+                                ? {
+                                    library_id:
+                                        typeof template.library_origin.library_id
+                                        ===
+                                        "string"
+                                            ? template.library_origin.library_id
+                                            : "",
+                                    library_name:
+                                        typeof template.library_origin.library_name
+                                        ===
+                                        "string"
+                                            ? template.library_origin.library_name
+                                            : "",
+                                    object_id:
+                                        typeof template.library_origin.object_id
+                                        ===
+                                        "string"
+                                            ? template.library_origin.object_id
+                                            : "",
+                                    version:
+                                        typeof template.library_origin.version
+                                        ===
+                                        "string"
+                                            ? template.library_origin.version
+                                            : "",
+                                }
+                                : undefined,
 
                         signals:
                             Array.isArray(

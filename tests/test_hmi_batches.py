@@ -25,7 +25,8 @@ REQUEST = {
 
 
 def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
-                     first_source="Zgniatarka"):
+                     first_source="Zgniatarka", target_language_active=True,
+                     activate_target_on_add=True):
     monkeypatch.setattr(batches, "JOB_DIR", tmp_path)
     monkeypatch.setattr(
         batches, "resolve_ollama_model",
@@ -40,6 +41,7 @@ def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
     live = {"main-1": "Text", "main-2": "Text", "other-1": "Original"}
     commands = []
     imports = []
+    target_active = {"value": target_language_active}
 
     def export_file(path):
         wb = Workbook()
@@ -47,7 +49,7 @@ def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
         sheet.title = "User Texts"
         sheet.append([
             "Category", "ViewPath", "Internal ID", "Substitutions",
-            "en-US*", "pl-PL", 'ref="0"',
+            "en-US*", "pl-PL" if target_active["value"] else "en-US", 'ref="0"',
         ])
         for row_id, root, source in [
             ("main-1", "HMI_00_Main", first_source),
@@ -72,6 +74,8 @@ def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
             export_file(Path(args[-1]))
             return ["PROJECT_TEXTS_EXPORTED|" + args[-1]]
         if args[0] == "add-project-language":
+            if activate_target_on_add:
+                target_active["value"] = True
             return ["LANGUAGE_ADDED|pl-PL"]
         if args[0] == "import-project-texts":
             if fail_on_import and len(imports) + 1 == fail_on_import:
@@ -104,6 +108,40 @@ def setup_batch_mock(monkeypatch, tmp_path, *, fail_on_import=None,
         },
     )
     return live, commands, imports
+
+
+def test_batch_activates_target_language_before_checkpoint(monkeypatch, tmp_path):
+    """Never select batch candidates from TIA's fallback source column."""
+    _live, commands, _imports = setup_batch_mock(
+        monkeypatch, tmp_path, target_language_active=False,
+    )
+
+    started = client.post(
+        "/api/v1/tia/hmis/batch-translations/start", json=REQUEST,
+    )
+
+    assert started.status_code == 200, started.text
+    assert started.json()["total_unique"] == 2
+    assert commands[:2] == ["add-project-language", "export-project-texts"]
+
+
+def test_batch_refuses_checkpoint_when_target_column_is_still_unavailable(
+    monkeypatch, tmp_path,
+):
+    """A successful adapter response is insufficient without target column."""
+    _live, commands, imports = setup_batch_mock(
+        monkeypatch, tmp_path, target_language_active=False,
+        activate_target_on_add=False,
+    )
+
+    started = client.post(
+        "/api/v1/tia/hmis/batch-translations/start", json=REQUEST,
+    )
+
+    assert started.status_code == 409
+    assert "requested target column pl-PL" in started.json()["detail"]
+    assert commands == ["add-project-language", "export-project-texts"]
+    assert imports == []
 
 
 def test_two_batches_import_each_to_tia_and_save_checkpoint(monkeypatch, tmp_path):

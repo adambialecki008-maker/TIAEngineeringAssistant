@@ -17,6 +17,36 @@ import {
     postJson,
 } from "./api.js";
 
+let categoryOptions = ["General"];
+
+export function setDbCategoryOptions(categories) {
+    categoryOptions = [...new Set(categories.filter(value => typeof value === "string" && value.trim()))]
+        .sort((left, right) => left.localeCompare(right));
+    if (!categoryOptions.includes("General")) categoryOptions.push("General");
+}
+
+function createCategorySelect(db, refresh) {
+    const label = document.createElement("label");
+    label.textContent = "Category: ";
+    const select = document.createElement("select");
+    const current = db.category || "General";
+    const options = categoryOptions.includes(current) ? categoryOptions : [...categoryOptions, current];
+    for (const value of options) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+    }
+    select.value = current;
+    select.addEventListener("change", () => {
+        db.category = select.value;
+        saveProjectConfig();
+        refresh();
+    });
+    label.appendChild(select);
+    return label;
+}
+
 
 function requirePlc() {
     if (!projectConfig.plc_family) {
@@ -33,6 +63,7 @@ function requirePlc() {
 
 export function addDb(
     nameInput,
+    categoryInput,
     refresh
 ) {
     if (!requirePlc()) {
@@ -75,6 +106,7 @@ export function addDb(
         name: name,
         retain: false,
         members: [],
+        category: categoryInput?.value || "General",
     });
 
 
@@ -259,7 +291,7 @@ export function renderDbs(
 
             summary.textContent =
                 `${db.name} ` +
-                `(${db.members.length} members)`;
+                `(${db.members.length} members, ${db.category || "General"})`;
 
 
             details.appendChild(
@@ -293,6 +325,13 @@ export function renderDbs(
                             dbIndex,
                             refresh
                         )
+                )
+            );
+
+            actions.appendChild(
+                createCategorySelect(
+                    db,
+                    refresh
                 )
             );
 

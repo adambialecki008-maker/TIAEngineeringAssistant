@@ -11,6 +11,7 @@ import {
 import {
     addUdt,
     renderUdts,
+    setUdtCategoryOptions,
 } from "./udt.js";
 
 import { initUdtTiaImportUi } from "./udt_import.js";
@@ -18,7 +19,12 @@ import { initUdtTiaImportUi } from "./udt_import.js";
 import {
     addDb,
     renderDbs,
+    setDbCategoryOptions,
 } from "./db.js";
+
+import {
+    listCategories,
+} from "./library_store.js";
 
 import {
     generatePreview,
@@ -30,6 +36,10 @@ import {
     initTiaUi,
 } from "./tia.js";
 
+import {
+    initDataLibrariesUi,
+} from "./data_libraries.js";
+
 
 const plcFamilySelect =
     document.getElementById(
@@ -40,6 +50,11 @@ const plcFamilySelect =
 const newUdtNameInput =
     document.getElementById(
         "new-udt-name"
+    );
+
+const newUdtCategoryInput =
+    document.getElementById(
+        "new-udt-category"
     );
 
 const addUdtButton =
@@ -56,6 +71,11 @@ const udtContainer =
 const newDbNameInput =
     document.getElementById(
         "new-db-name"
+    );
+
+const newDbCategoryInput =
+    document.getElementById(
+        "new-db-category"
     );
 
 const addDbButton =
@@ -134,6 +154,40 @@ function renderAll() {
                 error
             );
         }
+    }
+}
+
+
+function applyLibraryCategoryOptions(categories) {
+    const selectedUdt = newUdtCategoryInput?.value || "General";
+    const selectedDb = newDbCategoryInput?.value || "General";
+    const names = [...new Set(categories.filter(value => typeof value === "string" && value.trim()))]
+        .sort((left, right) => left.localeCompare(right));
+    if (!names.includes("General")) names.push("General");
+    setUdtCategoryOptions(names);
+    setDbCategoryOptions(names);
+    for (const select of [newUdtCategoryInput, newDbCategoryInput]) {
+        if (!select) continue;
+        select.replaceChildren();
+        for (const name of names) {
+            const option = document.createElement("option");
+            option.value = name;
+            option.textContent = name;
+            select.appendChild(option);
+        }
+        select.value = names.includes(select === newUdtCategoryInput ? selectedUdt : selectedDb)
+            ? (select === newUdtCategoryInput ? selectedUdt : selectedDb)
+            : "General";
+    }
+    renderAll();
+}
+
+
+async function refreshLibraryCategoryOptions() {
+    try {
+        applyLibraryCategoryOptions((await listCategories()).map(category => category.name));
+    } catch (error) {
+        console.error("Cannot load library categories:", error);
     }
 }
 
@@ -221,6 +275,7 @@ if (
         () =>
             addUdt(
                 newUdtNameInput,
+                newUdtCategoryInput,
                 renderAll
             )
     );
@@ -234,6 +289,7 @@ if (
             ) {
                 addUdt(
                     newUdtNameInput,
+                    newUdtCategoryInput,
                     renderAll
                 );
             }
@@ -252,6 +308,7 @@ if (
         () =>
             addDb(
                 newDbNameInput,
+                newDbCategoryInput,
                 renderAll
             )
     );
@@ -265,6 +322,7 @@ if (
             ) {
                 addDb(
                     newDbNameInput,
+                    newDbCategoryInput,
                     renderAll
                 );
             }
@@ -292,7 +350,16 @@ if (
  * Render the original engineering editors.
  */
 renderAll();
+window.addEventListener("library-categories-changed", event => {
+    applyLibraryCategoryOptions(event.detail || []);
+});
 initUdtTiaImportUi(renderAll);
+const dataLibrariesUi = initDataLibrariesUi(renderAll);
+if (dataLibrariesUi?.ready) {
+    dataLibrariesUi.ready.then(refreshLibraryCategoryOptions);
+} else {
+    refreshLibraryCategoryOptions();
+}
 
 
 /*

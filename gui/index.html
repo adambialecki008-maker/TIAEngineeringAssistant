@@ -96,6 +96,10 @@
             Data Blocks
         </button>
 
+        <button class="tab-button" data-tab="libraries" type="button">
+            Data &amp; Libraries
+        </button>
+
         <button
             class="tab-button"
             data-tab="preview"
@@ -1101,6 +1105,11 @@
 
         </section>
 
+        <section class="tab-panel" data-tab-panel="libraries">
+            <div class="panel-header"><div><h2>Data &amp; Libraries</h2><p class="panel-description">Portable local engineering libraries and project backups. These operations never write to TIA Portal.</p></div></div>
+            <div id="data-libraries-root"></div>
+        </section>
+
 
         <section
             class="tab-panel"
@@ -1636,7 +1645,7 @@
                            role="status" aria-live="polite">
                             Scan the selected types, then click Translate.
                         </p>
-                        <div class="hmi-batch-progress" role="group"
+                        <div id="tia-hmi-batch-progress-panel" class="hmi-batch-progress" role="group"
                              aria-label="Verified TIA import progress for all selected types">
                             <div class="hmi-batch-progress-caption">
                                 <strong>Verified in TIA — selected types</strong>
@@ -2202,6 +2211,16 @@
                         placeholder="UDT_CombustionZone"
                     >
 
+                    <label for="new-udt-category">
+                        Category:
+                    </label>
+
+                    <select
+                        id="new-udt-category"
+                    >
+                        <option value="General">General</option>
+                    </select>
+
                     <button
                         id="add-udt-button"
                         type="button"
@@ -2269,6 +2288,16 @@
                         type="text"
                         placeholder="DB_Process"
                     >
+
+                    <label for="new-db-category">
+                        Category:
+                    </label>
+
+                    <select
+                        id="new-db-category"
+                    >
+                        <option value="General">General</option>
+                    </select>
 
                     <button
                         id="add-db-button"

@@ -107,6 +107,8 @@ export function initTiaUi(
     const hmiBatchProgress = document.getElementById("tia-hmi-batch-progress");
     const hmiBatchProgressText =
         document.getElementById("tia-hmi-batch-progress-text");
+    const hmiBatchProgressPanel =
+        document.getElementById("tia-hmi-batch-progress-panel");
     const hmiScanSummary = document.getElementById("tia-hmi-scan-summary");
     const hmiDedicatedTextLists = document.getElementById(
         "tia-hmi-dedicated-text-lists"
@@ -1863,6 +1865,10 @@ export function initTiaUi(
         const safeTotal = Number.isFinite(total) && total > 0 ? total : 0;
         const done = Math.max(0, Math.min(Number(completed) || 0, safeTotal));
         const percent = safeTotal ? 100 * done / safeTotal : 0;
+        // A stopped or cleared run has no meaningful denominator. Its final
+        // verified count is shown in the status and report; do not present
+        // a misleading "0 / —" progress bar underneath it.
+        hmiBatchProgressPanel?.classList.toggle("hidden", !safeTotal);
         if (hmiBatchProgress) {
             hmiBatchProgress.value = percent;
             hmiBatchProgress.setAttribute("aria-valuenow", String(Math.round(percent)));

@@ -18,6 +18,7 @@ from openpyxl import load_workbook
 from pydantic import BaseModel, Field
 
 from engine.tia.adapter import PROJECT_ROOT
+from engine.tia.compat import run_adapter
 from engine.tia.models import TranslateHmiTextsRequest
 from engine.tia.hmi_text_safety import (
     needs_target_fill, normalize_hmi_translation, validate_hmi_translation,
@@ -138,6 +139,23 @@ def _matching_source_rows(request: TranslateHmiTextsRequest) -> list[dict]:
     try:
         workbook = load_workbook(path, data_only=True, read_only=False)
         try:
+            # A batch checkpoint must be created from the actual requested
+            # target slot.  TIA can export a second source-language column
+            # before the target language has been activated; treating that
+            # column as the target would make the candidate count differ from
+            # the subsequent import verification and a later scan.
+            for sheet in workbook.worksheets:
+                columns = review._source_target_columns(
+                    sheet, request.source_culture, request.target_culture,
+                )
+                if columns is not None and columns[1].casefold() != (
+                    request.target_culture.casefold()
+                ):
+                    raise HTTPException(
+                        409, "TIA did not export the requested target column "
+                        + request.target_culture
+                        + " after language activation. No batch was created."
+                    )
             return list(review._matching_rows(workbook, request))
         finally:
             workbook.close()
@@ -156,6 +174,12 @@ def start_hmi_batch_job(request: StartBatchJobRequest):
     model = (
         "source-copy" if request.translation_strategy == "copy"
         else resolve_ollama_model(request.ollama_model)
+    )
+    # Starting automatic import is the explicit write authorization. Activate
+    # the target language before taking the checkpoint so scan, candidates and
+    # verified import all address the same TIA language slot.
+    run_adapter(
+        "add-project-language", str(request.process_id), request.target_culture
     )
     rows = _matching_source_rows(request)
     all_unique = list(dict.fromkeys(

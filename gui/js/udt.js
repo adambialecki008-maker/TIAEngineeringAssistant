@@ -17,6 +17,36 @@ import {
     postJson,
 } from "./api.js";
 
+let categoryOptions = ["General"];
+
+export function setUdtCategoryOptions(categories) {
+    categoryOptions = [...new Set(categories.filter(value => typeof value === "string" && value.trim()))]
+        .sort((left, right) => left.localeCompare(right));
+    if (!categoryOptions.includes("General")) categoryOptions.push("General");
+}
+
+function createCategorySelect(udt, refresh) {
+    const label = document.createElement("label");
+    label.textContent = "Category: ";
+    const select = document.createElement("select");
+    const current = udt.category || "General";
+    const options = categoryOptions.includes(current) ? categoryOptions : [...categoryOptions, current];
+    for (const value of options) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+    }
+    select.value = current;
+    select.addEventListener("change", () => {
+        udt.category = select.value;
+        saveProjectConfig();
+        refresh();
+    });
+    label.appendChild(select);
+    return label;
+}
+
 
 function requirePlc() {
     if (!projectConfig.plc_family) {
@@ -33,6 +63,7 @@ function requirePlc() {
 
 export function addUdt(
     nameInput,
+    categoryInput,
     refresh
 ) {
     if (!requirePlc()) {
@@ -74,13 +105,13 @@ export function addUdt(
     projectConfig.udts.push({
         name: name,
         fields: [],
+        category: categoryInput?.value || "General",
     });
 
 
     saveProjectConfig();
 
-    nameInput.value =
-        "";
+    nameInput.value = "";
 
     refresh();
 }
@@ -434,7 +465,7 @@ export function renderUdts(
 
             summary.textContent =
                 `${udt.name} ` +
-                `(${udt.fields.length} fields)`;
+                `(${udt.fields.length} fields, ${udt.category || "General"})`;
 
 
             details.appendChild(
@@ -468,6 +499,13 @@ export function renderUdts(
                             udtIndex,
                             refresh
                         )
+                )
+            );
+
+            actions.appendChild(
+                createCategorySelect(
+                    udt,
+                    refresh
                 )
             );
 
