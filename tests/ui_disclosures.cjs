@@ -11,4 +11,12 @@ async function openSection(page, id) {
     return details;
 }
 
-module.exports = {openSection};
+async function revealEngineeringItem(page, containerSelector) {
+    const details = page.locator(containerSelector + " > details").first();
+    if (await details.count() && !(await details.evaluate(el => el.open))) {
+        await details.locator(":scope > summary").click();
+    }
+    return page.locator(containerSelector);
+}
+
+module.exports = {openSection, revealEngineeringItem};
