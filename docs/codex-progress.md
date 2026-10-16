@@ -440,3 +440,12 @@
   regression verifies the no-contact snapshot workflow alongside Analyze Files
   and the optional Ollama review.
 
+## PLC Code Review dependency rules - 2026-10-16
+
+- Deterministic diagnostics now identify multi-instance cycles that are fully
+  demonstrated by loaded FB declarations, plus IEC timer/counter instances
+  outside FB Static and instruction names used as data types.
+- The rules use the existing Siemens type registry and loaded source only;
+  missing project context remains an unresolved warning rather than an
+  invented error. Focused regression: 7 tests passed.
+

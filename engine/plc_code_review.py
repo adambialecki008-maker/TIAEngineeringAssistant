@@ -15,7 +15,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from engine.tia.ollama_translation import _ollama_json, resolve_ollama_model
-from engine.tia.type_registry import is_builtin_type
+from engine.tia.type_registry import is_builtin_type, type_entry
 from engine.tia.xml_parser import xml_attribute, xml_local_name
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -176,12 +176,68 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
                 report.findings.append(ReviewFinding(source_file=block.source_file, block=block.name, language=block.language, location=declaration.location, severity="error", category="Duplicate declaration", explanation=f"{declaration.name} is declared more than once in this parsed block.", evidence=declaration.name))
             seen.add(key)
             data_type = declaration.data_type.split("[")[0].strip()
+            registry_entry = type_entry(data_type)
+            system_instance = bool(registry_entry and str(registry_entry.get("kind", "")).endswith("_instance"))
+            allowed_system_instance = block.block_type in {"FUNCTION_BLOCK", "FB"} and declaration.section.casefold() == "static"
+            if system_instance and not allowed_system_instance:
+                report.findings.append(ReviewFinding(
+                    source_file=block.source_file, block=block.name, language=block.language,
+                    location=declaration.location, severity="error", category="Invalid IEC instance context",
+                    explanation=f"{data_type} is a Siemens system instance and is only valid as a Static member of an FB.",
+                    suggested_fix="Declare the instance in the Static section of a Function Block or remove it.",
+                    evidence=data_type,
+                ))
+            elif registry_entry and not registry_entry.get("declarable") and not system_instance:
+                report.findings.append(ReviewFinding(
+                    source_file=block.source_file, block=block.name, language=block.language,
+                    location=declaration.location, severity="error", category="Invalid instruction declaration",
+                    explanation=f"{data_type} is registered as an instruction or legacy reference, not a declarable data type.",
+                    suggested_fix="Use a supported data type or a verified system-instance type in an FB Static section.",
+                    evidence=data_type,
+                ))
             if not is_builtin_type(data_type) and data_type.casefold() not in names:
                 report.findings.append(ReviewFinding(source_file=block.source_file, block=block.name, language=block.language, location=declaration.location, severity="warning", category="Unresolved dependency", explanation=f"{data_type} is not among the loaded blocks or registered Siemens types.", suggested_fix="Load the defining UDT/FB/FC/DB or review in the full TIA project.", evidence=data_type, verification_status="requires project context"))
             elif not is_builtin_type(data_type):
                 block.dependencies.append(data_type)
         block.dependencies = sorted(set(block.dependencies), key=str.casefold)
+    _add_multi_instance_cycle_findings(report)
     return report
+
+
+def _add_multi_instance_cycle_findings(report: ReviewReport) -> None:
+    """Report only cycles wholly demonstrated by loaded Function Block declarations."""
+    blocks = {
+        block.name: {dep for dep in block.dependencies if dep in {item.name for item in report.files if item.block_type in {"FUNCTION_BLOCK", "FB"}}}
+        for block in report.files if block.block_type in {"FUNCTION_BLOCK", "FB"}
+    }
+    visited, active, cycles = set(), [], set()
+
+    def visit(name: str) -> None:
+        if name in active:
+            cycle = active[active.index(name):] + [name]
+            cycles.add(tuple(cycle))
+            return
+        if name in visited:
+            return
+        visited.add(name)
+        active.append(name)
+        for dependency in blocks.get(name, set()):
+            visit(dependency)
+        active.pop()
+
+    for name in blocks:
+        visit(name)
+    by_name = {block.name: block for block in report.files}
+    for cycle in cycles:
+        evidence = " -> ".join(cycle)
+        for name in set(cycle[:-1]):
+            block = by_name[name]
+            report.findings.append(ReviewFinding(
+                source_file=block.source_file, block=name, language=block.language,
+                severity="error", category="Cyclic multi-instance dependency",
+                explanation="Loaded Function Block declarations form a multi-instance cycle.",
+                suggested_fix="Break the cycle before importing or reusing these blocks.", evidence=evidence,
+            ))
 
 
 def _source_chunks(content: str) -> tuple[list[str], bool]:

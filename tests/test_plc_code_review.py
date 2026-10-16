@@ -26,3 +26,16 @@ def test_code_review_api_is_read_only():
     response = TestClient(app).post("/api/v1/code-review/analyze-files", json=[{"name":"DB.scl", "content":"DATA_BLOCK DB_A"}])
     assert response.status_code == 200
     assert response.json()["read_only"] is True
+
+
+def test_multi_instance_cycles_and_iec_context_are_reported_from_loaded_source():
+    report = analyze_files([
+        ReviewInputFile(name="A.scl", content="FUNCTION_BLOCK FB_A\nVAR_STATIC\n B : FB_B;\n Timer : TON_TIME;\nEND_VAR"),
+        ReviewInputFile(name="B.scl", content="FUNCTION_BLOCK FB_B\nVAR_STATIC\n A : FB_A;\nEND_VAR"),
+        ReviewInputFile(name="Bad.scl", content="FUNCTION FC_Bad\nVAR_INPUT\n Timer : TON_TIME;\n Call : TON;\nEND_VAR"),
+    ])
+    cycles = [item for item in report.findings if item.category == "Cyclic multi-instance dependency"]
+    assert {item.block for item in cycles} == {"FB_A", "FB_B"}
+    assert all(item.evidence == "FB_A -> FB_B -> FB_A" for item in cycles)
+    assert any(item.category == "Invalid IEC instance context" and item.evidence == "TON_TIME" for item in report.findings)
+    assert any(item.category == "Invalid instruction declaration" and item.evidence == "TON" for item in report.findings)
