@@ -82,11 +82,6 @@ def scan_scl_call_sites(lines: list[str]) -> list[SclCallSite]:
         # No method/array-member or namespace inference for dotted calls.
         if i and tokens[i - 1].value == ".":
             continue
-        # Siemens typed literals (T#..., INT#...) are not call expressions.
-        if i and tokens[i - 1].value == "#":
-            # A # before the name denotes a local symbolic instance, whereas
-            # a typed literal would have # after the name, not before it.
-            pass
         name = token.value
         if token.kind == "symbol":
             name = name[1:-1].replace('""', '"')

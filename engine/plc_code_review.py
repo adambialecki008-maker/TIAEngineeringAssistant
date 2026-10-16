@@ -613,12 +613,6 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
     return report
 
 
-_SCL_CALL = re.compile(
-    r"^\s*(?:(?:#?" + _IDENTIFIER + r")\s*:=\s*)?(#?" + _IDENTIFIER + r")\s*\(",
-    re.I,
-)
-
-
 _NAMED_CALL_ARGUMENT = re.compile(
     r"^\s*(" + _IDENTIFIER + r")\s*(:=|=>)\s*(.+)$", re.I | re.S,
 )

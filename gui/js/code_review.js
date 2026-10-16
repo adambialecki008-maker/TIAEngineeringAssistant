@@ -39,13 +39,14 @@ function reportMarkdown(report) {
         lines.push("", "## Observed FB/FC calls (read-only)", "");
         for (const block of callBlocks) {
             lines.push("### " + markdownText(block.name) + " — " + markdownText(block.source_file), "");
-            lines.push("| Location | Source | Target | Nesting | Via instance | Resolution |",
-                "| --- | --- | --- | --- | --- | --- |");
+            lines.push("| Location | Source | Target | Nesting | Via instance | Resolution | Arguments |",
+                "| --- | --- | --- | --- | --- | --- | --- |");
             for (const call of block.calls) {
                 lines.push("| " + [
                     call.location, call.source, call.target,
                     call.parent_target ? "under " + call.parent_target + " (depth " + call.nesting_depth + ")" : "Top level",
                     call.instance || "—", call.resolution,
+                    call.source === "SCL" ? (call.arguments_complete ? "Parsed named bindings" : "Not fully verified") : "Not inspected",
                 ].map(markdownText).join(" | ") + " |");
                 if ((call.arguments || []).length) {
                     lines.push("- Named bindings: " + call.arguments.map(arg =>
@@ -156,7 +157,7 @@ function renderBlockCalls(block, parent) {
     const table = document.createElement("table");
     table.className = "management-table review-block-calls";
     const header = document.createElement("tr");
-    for (const label of ["Location", "Source", "Target", "Nesting", "Via instance", "Resolution"]) {
+    for (const label of ["Location", "Source", "Target", "Nesting", "Via instance", "Resolution", "Arguments"]) {
         const th = document.createElement("th");
         th.textContent = label;
         header.appendChild(th);
@@ -168,7 +169,8 @@ function renderBlockCalls(block, parent) {
         const tr = document.createElement("tr");
         for (const value of [call.location, call.source, call.target,
             call.parent_target ? "↳ " + call.parent_target + " (depth " + call.nesting_depth + ")" : "Top level",
-            call.instance || "—", call.resolution]) {
+            call.instance || "—", call.resolution,
+            call.source === "SCL" ? (call.arguments_complete ? "Parsed named bindings" : "Not fully verified") : "Not inspected"]) {
             const td = document.createElement("td");
             td.textContent = String(value ?? "");
             tr.appendChild(td);

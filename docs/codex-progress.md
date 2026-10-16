@@ -615,3 +615,16 @@
   functions, quoted/commented text and incomplete syntax, plus GUI/Markdown
   nesting assertions.
 - Still read-only. No compile claims or automatic source modifications.
+
+## Point 2 review closure: visible argument certainty — 2026-10-16
+
+- GUI and Markdown now explicitly display "Not fully verified" for SCL
+  call sites with incomplete or positional argument syntax, and "Not inspected"
+  for FlgNet call arguments.
+- Removed the obsolete beginning-of-line SCL call regex and no-op scanner
+  branch so a single nested-call pipeline defines the result.
+- Added regression for nested malformed call, incomplete binding suppression
+  and verified nested diagnostic.
+- Point 2 supported offline scope: complete for recognized user FB/FC calls
+  and explicit named SCL bindings; the full Siemens SCL grammar and TIA Portal
+  compiler behavior remain outside the lexical scanner.

@@ -754,3 +754,31 @@ def test_scl_multiline_nested_call_and_partial_balancing_do_not_fake_findings():
     mismatch = [f for f in report.findings if f.category == "Call parameter type mismatch"]
     assert len(mismatch) == 1
     assert mismatch[0].evidence == "FC_Inner(Flag := ...)"
+
+
+def test_incomplete_nested_call_carries_unverified_status_and_no_fake_parameter_error():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION FC_Main : Int\nBEGIN\n"
+            "FC_Outer(Missing := FC_Inner(Flag := TRUE));\n"
+            "FC_Broken(Flag := FC_Inner(Flag := FALSE);\n"
+            "END_FUNCTION"
+        )),
+        ReviewInputFile(name="outer.scl", content=(
+            "FUNCTION FC_Outer : Int\nVAR_INPUT\n Expected : Bool;\nEND_VAR\nEND_FUNCTION"
+        )),
+        ReviewInputFile(name="inner.scl", content=(
+            "FUNCTION FC_Inner : Bool\nVAR_INPUT\n Flag : Bool;\nEND_VAR\nEND_FUNCTION"
+        )),
+    ])
+    calls = report.files[0].calls
+    assert calls[0].target == "FC_Outer"
+    assert calls[0].arguments_complete is True
+    assert calls[1].target == "FC_Inner"
+    assert calls[1].parent_target == "FC_Outer"
+    assert calls[2].target == "FC_Broken"
+    assert calls[2].arguments_complete is False
+    assert calls[3].parent_target == "FC_Broken"
+    issues = [f for f in report.findings if f.category == "Unknown call parameter"]
+    assert len(issues) == 1 and issues[0].evidence == "FC_Outer(Missing := ...)"
+    assert not any(f.evidence.startswith("FC_Broken(") for f in report.findings)
