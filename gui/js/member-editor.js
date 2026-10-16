@@ -547,6 +547,7 @@ export function createMemberTree({
     nested = false,
     allowSystemInstances = false,
     allowFbInstances = false,
+    allowRetain = false,
 }) {
     const root = document.createElement("div");
     root.className = "member-tree";
@@ -716,9 +717,9 @@ export function createMemberTree({
                 row.after(editRow);
             }
 
-            const ownRetain = isDb && !nested && path.length === 0;
+            const ownRetain = (isDb || allowRetain) && !nested && path.length === 0;
             const effectiveRetain = member.retain ?? inheritedRetain ?? retainDefault;
-            const retainCell = isDb
+            const retainCell = isDb || allowRetain
                 ? tableFlagCell({
                     member, key:"retain",
                     inherited:effectiveRetain,
@@ -726,7 +727,7 @@ export function createMemberTree({
                     onChange:value => mutate(path, rows => { rows[index].retain = value; }),
                 })
                 : createTextCell("—");
-            if (!isDb) retainCell.title = "Retain belongs to a DB, not a UDT declaration";
+            if (!isDb && !allowRetain) retainCell.title = "Retain is unavailable in this declaration section";
             const attrCells = TABLE_FIELDS.map(([key]) => tableFlagCell({
                 member, key, inherited:null,
                 onChange:value => mutate(path, rows => { rows[index][key] = value; }),

@@ -2877,3 +2877,15 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .native-instance-fields { width: 100%; border-collapse: collapse; }
 .native-instance-fields th, .native-instance-fields td { padding: 6px 10px; font-size: 12px; }
 .native-instance-fields td:first-child { font-family: Consolas, monospace; }
+
+
+/* Add new declaration-only FB/FC, same workflow as local UDT/DB creation. */
+.program-create-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.program-create-form > label { font-size: 13px; }
+.program-create-form > input { width: 180px; max-width: 100%; }
+.program-create-form > input[type="number"] { width: 150px; }
+.program-create-form > select { width: 104px; }
+.program-create-form > button { white-space: nowrap; }
+.program-create-status { min-height: 1.3em; margin: 8px 0 0; }
+.program-create-status.error { color: var(--ui-error, #fca5a5); }
+.program-create-status.success { color: var(--ui-blue-accent, #86c6fa); }

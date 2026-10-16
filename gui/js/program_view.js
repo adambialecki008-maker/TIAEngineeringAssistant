@@ -22,7 +22,7 @@ export function programHeading(block, kind) {
     const tia = block.source_mode === "tia_read_only";
     state.textContent = tia
         ? (block.interface_verified === false ? "TIA · Unverified" : "TIA · Interface verified")
-        : "Legacy · Unverified";
+        : block.created_locally === true ? "Local new · Not in TIA" : "Legacy · Unverified";
     tags.appendChild(state);
     if (block.declaration_draft) {
         const draft = document.createElement("span");
@@ -41,7 +41,9 @@ export function programMetadata(block, kind, dependencies) {
     summary.textContent = "Details";
     const explanation = document.createElement("p");
     explanation.className = "hint";
-    if (block.source_mode !== "tia_read_only") {
+    if (block.created_locally === true) {
+        explanation.textContent = "New local declaration-only block. Add Input/Output and other allowed parameters here. There is no LAD, FBD or SCL program source; the block has not been created in TIA Portal and cannot be imported as program logic.";
+    } else if (block.source_mode !== "tia_read_only") {
         explanation.textContent = "Legacy local interface: not verified against TIA. Local declaration drafts are editable, but dependency reuse and FB/FC export stay blocked.";
     } else if (block.interface_verified === false) {
         explanation.textContent = "TIA interface could not be verified. Local declarations can be inspected and edited; dependency reuse and export stay blocked.";
@@ -81,7 +83,8 @@ export function programSection(block, kind, section, count, state) {
     const details = document.createElement("details");
     details.className = "program-declaration-section";
     details.dataset.checkpoint = key;
-    details.open = state.has(key) ? state.get(key) : count > 0;
+    details.open = state.has(key) ? state.get(key)
+        : count > 0 || (block.created_locally === true && section === "Input");
     details.addEventListener("toggle", () => {
         // A detached older rendering must not overwrite the current choice.
         if (details.isConnected) state.set(key, details.open);

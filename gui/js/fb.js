@@ -2,6 +2,7 @@ import {projectConfig, saveProjectConfig} from "./state.js";
 import {createButton} from "./ui.js";
 import {createMemberTree} from "./member-editor.js";
 import {getSystemInstanceTypes} from "./plc-types.js";
+import {findSectionNameConflict} from "./program_creation.js";
 import {programLanguage, programHeading, programMetadata, programDeclarations, programSection, programActions} from "./program_view.js";
 
 const SECTIONS = ["Input", "Output", "InOut", "Static", "Temp", "Constant"];
@@ -51,7 +52,7 @@ export function renderFunctionBlocks(host, refresh) {
     if (!projectConfig.fbs.length) {
         const empty = document.createElement("p");
         empty.className = "hint";
-        empty.textContent = "No Function Block snapshots are loaded. Read blocks from the Active PLC to analyze their interfaces.";
+        empty.textContent = "No Function Blocks yet. Add a new local FB above, or read one from the Active PLC.";
         host.appendChild(empty);
         return;
     }
@@ -71,7 +72,10 @@ export function renderFunctionBlocks(host, refresh) {
                 isDb: false,
                 allowSystemInstances: section === "Static",
                 allowFbInstances: section === "Static",
+                allowRetain: section === "Static",
                 onChange: next => {
+                    const conflict = findSectionNameConflict(fb, section, next);
+                    if (conflict) { alert(conflict); return false; }
                     fb[key] = {name: section, members: next};
                     markDraft(fb);
                     refresh();
@@ -120,8 +124,11 @@ export function renderFunctionBlocks(host, refresh) {
         if (fb.declaration_draft && fb.original_interface) {
             actions.appendChild(createButton("Discard draft", () => resetDraft(fb, refresh)));
         }
-        actions.appendChild(createButton("Remove snapshot", () => {
-            if (!confirm('Remove the local snapshot "' + fb.name + '"? TIA Portal will not be changed.')) return;
+        actions.appendChild(createButton(fb.created_locally ? "Delete local FB" : "Remove snapshot", () => {
+            const message = fb.created_locally
+                ? 'Delete locally created FB "' + fb.name + '"? TIA Portal will not be changed.'
+                : 'Remove the local snapshot "' + fb.name + '"? TIA Portal will not be changed.';
+            if (!confirm(message)) return;
             projectConfig.fbs.splice(projectConfig.fbs.indexOf(fb), 1);
             saveProjectConfig();
             refresh();

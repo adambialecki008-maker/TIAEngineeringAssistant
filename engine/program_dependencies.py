@@ -59,7 +59,10 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
         for obj in items:
             add_edges(kind, obj)
             if kind in {"FB", "FC"}:
-                if obj.source_mode != "tia_read_only" or not obj.interface_verified:
+                if obj.created_locally:
+                    unresolved.append({"object": obj.name,
+                                       "reason": "Locally created declarations only; no PLC program or verified TIA block."})
+                elif obj.source_mode != "tia_read_only" or not obj.interface_verified:
                     unresolved.append({"object": obj.name,
                                        "reason": "Block interface is not a verified TIA snapshot."})
     for obj in project.instance_dbs:

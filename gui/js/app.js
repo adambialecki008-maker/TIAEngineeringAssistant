@@ -30,6 +30,7 @@ import {
 import {renderFunctionBlocks} from "./fb.js";
 import {renderFunctions} from "./fc.js";
 import {initProgramDependencies} from "./program_dependencies.js";
+import {initLocalProgramCreationUi} from "./program_creation.js";
 
 import {
     listCategories,
@@ -385,6 +386,7 @@ initFbTiaImportUi(renderAll);
 initFcTiaImportUi(renderAll);
 initInstanceDbTiaUi(renderAll);
 initProgramDependencies();
+initLocalProgramCreationUi(renderAll);
 const dataLibrariesUi = initDataLibrariesUi(() => {
     if (plcFamilySelect) plcFamilySelect.value = projectConfig.plc_family;
     sourceImportUi?.refreshSelection();

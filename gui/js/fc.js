@@ -1,6 +1,7 @@
 import {projectConfig, saveProjectConfig} from "./state.js";
 import {createButton} from "./ui.js";
 import {createMemberTree} from "./member-editor.js";
+import {findSectionNameConflict} from "./program_creation.js";
 import {programLanguage, programHeading, programMetadata, programDeclarations, programSection, programActions} from "./program_view.js";
 
 const SECTIONS = ["Input", "Output", "InOut", "Temp", "Constant"];
@@ -37,7 +38,7 @@ export function renderFunctions(host, refresh) {
     if (!projectConfig.fcs.length) {
         const empty = document.createElement("p");
         empty.className = "hint";
-        empty.textContent = "No Function snapshots are loaded. Read FCs from the Active PLC to analyze or prepare declaration drafts.";
+        empty.textContent = "No Functions yet. Add a new local FC above, or read one from the Active PLC.";
         host.appendChild(empty);
         return;
     }
@@ -54,6 +55,8 @@ export function renderFunctions(host, refresh) {
             details.appendChild(createMemberTree({
                 prefix: "fc-" + fc.name + "-" + key, members, isDb: false,
                 onChange: next => {
+                    const conflict = findSectionNameConflict(fc, section, next);
+                    if (conflict) { alert(conflict); return false; }
                     fc[key] = {name: section, members: next};
                     markDraft(fc);
                     refresh();
@@ -87,8 +90,11 @@ export function renderFunctions(host, refresh) {
                 refresh();
             }));
         }
-        actions.appendChild(createButton("Remove snapshot", () => {
-            if (!confirm('Remove the local snapshot "' + fc.name + '"? TIA Portal will not be changed.')) return;
+        actions.appendChild(createButton(fc.created_locally ? "Delete local FC" : "Remove snapshot", () => {
+            const message = fc.created_locally
+                ? 'Delete locally created FC "' + fc.name + '"? TIA Portal will not be changed.'
+                : 'Remove the local snapshot "' + fc.name + '"? TIA Portal will not be changed.';
+            if (!confirm(message)) return;
             projectConfig.fcs.splice(projectConfig.fcs.indexOf(fc), 1);
             saveProjectConfig();
             refresh();

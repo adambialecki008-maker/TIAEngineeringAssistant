@@ -331,8 +331,22 @@
         </section>
 
         <section class="tab-panel" data-tab-panel="fb">
-            <div class="panel-header"><div><h2>Function Blocks and Functions</h2><p class="panel-description">Read existing FB/FC blocks from TIA. Edit declaration drafts locally while preserving their LAD, FBD or SCL logic unchanged.</p></div></div>
-            <div class="card"><div id="fb-container"></div></div>
+            <div class="panel-header"><div><h2>Function Blocks and Functions</h2><p class="panel-description">Create new declaration-only FB/FC blocks or read existing blocks from TIA. Program logic remains in TIA Portal.</p></div></div>
+            <div class="card">
+                <h3>Function Blocks (FB)</h3>
+                <p class="hint">Create a new FB interface with Input, Output, InOut, Static, Temp and Constant parameters. The new block is local until you implement it in TIA Portal.</p>
+                <form id="new-fb-form" class="program-create-form">
+                    <label for="new-fb-name">FB name</label>
+                    <input id="new-fb-name" name="fb-name" type="text" placeholder="FB_Motor" autocomplete="off" required>
+                    <label for="new-fb-number">Block number (optional)</label>
+                    <input id="new-fb-number" name="fb-number" type="number" min="0" step="1" placeholder="Automatic in TIA">
+                    <label for="new-fb-language">Language</label>
+                    <select id="new-fb-language" name="fb-language"><option value="LAD">LAD</option><option value="FBD">FBD</option><option value="SCL">SCL</option></select>
+                    <button id="add-fb-button" type="submit">Add new FB</button>
+                </form>
+                <p id="new-fb-status" class="hint program-create-status" role="status" aria-live="polite"></p>
+            </div>
+            <div id="fb-container"></div>
             <div class="card">
                 <h3>Read Function Block from TIA</h3>
                 <p class="hint">Read a consistent SCL, LAD or FBD FB. Declaration changes are local drafts only; nothing is written to TIA Portal.</p>
@@ -344,7 +358,21 @@
                 </div>
                 <p id="tia-fb-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Function Blocks.</p>
             </div>
-            <div class="card"><h3>Functions (FC)</h3><div id="fc-container"></div></div>
+            <div class="card">
+                <h3>Functions (FC)</h3>
+                <p class="hint">Create a new FC interface with Input, Output, InOut, Temp and Constant parameters. FC has no Static section or Instance DB.</p>
+                <form id="new-fc-form" class="program-create-form">
+                    <label for="new-fc-name">FC name</label>
+                    <input id="new-fc-name" name="fc-name" type="text" placeholder="FC_Calculate" autocomplete="off" required>
+                    <label for="new-fc-number">Block number (optional)</label>
+                    <input id="new-fc-number" name="fc-number" type="number" min="0" step="1" placeholder="Automatic in TIA">
+                    <label for="new-fc-language">Language</label>
+                    <select id="new-fc-language" name="fc-language"><option value="LAD">LAD</option><option value="FBD">FBD</option><option value="SCL">SCL</option></select>
+                    <button id="add-fc-button" type="submit">Add new FC</button>
+                </form>
+                <p id="new-fc-status" class="hint program-create-status" role="status" aria-live="polite"></p>
+            </div>
+            <div id="fc-container"></div>
             <div class="card">
                 <h3>Read Function from TIA</h3>
                 <p class="hint">FC supports Input, Output, InOut, Temp and Constant declaration drafts. FCs cannot have Static data or Instance DBs.</p>
