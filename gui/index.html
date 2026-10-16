@@ -112,7 +112,7 @@
         >
             Source preview
         </button>
-        <button class="tab-button" data-tab="review" type="button">PLC Code Review</button>
+
 
     </nav>
 
@@ -187,6 +187,7 @@
                 </div>
             </div>
 
+            <p id="overview-tia-live-status" class="status-box" role="status" aria-live="polite">TIA connection not checked.</p>
             <div class="card overview-help">
                 <h3>Engineering context — getting started</h3>
                 <p class="hint">
@@ -1149,7 +1150,7 @@
         </section>
 
         <section class="tab-panel" data-tab-panel="libraries">
-            <div class="panel-header"><div><h2>Data &amp; Libraries</h2><p class="panel-description">Portable local engineering libraries and project backups. These operations never write to TIA Portal.</p></div></div>
+            <div class="panel-header"><div><h2>Data &amp; Libraries</h2><p class="panel-description">Engineering libraries, project backups and read-only TIA project export. No automatic TIA project writes.</p></div></div>
             <div id="data-libraries-root"></div>
         </section>
 
@@ -2413,37 +2414,7 @@
 
         </section>
 
-        <section class="tab-panel" data-tab-panel="review">
-            <div class="panel-header">
-                <h2>PLC Code Review</h2>
-                <p>Read-only analysis from loaded TIA blocks and full-project export for ChatGPT.</p>
-            </div>
-            <div class="card">
-                <h3>Export entire TIA Portal project</h3>
-                <p class="hint">
-                    Read the selected open TIA Portal V21 project through Siemens Openness.
-                    Export available PLC blocks, DB/UDT, device inventory and supported HMI
-                    objects as a ZIP for ChatGPT. Missing or unsupported items are listed
-                    in TIA_MISSING.tsv. No project write or LLM request.
-                </p>
-                <div class="action-row">
-                    <button id="review-export-llm" type="button" class="secondary-button">Export file for LLM review</button>
-                </div>
-                <p id="review-export-llm-status" class="hint" aria-live="polite">
-                    Select a TIA Portal process in the TIA connection panel before exporting.
-                    The ZIP is not a native .zap21 project backup.
-                </p>
-            </div>
-            <div class="card">
-                <h3>Analyze from TIA</h3>
-                <p class="hint">Analyze original XML from locally loaded read-only FB/FC snapshots. No project changes.</p>
-                <div class="action-row">
-                    <button id="review-tia-analyze" type="button">Analyze loaded TIA blocks</button>
-                </div>
-                <p id="review-tia-status" class="hint" aria-live="polite">Load FB or FC snapshots from TIA first.</p>
-                <div id="review-results"></div>
-            </div>
-        </section>
+
 
     </main>
 
