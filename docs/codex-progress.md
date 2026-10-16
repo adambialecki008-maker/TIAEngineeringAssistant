@@ -384,3 +384,17 @@
 - GitHub Actions run `38891135388` passed: Python pytest, JavaScript checks
   and Playwright Chromium are green.
 
+## PLC Code Review file-analysis core — 2026-10-16
+
+- Added a read-only local analyzer for `.scl` and `.xml` PLC source files and
+  the `/api/v1/code-review/analyze-files` endpoint. It accepts multiple files,
+  enforces a 2 MiB per-file limit and never contacts TIA, Ollama or an external
+  service.
+- SCL parsing recognizes supported block headers and interface declarations.
+  XML parsing is explicitly best-effort: it records recognizable Member and
+  CompileUnit/Network structures and returns partial or failed verification
+  rather than claiming unsupported SimaticML variants are fully parsed.
+- Deterministic findings cover duplicate declarations and dependencies missing
+  from the loaded file set. Missing project context is labelled accordingly.
+- Validation: focused 3 tests and full `pytest -q` — 529 passed.
+

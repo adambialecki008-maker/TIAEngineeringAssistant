@@ -17,6 +17,7 @@ from engine.function_block import FunctionBlockSpecification
 from engine.function import FunctionSpecification
 from engine.instance_db import InstanceDbSnapshot
 from engine.program_dependencies import report_program_dependencies
+from engine.plc_code_review import ReviewInputFile, ReviewReport, analyze_files
 from engine.project import (
     GeneratedProjectSource,
     ProjectSpecification,
@@ -53,6 +54,12 @@ app.mount(
     StaticFiles(directory="gui"),
     name="gui",
 )
+
+
+@app.post("/api/v1/code-review/analyze-files", response_model=ReviewReport)
+def analyze_code_review_files(files: list[ReviewInputFile]) -> ReviewReport:
+    """Analyze supplied PLC source text locally; no TIA or external service is called."""
+    return analyze_files(files)
 
 
 @app.get("/")
