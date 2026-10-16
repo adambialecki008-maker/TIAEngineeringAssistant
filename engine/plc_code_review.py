@@ -74,12 +74,19 @@ class ReviewLogicNetwork(BaseModel):
     verification_status: str = "topology only — not logic-verified"
 
 
+class ReviewCallArgument(BaseModel):
+    name: str
+    operator: Literal[":=", "=>"]
+
+
 class ReviewCall(BaseModel):
     target: str
     location: str
     source: Literal["SCL", "FlgNet"]
     language: str
     instance: str = ""
+    arguments: list[ReviewCallArgument] = Field(default_factory=list)
+    arguments_complete: bool = False
     resolution: Literal["loaded block", "requires project context"] = "requires project context"
 
 
@@ -594,6 +601,7 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
         block.dependencies = sorted(set(block.dependencies), key=str.casefold)
     _add_multi_instance_cycle_findings(report)
     _observed_calls(report, files)
+    _check_call_interfaces(report)
     _network_diagnostics(report)
     return report
 
@@ -602,6 +610,79 @@ _SCL_CALL = re.compile(
     r"^\s*(?:(?:#?" + _IDENTIFIER + r")\s*:=\s*)?(#?" + _IDENTIFIER + r")\s*\(",
     re.I,
 )
+
+
+_NAMED_CALL_ARGUMENT = re.compile(
+    r"^\s*(" + _IDENTIFIER + r")\s*(:=|=>)\s*(.+)$", re.I | re.S,
+)
+
+
+def _scl_call_arguments(
+    lines: list[str], start_line: int, after_open_paren: int,
+) -> tuple[list[ReviewCallArgument], bool]:
+    """Read bounded, balanced call arguments; never infer a complex expression's type.
+
+    Only arguments with an explicitly named := / => binding are verified.
+    A positional, malformed, or overly long call remains unverified.
+    """
+    depth = 1
+    quote = ""
+    pieces: list[str] = []
+    current: list[str] = []
+    total = 0
+    finished = False
+    for line_number in range(start_line, min(len(lines), start_line + 100)):
+        line = lines[line_number]
+        start = after_open_paren if line_number == start_line else 0
+        pos = start
+        while pos < len(line):
+            char = line[pos]
+            total += 1
+            if total > 12000:
+                return [], False
+            if quote:
+                current.append(char)
+                if char == quote:
+                    if pos + 1 < len(line) and line[pos + 1] == quote:
+                        pos += 1
+                        current.append(line[pos])
+                    else:
+                        quote = ""
+            elif char in {"'", '"'}:
+                quote = char
+                current.append(char)
+            elif char == "(":
+                depth += 1
+                current.append(char)
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    pieces.append("".join(current).strip())
+                    finished = True
+                    break
+                current.append(char)
+            elif char == "," and depth == 1:
+                pieces.append("".join(current).strip())
+                current = []
+            else:
+                current.append(char)
+            pos += 1
+        if finished:
+            break
+        current.append(" ")
+    if not finished:
+        return [], False
+    if len(pieces) == 1 and not pieces[0]:
+        return [], True
+    arguments: list[ReviewCallArgument] = []
+    for piece in pieces:
+        match = _NAMED_CALL_ARGUMENT.fullmatch(piece)
+        if not match:
+            return [], False
+        arguments.append(ReviewCallArgument(
+            name=_identifier(match.group(1)), operator=match.group(2),
+        ))
+    return arguments, True
 
 
 def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[ReviewCall]:
@@ -615,7 +696,8 @@ def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[Revie
     }
     body = False
     calls: list[ReviewCall] = []
-    for line_number, line in enumerate(_scl_without_comments(file.content)[0], 1):
+    lines = _scl_without_comments(file.content)[0]
+    for line_number, line in enumerate(lines, 1):
         token = line.strip().upper().split(None, 1)[0] if line.strip() else ""
         if token == "BEGIN":
             body = True
@@ -636,12 +718,13 @@ def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[Revie
         # expressions that the lightweight scanner cannot authenticate.
         if declared_type is None and not target.casefold().startswith(("fc_", "fb_")):
             continue
+        arguments, complete = _scl_call_arguments(lines, line_number - 1, match.end())
         calls.append(ReviewCall(
             target=target, location=f"line {line_number}", source="SCL",
             language="SCL", instance=raw if declared_type else "",
+            arguments=arguments, arguments_complete=complete,
         ))
     return calls
-
 
 def _observed_calls(report: ReviewReport, sources: list[ReviewInputFile]) -> None:
     """Resolve against only files supplied in this analysis, never invent links."""
@@ -675,6 +758,71 @@ def _observed_calls(report: ReviewReport, sources: list[ReviewInputFile]) -> Non
                 call.resolution = "loaded block"
                 block.dependencies.append(target.name)
         block.dependencies = sorted(set(block.dependencies), key=str.casefold)
+
+
+def _check_call_interfaces(report: ReviewReport) -> None:
+    """Check explicit named bindings against *loaded* declared Input/Output/InOut.
+
+    Never infer missing required parameters or actual expression data types.
+    Partial XML interfaces require additional TIA verification.
+    """
+    loaded = {
+        item.name.casefold(): item for item in report.files
+        if item.block_type in {"FB", "FC", "FUNCTION_BLOCK", "FUNCTION"}
+    }
+    for caller in report.files:
+        for call in caller.calls:
+            if call.resolution != "loaded block" or not call.arguments_complete:
+                continue
+            target = loaded.get(call.target.casefold())
+            if target is None or target.verification_status == "failed":
+                continue
+            formal = {
+                member.name.casefold(): member
+                for member in target.declarations
+                if member.section.casefold() in {"input", "output", "inout"}
+                and "." not in member.name
+            }
+            if not formal:
+                # The interface can be empty or absent from a partial export.
+                # Never claim a mismatch without exported formal declarations.
+                continue
+            verification = (
+                "verified" if target.verification_status == "parsed"
+                else "requires TIA verification"
+            )
+            seen: set[str] = set()
+            for argument in call.arguments:
+                key = argument.name.casefold()
+                category = ""
+                detail = ""
+                if key in seen:
+                    category = "Duplicate call parameter"
+                    detail = f"{argument.name} is bound more than once in the same call."
+                elif key not in formal and key not in {"en", "eno"}:
+                    category = "Unknown call parameter"
+                    detail = f"{argument.name} is absent from the loaded {target.name} interface."
+                elif key in formal:
+                    section = formal[key].section.casefold()
+                    if (section == "input" and argument.operator == "=>") or (
+                        section == "output" and argument.operator == ":="
+                    ):
+                        category = "Call parameter direction"
+                        detail = (
+                            f"{argument.name} belongs to {formal[key].section} "
+                            f"but uses {argument.operator}."
+                        )
+                seen.add(key)
+                if category:
+                    report.findings.append(ReviewFinding(
+                        source_file=caller.source_file, block=caller.name,
+                        language=call.language, location=call.location,
+                        severity="warning", category=category,
+                        explanation=detail,
+                        evidence=f"{call.target}({argument.name} {argument.operator} ...)",
+                        suggested_fix="Compare named bindings with the exported FB/FC interface.",
+                        verification_status=verification,
+                    ))
 
 
 def _add_multi_instance_cycle_findings(report: ReviewReport) -> None:

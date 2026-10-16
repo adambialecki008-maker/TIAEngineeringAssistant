@@ -45,6 +45,11 @@ function reportMarkdown(report) {
                 lines.push("| " + [
                     call.location, call.source, call.target, call.instance || "—", call.resolution,
                 ].map(markdownText).join(" | ") + " |");
+                if ((call.arguments || []).length) {
+                    lines.push("- Named bindings: " + call.arguments.map(arg =>
+                        markdownText(arg.name) + " " + arg.operator).join(", ") +
+                        (call.arguments_complete ? "" : " (partial)"));
+                }
             }
             lines.push("");
         }
@@ -169,6 +174,15 @@ function renderBlockCalls(block, parent) {
     table.append(thead, tbody);
     wrapper.appendChild(table);
     parent.appendChild(wrapper);
+    for (const call of block.calls) {
+        if (!(call.arguments || []).length) continue;
+        const label = document.createElement("p");
+        label.className = "hint review-call-arguments";
+        label.textContent = call.target + " · " + call.location + ": "
+            + call.arguments.map(argument => argument.name + " " + argument.operator).join(", ")
+            + (call.arguments_complete ? "" : " (partial)");
+        parent.appendChild(label);
+    }
 }
 
 function renderReport(report, results) {

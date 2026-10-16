@@ -400,3 +400,91 @@ def test_declaration_only_scl_does_not_produce_call_edges():
         ' FB_Remote : FB_External;\nEND_VAR\nEND_FUNCTION_BLOCK'
     ))])
     assert report.files[0].calls == []
+
+
+
+def test_named_scl_call_parameters_are_compared_with_loaded_fb_interface():
+    report = analyze_files([
+        ReviewInputFile(name="run.scl", content=(
+            'FUNCTION_BLOCK FB_Run\nVAR_STATIC\n Motor : FB_Motor;\nEND_VAR\nBEGIN\n'
+            '#Motor(Start := TRUE, Ready => #Ack, Cmd := Func(3, 4));\n'
+            '#Motor(Start => TRUE, Ready := #Ack, Ghost := 1, Start := TRUE);\n'
+            'END_FUNCTION_BLOCK'
+        )),
+        ReviewInputFile(name="motor.scl", content=(
+            'FUNCTION_BLOCK FB_Motor\nVAR_INPUT\n Start : Bool;\nEND_VAR\n'
+            'VAR_OUTPUT\n Ready : Bool;\nEND_VAR\n'
+            'VAR_IN_OUT\n Cmd : Int;\nEND_VAR\nEND_FUNCTION_BLOCK'
+        )),
+    ])
+    calls = report.files[0].calls
+    assert len(calls) == 2
+    assert all(call.arguments_complete for call in calls)
+    assert [(arg.name, arg.operator) for arg in calls[0].arguments] == [
+        ("Start", ":="), ("Ready", "=>"), ("Cmd", ":="),
+    ]
+    assert not any(f.location == "line 6" for f in report.findings)
+    assert {f.category for f in report.findings} == {
+        "Unknown call parameter", "Duplicate call parameter", "Call parameter direction",
+    }
+    assert len([f for f in report.findings if f.category == "Call parameter direction"]) == 2
+    assert all(f.location == "line 7" and f.verification_status == "verified" for f in report.findings)
+
+
+def test_multiline_scl_call_with_quotes_and_nested_commas_keeps_line_location():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            'FUNCTION FC_Runner : Int\nBEGIN\n'
+            'FC_Target(\n'
+            ' Name := \'a,b\'+CONCAT(IN1 := \'c,d\', IN2 := \'e\'),\n'
+            ' Mode := 1\n'
+            ');\nEND_FUNCTION'
+        )),
+        ReviewInputFile(name="target.scl", content=(
+            'FUNCTION FC_Target : Int\nVAR_INPUT\n Name : String[20];\n Mode : Int;\n'
+            'END_VAR\nEND_FUNCTION'
+        )),
+    ])
+    assert len(report.files[0].calls) == 1
+    call = report.files[0].calls[0]
+    assert call.location == "line 3"
+    assert call.arguments_complete is True
+    assert [a.name for a in call.arguments] == ["Name", "Mode"]
+    assert not report.findings
+
+
+def test_partial_positional_or_unclosed_calls_skip_interface_diagnostics():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            'FUNCTION FC_Runner : Int\nBEGIN\nFC_Target(1, Wrong := 5);\n'
+            'FC_Target(Wrong := 1;\nEND_FUNCTION'
+        )),
+        ReviewInputFile(name="target.scl", content=(
+            'FUNCTION FC_Target : Int\nVAR_INPUT\n Known : Int;\nEND_VAR\nEND_FUNCTION'
+        )),
+    ])
+    assert len(report.files[0].calls) == 2
+    assert all(not c.arguments_complete and not c.arguments for c in report.files[0].calls)
+    assert not any(f.category in {
+        "Unknown call parameter", "Duplicate call parameter", "Call parameter direction",
+    } for f in report.findings)
+
+
+def test_non_loaded_and_partial_xml_call_interfaces_do_not_claim_verified_error():
+    partial = (
+        '<Document><SW.Blocks.FC><AttributeList><Name>FC_XML</Name>'
+        '<Interface><Sections><Section Name="Input">'
+        '<Member Name="Start" Datatype="Bool"/>'
+        '</Section></Sections></Interface></AttributeList></SW.Blocks.FC></Document>'
+    )
+    report = analyze_files([
+        ReviewInputFile(name="runner.scl", content=(
+            'FUNCTION_BLOCK FB_Run\nBEGIN\nFC_XML(Unknown := TRUE);\n'
+            'FC_External(NotKnown := 1);\nEND_FUNCTION_BLOCK'
+        )),
+        ReviewInputFile(name="external.xml", content=partial),
+    ])
+    findings = [f for f in report.findings if f.category == "Unknown call parameter"]
+    assert len(findings) == 1
+    assert findings[0].verification_status == "requires TIA verification"
+    assert findings[0].evidence == "FC_XML(Unknown := ...)"

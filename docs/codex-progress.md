@@ -552,3 +552,18 @@
 - Python regression covers two resolved SCL calls, partial uploads,
   observed FlgNet CallInfo, and declaration-only sources. Browser assertions
   cover the read-only call table and Markdown export.
+
+## FB/FC named call-binding preflight (SCL) — 2026-10-16
+
+- Reads multiline explicit named SCL call bindings (:= and =>) using balanced
+  parentheses, including nested function calls and quoted strings.
+- Compares observed names and directions only with the supplied callee's
+  declared Input/Output/InOut interface, without inferring types or claiming
+  that missing parameters are mandatory.
+- Flags duplicate bindings, unknown names and obvious Input/Output direction
+  mismatches as source-level warnings. For partial SimaticML declarations,
+  results require confirmation in TIA; absent or incomplete call syntax is not
+  diagnosed. Unloaded callees stay unresolved without fabricated errors.
+- Per-call binding names are shown in GUI and exported in Markdown.
+- Adds Python regression and browser coverage. Does not alter TIA, project
+  blocks, source files or existing HMI/UDT/DB import behavior.
