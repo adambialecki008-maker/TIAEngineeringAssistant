@@ -41,7 +41,7 @@ export function initFcTiaImportUi(renderAll) {
             available.forEach((block, index) => select.append(new Option(
                 block.name + " [" + (block.group_path || "root") + "]", String(index))));
             load.disabled = available.length === 0;
-            report(available.length + " consistent SCL/LAD/KOP/FBD Function(s) available for local declaration analysis.");
+            report(available.length + " consistent SCL/LAD/FBD Function(s) available for local declaration analysis.");
         } catch (error) { report(error.message, true); }
         finally { busy = false; scan.disabled = false; }
     });

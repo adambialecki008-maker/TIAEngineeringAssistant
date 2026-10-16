@@ -25,8 +25,10 @@ class FunctionSpecification(BaseModel):
     @model_validator(mode="after")
     def validate_sections(self):
         language = self.language.strip().upper()
-        if language not in {"SCL", "LAD", "KOP", "FBD"}:
-            raise ValueError("Only SCL, LAD, KOP and FBD Functions are supported.")
+        if language == "KOP":  # localized TIA ladder metadata; expose LAD consistently
+            language = "LAD"
+        if language not in {"SCL", "LAD", "FBD"}:
+            raise ValueError("Only SCL, LAD and FBD Functions are supported.")
         self.language = language
         if self.source_mode == "tia_read_only" and not self.source_xml:
             raise ValueError("TIA FC import requires original source XML to preserve its logic.")

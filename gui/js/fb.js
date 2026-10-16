@@ -2,25 +2,10 @@ import {projectConfig, saveProjectConfig} from "./state.js";
 import {createButton} from "./ui.js";
 import {createMemberTree} from "./member-editor.js";
 import {getSystemInstanceTypes} from "./plc-types.js";
+import {programLanguage, programHeading, programMetadata, programDeclarations, programSection, programActions} from "./program_view.js";
 
 const SECTIONS = ["Input", "Output", "InOut", "Static", "Temp", "Constant"];
 const sectionOpenState = new Map();
-
-function stateKey(fb, section) {
-    return "fb-analyzer:" + fb.name.toLocaleLowerCase() + ":" + section;
-}
-
-function rememberedDetails(fb, section, label) {
-    const details = document.createElement("details");
-    const key = stateKey(fb, section);
-    details.dataset.checkpoint = key;
-    details.open = sectionOpenState.get(key) === true;
-    details.addEventListener("toggle", () => sectionOpenState.set(key, details.open));
-    const summary = document.createElement("summary");
-    summary.textContent = label;
-    details.appendChild(summary);
-    return details;
-}
 
 function dependencySummary(fb) {
     const dependencies = (fb.static?.members || [])
@@ -42,19 +27,6 @@ function dependencySummary(fb) {
         member.name + " → " + target.name + (target.interface_verified === false ? " (Unverified)" : "")).join(", "));
     if (udts.length) descriptions.push("UDT: " + udts.join(", "));
     note.textContent = descriptions.join(". ") + ".";
-    return note;
-}
-
-function snapshotStatus(fb) {
-    const note = document.createElement("p");
-    note.className = "hint";
-    if (fb.source_mode === "tia_read_only") {
-        note.textContent = fb.interface_verified === false
-            ? "TIA snapshot — Unverified interface. Declaration changes stay local; dependency reuse and export are blocked."
-            : "TIA snapshot — edit declarations locally. The original program XML is preserved and TIA Portal is never written.";
-    } else {
-        note.textContent = "Legacy local declaration — read-only and not verified against TIA. It remains visible for migration, but cannot confirm dependencies or be exported as an FB.";
-    }
     return note;
 }
 
@@ -85,23 +57,14 @@ export function renderFunctionBlocks(host, refresh) {
     }
     for (const fb of projectConfig.fbs) {
         const card = document.createElement("article");
-        card.className = "card";
-        const title = document.createElement("h3");
-        title.textContent = fb.name + " (" + (fb.language || "Unknown") + ")"
-            + (fb.number === null || fb.number === undefined ? "" : " — FB " + fb.number);
-        card.append(title, snapshotStatus(fb));
-        if (fb.declaration_draft) {
-            const draft = document.createElement("p");
-            draft.className = "hint";
-            draft.textContent = "Local declaration draft — not applied to TIA Portal.";
-            card.appendChild(draft);
-        }
-        const dependencies = dependencySummary(fb);
-        if (dependencies) card.appendChild(dependencies);
+        card.className = "card program-block-card";
+        card.appendChild(programHeading(fb, "FB"));
+        card.appendChild(programMetadata(fb, "FB", dependencySummary(fb)));
+        const declarations = programDeclarations();
         for (const section of SECTIONS) {
             const key = section.toLowerCase();
             const members = fb[key]?.members || [];
-            const details = rememberedDetails(fb, "section:" + key, section + " (" + members.length + ")");
+            const details = programSection(fb, "FB", section, members.length, sectionOpenState);
             details.appendChild(createMemberTree({
                 prefix: "fb-" + fb.name + "-" + key,
                 members,
@@ -121,7 +84,9 @@ export function renderFunctionBlocks(host, refresh) {
                 for (const type of getSystemInstanceTypes(projectConfig.plc_family)) {
                     system.append(new Option(type.name, type.name));
                 }
-                details.append(system, createButton("Add IEC instance", () => {
+                const iecControls = document.createElement("div");
+                iecControls.className = "program-iec-controls";
+                iecControls.append(system, createButton("Add IEC instance", () => {
                     const type = system.value;
                     if (!type) return;
                     const base = type.replace(/[^A-Za-z0-9]/g, "_");
@@ -134,26 +99,34 @@ export function renderFunctionBlocks(host, refresh) {
                     markDraft(fb);
                     refresh();
                 }));
+                details.appendChild(iecControls);
             }
-            card.appendChild(details);
+            declarations.appendChild(details);
         }
+        card.appendChild(declarations);
         if (fb.source_xml) {
-            const source = rememberedDetails(fb, "source", "Original TIA " + fb.language + " source XML (read-only)");
+            const source = document.createElement("details");
+            source.className = "program-source-details";
+            const summary = document.createElement("summary");
+            summary.textContent = "Original " + programLanguage(fb.language) + " XML (read-only)";
+            source.appendChild(summary);
             const sourceText = document.createElement("pre");
             sourceText.className = "device-config-preview";
             sourceText.textContent = fb.source_xml;
             source.appendChild(sourceText);
             card.appendChild(source);
         }
+        const actions = programActions();
         if (fb.declaration_draft && fb.original_interface) {
-            card.appendChild(createButton("Discard local declaration draft", () => resetDraft(fb, refresh)));
+            actions.appendChild(createButton("Discard draft", () => resetDraft(fb, refresh)));
         }
-        card.appendChild(createButton("Remove local snapshot", () => {
+        actions.appendChild(createButton("Remove snapshot", () => {
             if (!confirm('Remove the local snapshot "' + fb.name + '"? TIA Portal will not be changed.')) return;
             projectConfig.fbs.splice(projectConfig.fbs.indexOf(fb), 1);
             saveProjectConfig();
             refresh();
         }));
+        card.appendChild(actions);
         host.appendChild(card);
     }
 }

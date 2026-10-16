@@ -40,7 +40,7 @@ export function initFbTiaImportUi(renderAll) {
             available.forEach((block, index) => select.append(new Option(
                 block.name + " [" + (block.group_path || "root") + "]", String(index))));
             load.disabled = available.length === 0;
-            report(available.length + " consistent SCL/LAD/KOP/FBD Function Block(s) available for read-only analysis.");
+            report(available.length + " consistent SCL/LAD/FBD Function Block(s) available for read-only analysis.");
         } catch (error) { report(error.message, true); }
         finally { busy = false; scan.disabled = false; }
     });

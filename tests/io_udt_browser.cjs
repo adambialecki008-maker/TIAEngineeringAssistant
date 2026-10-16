@@ -66,7 +66,14 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
   await page.locator('[data-tab="devices"]').click();
   await assert.equal((await page.locator('[data-tab="devices"]').innerText()).trim(),
     "I/O Engineering");
-  await page.locator("#device-mapping-mode").waitFor();
+  // The device panels are collapsible by default. Open the actual UI sections
+  // instead of bypassing visibility checks on hidden controls.
+  for (const control of ["#device-mapping-mode", "#refresh-hardware-button",
+                         "#generated-plc-tags-body"]) {
+    await page.locator(control).locator("xpath=ancestor::details.device-section[1]")
+      .locator(":scope > summary").click();
+  }
+  await page.locator("#device-mapping-mode").waitFor({state:"visible"});
   assert.equal(await page.locator("#device-mapping-mode").inputValue(),"device");
   await page.locator("#refresh-hardware-button").click();
   await page.locator("#device-io-mapping-body select").first().selectOption({index:1});

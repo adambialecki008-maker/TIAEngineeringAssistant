@@ -25,10 +25,11 @@ export function convertTiaFbDetail(detail) {
         || !Array.isArray(detail.members)) {
         throw Error("TIA did not export usable Function Block declarations.");
     }
-    const language = String(detail.programming_language || "").trim().toUpperCase();
-    if (!["SCL", "LAD", "KOP", "FBD"].includes(language))
+    const rawLanguage = String(detail.programming_language || "").trim().toUpperCase();
+    const language = rawLanguage === "KOP" ? "LAD" : rawLanguage;
+    if (!["SCL", "LAD", "FBD"].includes(language))
         throw Error(detail.name + " uses " + (language || "an unknown language")
-            + ". Only SCL, LAD, KOP and FBD FBs are supported.");
+            + ". Only SCL, LAD and FBD FBs are supported.");
     if (!String(detail.source_xml || "").trim())
         throw Error(detail.name + ": original TIA source XML is unavailable; import is blocked to avoid losing logic.");
     const grouped = Object.fromEntries([...SECTIONS.values()].map(key => [key, []]));
