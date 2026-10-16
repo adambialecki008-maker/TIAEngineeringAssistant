@@ -1072,13 +1072,15 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     );
     libraryCard.append(exportSection);
 
-    // The enclosing Import Library card is already foldable. Keep its file
-    // controls directly inside it instead of forcing a redundant second open.
+    // The outer Import Library menu is the only disclosure for file import.
+    // Keep its stable panel ID and mounted controls/event handlers.
     const transfer = element("div");
     transfer.className = "card";
     transfer.id = "library-import-card";
+    transfer.append(element("h3", "Import Library"));
     const importContent = element("div");
-    importContent.className = "details-content";
+    importContent.id = "library-import-panel";
+    importContent.className = "library-import-content";
     transfer.append(importContent);
     const importFile = document.createElement("input");
     importFile.type = "file";
@@ -1439,9 +1441,13 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
 
     const recovery = element("div");
     recovery.className = "card";
-    const snapshotSummary = element("p", "Saved snapshots");
-    snapshotSummary.className = "hint";
+    recovery.append(element("h3", "Recovery snapshots"));
+    // The Recovery snapshots panel already provides the single needed fold.
+    const snapshotDetails = element("section");
+    snapshotDetails.className = "library-snapshot-list";
+    const snapshotSummary = element("h4", "Saved snapshots");
     const snapshots = element("div", "Loading snapshots…");
+    snapshotDetails.append(snapshotSummary, snapshots);
     const renderSnapshots = async () => {
         snapshots.replaceChildren();
         const entries = (await listSnapshots()).filter(item => (item.profile_id || "default") === getActiveProjectProfileId()).sort((left, right) => right.created_at.localeCompare(left.created_at));
@@ -1491,8 +1497,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         actionButton("Refresh snapshots", () => renderSnapshots().catch(error => {
             snapshots.replaceChildren(element("p", `Cannot load snapshots: ${error.message}`));
         })),
-        snapshotSummary,
-        snapshots,
+        snapshotDetails,
     );
 
     // Profiles belong to Overview; keep one live instance of the controls.
