@@ -28,6 +28,43 @@ const key = "tiaEngineeringAssistant.projectConfig";
         await page.locator('[data-tab="fb"]').click();
         await openSection(page, "fb-editor");
         await openSection(page, "fc-editor");
+        await openSection(page, "fb-import");
+        await openSection(page, "fc-import");
+
+        // The selection remains usable and Load stays to its right, even
+        // with smaller viewports. Check computed layout, not just source CSS.
+        for (const width of [1440, 950, 620]) {
+            await page.setViewportSize({width, height:900});
+            for (const kind of ["fb", "fc"]) {
+                const row = page.locator('[data-ui-section="' + kind
+                    + '-import"] .program-import-controls');
+                const result = await row.evaluate(container => {
+                    const select = container.querySelector("select");
+                    const load = container.querySelector("button:last-child");
+                    const label = container.querySelector("label");
+                    const scan = container.querySelector("button:first-child");
+                    const selectRect = select.getBoundingClientRect();
+                    const loadRect = load.getBoundingClientRect();
+                    return {
+                        selectRight:selectRect.right, selectTop:selectRect.top,
+                        loadLeft:loadRect.left, loadTop:loadRect.top,
+                        loadRight:loadRect.right, rowRight:container.getBoundingClientRect().right,
+                        whiteSpace:getComputedStyle(load).whiteSpace,
+                        fontSizes:[scan,label,select,load].map(x=>getComputedStyle(x).fontSize),
+                    };
+                });
+                assert.equal(await page.locator("#tia-" + kind + "-load").innerText(),"Load");
+                assert.equal(result.whiteSpace,"nowrap");
+                assert.deepEqual(result.fontSizes,["14px","14px","14px","14px"]);
+                assert.ok(result.loadLeft >= result.selectRight - 1,
+                    kind + " Load must be to the right of selector at width " + width);
+                assert.ok(Math.abs(result.loadTop - result.selectTop) < 2,
+                    kind + " Load must share selector row at width " + width);
+                assert.ok(result.loadRight <= result.rowRight + 2,
+                    kind + " Load must remain visible within panel at width " + width);
+            }
+        }
+        await page.setViewportSize({width:1440,height:900});
 
         const make = async (kind, name, number, language) => {
             await page.locator("#new-" + kind + "-name").fill(name);

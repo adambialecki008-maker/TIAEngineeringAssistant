@@ -620,6 +620,9 @@ export function initTiaUi(
     ) {
         statusElement.textContent =
             message;
+        // Hide the redundant Active PLC success banner without hiding
+        // actual operation progress, errors or results.
+        statusElement.classList.toggle("hidden", !String(message || "").trim());
 
         statusElement.classList.toggle(
             "error",
@@ -925,12 +928,9 @@ export function initTiaUi(
         );
 
 
-        setStatus(
-            `Active PLC set to ${plc.plc_name} `
-            +
-            `(${plc.device_name}).`,
-            "success"
-        );
+        // Overview and the application header already display the Active PLC.
+        // The bottom-of-page success banner adds no useful information.
+        setStatus("");
     }
 
 

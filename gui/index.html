@@ -350,13 +350,13 @@
             <div class="card">
                 <h3>Read Function Block from TIA</h3>
                 <p class="hint">Read a consistent SCL, LAD or FBD FB. Declaration changes are local drafts only; nothing is written to TIA Portal.</p>
-                <div class="form-row">
+                <div class="form-row program-import-controls">
                     <button type="button" id="tia-fb-scan">Read FB list from TIA</button>
                     <label for="tia-fb-select">TIA Function Block:</label>
                     <select id="tia-fb-select" aria-label="Function Block from active PLC"></select>
-                    <button type="button" id="tia-fb-load" disabled>Load FB snapshot</button>
+                    <button type="button" id="tia-fb-load" disabled>Load</button>
                 </div>
-                <p id="tia-fb-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Function Blocks.</p>
+                <p id="tia-fb-import-status" class="status-box">Choose an Active PLC in Overview, then read available Function Blocks.</p>
             </div>
             <div class="card">
                 <h3>Functions (FC)</h3>
@@ -376,13 +376,13 @@
             <div class="card">
                 <h3>Read Function from TIA</h3>
                 <p class="hint">FC supports Input, Output, InOut, Temp and Constant declaration drafts. FCs cannot have Static data or Instance DBs.</p>
-                <div class="form-row">
+                <div class="form-row program-import-controls">
                     <button type="button" id="tia-fc-scan">Read FC list from TIA</button>
                     <label for="tia-fc-select">TIA Function:</label>
                     <select id="tia-fc-select" aria-label="Function from active PLC"></select>
-                    <button type="button" id="tia-fc-load" disabled>Load FC snapshot</button>
+                    <button type="button" id="tia-fc-load" disabled>Load</button>
                 </div>
-                <p id="tia-fc-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Functions.</p>
+                <p id="tia-fc-import-status" class="status-box">Choose an Active PLC in Overview, then read available Functions.</p>
             </div>
             <div class="card">
                 <h3>Offline declaration dependencies</h3>
@@ -395,7 +395,7 @@
                 <h3>Instance DB inventory</h3>
                 <p class="hint">Lists existing Instance DBs only. The current read-only TIA inventory does not expose a verified owning-FB relation, so no association is inferred.</p>
                 <button type="button" id="tia-instance-db-scan">Read Instance DBs from TIA</button>
-                <p id="tia-instance-db-status" class="status-box">Select an Active PLC in TIA Portal, then read Instance DB inventory.</p>
+                <p id="tia-instance-db-status" class="status-box">Choose an Active PLC in Overview, then read Instance DB inventory.</p>
                 <div id="instance-db-container"></div>
             </div>
         </section>
@@ -2014,7 +2014,7 @@
                 <div class="card-header">
                     <div>
                         <p class="hint">
-                            Tags are written only to the Active PLC selected in the TIA Portal tab.
+                            Tags are written only to the Active PLC selected in Overview (Choose Active PLC).
                         </p>
                     </div>
                 </div>
@@ -2201,7 +2201,7 @@
                     <button type="button" id="tia-udt-load" disabled>Import UDT into editor</button>
                 </div>
                 <p id="tia-udt-import-status" class="status-box">
-                    Select an Active PLC in TIA Portal, then read available UDTs.
+                    Choose an Active PLC in Overview, then read available UDTs.
                 </p>
             </div>
 
@@ -2279,7 +2279,7 @@
                     <button type="button" id="tia-db-load" disabled>Import DB into editor</button>
                 </div>
                 <p id="tia-db-import-status" class="status-box">
-                    Select an Active PLC in TIA Portal, then read available global DBs.
+                    Choose an Active PLC in Overview, then read available global DBs.
                 </p>
             </div>
 

@@ -2608,7 +2608,7 @@ export function initDevicesUi() {
         if (!processId) {
             setStatus(
                 hardwareStatus,
-                "Select a TIA process in the TIA Portal tab first.",
+                "Select a TIA process in Overview → Connection to TIA Portal first.",
                 "error"
             );
 
@@ -3456,7 +3456,7 @@ export function initDevicesUi() {
         if (!target) {
             setStatus(
                 plcTagsStatus,
-                "Select Active PLC in the TIA Portal tab first.",
+                "Choose Active PLC in Overview first.",
                 "error"
             );
 

@@ -57,6 +57,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         await page.locator('#tia-existing-plcs-body').getByRole("button",{name:"Use"}).click();
         await page.waitForFunction(() => document.getElementById("project-active-plc")
             .textContent.trim() === "PLC_1");
+        assert.equal(await page.locator("#tia-status").isVisible(),false,
+            "Selecting a PLC must not leave the redundant green success banner visible");
         assert.match(await page.locator("#overview-project-name").innerText(),/TIA_Demo_Copy/);
 
         const profiles = page.locator("#project-profile-selector");

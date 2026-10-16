@@ -1,3 +1,17 @@
+## PLC status and FB/FC import layout — 2026-10-16
+
+- Removed the redundant green `Active PLC set to...` banner below the PLC sections.
+  Active PLC selection and summary remain unchanged in Overview and the header;
+  other operation statuses and error messages remain visible.
+- Both FB and FC import controls use matching 14px typography and a responsive
+  CSS grid. Buttons are now simply `Load` and stay to the right of the selected
+  block without wrapping, including on narrow screens.
+- Corrected obsolete references to a nonexistent TIA Portal tab. Connection and
+  Active PLC selection are under Overview.
+- Extended Playwright with computed layout checks at 1440/950/620px and a
+  regression check ensuring the bottom PLC success message is not displayed.
+  No changes to PLC/TIA write flows.
+
 ## Compact main headings and single-object panels — 2026-10-16
 
 - Made top-level engineering bars uniformly 54px high, 15px text, shared

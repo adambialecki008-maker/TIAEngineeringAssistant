@@ -2890,6 +2890,48 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .program-create-status.error { color: var(--ui-error, #fca5a5); }
 .program-create-status.success { color: var(--ui-blue-accent, #86c6fa); }
 
+/* Consistent single-line import layout for both FB and FC.
+   The Load action always stays at the right of the selected block. */
+.app-content .program-import-controls {
+    display: grid;
+    grid-template-columns: max-content max-content minmax(130px, 1fr) max-content;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    width: 100%;
+}
+.app-content .program-import-controls > :is(label, button, select) {
+    font-family: var(--ui-font, Arial, Helvetica, sans-serif);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+.app-content .program-import-controls > select {
+    min-width: 0;
+    width: 100%;
+    text-overflow: ellipsis;
+}
+.app-content .program-import-controls > button:last-child {
+    justify-self: end;
+    white-space: nowrap;
+}
+@media (max-width: 800px) {
+    .app-content .program-import-controls {
+        grid-template-columns: minmax(0, 1fr) max-content;
+        row-gap: 8px;
+    }
+    .app-content .program-import-controls > button:first-child {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+    .app-content .program-import-controls > label {
+        grid-column: 1 / -1;
+    }
+    .app-content .program-import-controls > select { grid-column: 1; }
+    .app-content .program-import-controls > button:last-child { grid-column: 2; }
+}
+
 
 /* Unified top-level typography and disclosure hierarchy (Overview, PLC,
    HMI, UDT, DB, FB/FC, libraries and Source preview).
