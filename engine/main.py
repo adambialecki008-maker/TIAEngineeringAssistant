@@ -175,6 +175,27 @@ def create_db_specification(
     return specification
 
 
+
+@app.post("/api/v1/local-function-block-declarations")
+def validate_local_fb_declarations(
+    specification: FunctionBlockSpecification,
+) -> FunctionBlockSpecification:
+    """Validate a new local FB interface only; never create or modify TIA logic."""
+    if not specification.created_locally or specification.source_mode != "local":
+        raise HTTPException(status_code=422, detail="Only locally created FB declaration drafts are accepted.")
+    return specification
+
+
+@app.post("/api/v1/local-function-declarations")
+def validate_local_fc_declarations(
+    specification: FunctionSpecification,
+) -> FunctionSpecification:
+    """Validate a new local FC interface only; never create or modify TIA logic."""
+    if not specification.created_locally or specification.source_mode != "local":
+        raise HTTPException(status_code=422, detail="Only locally created FC declaration drafts are accepted.")
+    return specification
+
+
 @app.post("/api/v1/function-block-specifications")
 def create_function_block_specification(
     specification: FunctionBlockSpecification,

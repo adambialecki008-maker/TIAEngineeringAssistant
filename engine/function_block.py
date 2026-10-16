@@ -1,4 +1,5 @@
-"""Read-only Function Block interface snapshots imported from TIA Portal."""
+"""Function Block interfaces: read-only TIA snapshots or local declaration-only drafts."""
+import re
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
@@ -25,6 +26,9 @@ class FunctionBlockSpecification(BaseModel):
     # A TIA source snapshot is opaque: its program is never translated,
     # edited, regenerated, or written by this application.
     source_mode: Literal["local", "tia_read_only"] = "local"
+    # Legacy "local" objects remain readable. Only explicitly marked new drafts
+    # may be created through the local-declaration validation endpoint.
+    created_locally: bool = False
     source_xml: str | None = None
     interface_verified: bool = True
     unverified_reasons: list[str] = Field(default_factory=list)
@@ -46,6 +50,13 @@ class FunctionBlockSpecification(BaseModel):
         if self.source_mode == "tia_read_only":
             if not self.source_xml:
                 raise ValueError("TIA FB import requires original source XML to preserve its logic.")
+            if self.created_locally:
+                raise ValueError("TIA snapshots cannot be marked as locally created.")
+        if self.created_locally:
+            if self.source_mode != "local" or self.source_xml is not None or self.interface_verified:
+                raise ValueError("Local FB declaration drafts must have no program source and cannot be TIA-verified.")
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.name):
+                raise ValueError("Local FB name must be a valid PLC identifier.")
         if self.interface_verified and self.unverified_reasons:
             raise ValueError("Verified FB interfaces cannot contain unverified reasons.")
         for section in (self.input, self.output, self.inout, self.temp, self.constant):

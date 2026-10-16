@@ -65,3 +65,45 @@ def test_fc_snapshot_endpoint_requires_tia_source_mode():
     response = client.post("/api/v1/function-specifications", json={"name": "FC_Local"})
     assert response.status_code == 422
     assert "read-only TIA snapshots" in response.text
+
+
+def test_new_local_fc_accepts_parameters_without_code_or_tia_write():
+    payload = {
+        "name": "FC_ComputeNew", "number": 12, "language": "FBD",
+        "source_mode": "local", "created_locally": True, "interface_verified": False,
+        "input": {"name": "Input", "members": [{"name": "InputA", "data_type": "Int"}]},
+        "temp": {"name": "Temp", "members": [{"name": "Temporary", "data_type": "Bool"}]},
+    }
+    response = TestClient(app).post("/api/v1/local-function-declarations", json=payload)
+    assert response.status_code == 200, response.text
+    fc = FunctionSpecification.model_validate(response.json())
+    assert fc.input.members[0].name == "InputA"
+    assert fc.source_xml is None and fc.created_locally
+    assert fc.temp.members[0].name == "Temporary"
+    assert not hasattr(fc, "static")
+
+
+@pytest.mark.parametrize("override", [
+    {"interface_verified": True},
+    {"source_xml": "<FC/>"},
+    {"source_mode": "tia_read_only"},
+    {"name": "Invalid FC"},
+])
+def test_new_local_fc_cannot_claim_tia_source_or_verification(override):
+    payload = {"name": "FC_Local", "source_mode": "local", "created_locally": True,
+               "interface_verified": False, **override}
+    with pytest.raises(ValidationError):
+        FunctionSpecification.model_validate(payload)
+
+
+def test_local_fc_rejects_iec_instance_and_remains_distinct_from_snapshot_import():
+    payload = {"name": "FC_Counter", "source_mode": "local",
+               "created_locally": True, "interface_verified": False,
+               "temp": {"name": "Temp", "members": [{
+                   "name": "Timer", "data_type": "TON_TIME", "system_instance": True,
+               }]}}
+    assert TestClient(app).post("/api/v1/local-function-declarations", json=payload).status_code == 422
+    assert TestClient(app).post("/api/v1/function-specifications", json={
+        "name": "FC_Local", "source_mode": "local", "created_locally": True,
+        "interface_verified": False,
+    }).status_code == 422

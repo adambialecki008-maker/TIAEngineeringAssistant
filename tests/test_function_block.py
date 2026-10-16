@@ -106,3 +106,55 @@ def test_fbd_snapshot_preserves_original_source_for_read_only_analysis():
         "source_mode": "tia_read_only", "source_xml": "<SW.Blocks.FB><CompileUnit/></SW.Blocks.FB>",
     })
     assert fb.language == "FBD"
+
+
+def test_new_local_fb_accepts_parameter_declarations_without_source_xml():
+    from fastapi.testclient import TestClient
+    from engine.main import app
+    payload = {
+        "name": "FB_LocalMotor", "language": "LAD", "number": 31,
+        "source_mode": "local", "created_locally": True,
+        "interface_verified": False,
+        "input": {"name": "Input", "members": [{"name": "Enable", "data_type": "Bool"}]},
+        "output": {"name": "Output", "members": [{"name": "Ready", "data_type": "Bool"}]},
+        "static": {"name": "Static", "members": [
+            {"name": "TON_Motor", "data_type": "TON_TIME", "system_instance": True},
+        ]},
+    }
+    response = TestClient(app).post("/api/v1/local-function-block-declarations", json=payload)
+    assert response.status_code == 200, response.text
+    fb = FunctionBlockSpecification.model_validate(response.json())
+    assert fb.input.members[0].name == "Enable"
+    assert fb.static.members[0].system_instance
+    assert fb.source_xml is None
+    assert fb.created_locally
+    with pytest.raises(ValueError, match="source generation is disabled"):
+        generate_fb_source(fb.name, fb, {})
+
+
+@pytest.mark.parametrize("override", [
+    {"interface_verified": True},
+    {"source_xml": "<SW.Blocks.FB/>"},
+    {"source_mode": "tia_read_only"},
+    {"name": "FB invalid name"},
+])
+def test_locally_created_fb_cannot_claim_tia_verification_or_source(override):
+    payload = {
+        "name": "FB_Draft", "source_mode": "local", "created_locally": True,
+        "interface_verified": False, **override,
+    }
+    with pytest.raises(ValidationError):
+        FunctionBlockSpecification.model_validate(payload)
+
+
+def test_new_fb_endpoint_does_not_accept_legacy_or_imported_fb():
+    from fastapi.testclient import TestClient
+    from engine.main import app
+    client = TestClient(app)
+    assert client.post("/api/v1/local-function-block-declarations", json={
+        "name": "FB_Legacy", "source_mode": "local"
+    }).status_code == 422
+    assert client.post("/api/v1/function-block-specifications", json={
+        "name": "FB_New", "source_mode": "local", "created_locally": True,
+        "interface_verified": False,
+    }).status_code == 422
