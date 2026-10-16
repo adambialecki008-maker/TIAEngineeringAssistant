@@ -54,8 +54,47 @@ export function convertTiaFbDetail(detail) {
             converted[key] = {name: key === "inout" ? "InOut" : key[0].toUpperCase() + key.slice(1), members:[]};
             continue;
         }
+        // Exported children of a native TON/TOF/TP/CTU/CTD/CTUD
+        // are a read-only view, NOT separate declarations or user Structs.
+        // Only use rows actually exported by TIA; never invent PT/ET/etc.
+        const nativeChildren = new Map();
+        const declarableRows = [];
+        let systemRoot = null;
+        const observedPaths = new Set();
         let parsed;
-        try { parsed = convertTiaUdtDetail({kind:"udt", name:detail.name, members:rows}); }
+        try {
+            for (const row of rows) {
+                if (row.level === 0) {
+                    systemRoot = row.system_instance === true ? row.path : null;
+                    declarableRows.push(row);
+                    if (systemRoot) nativeChildren.set(normalized(systemRoot), []);
+                    continue;
+                }
+                if (systemRoot && row.path?.startsWith(systemRoot + ".")) {
+                    const segments = String(row.path).split(".");
+                    const rootSegments = String(systemRoot).split(".");
+                    const key = normalized(row.path);
+                    if (segments.length !== row.level + 1
+                        || segments[segments.length - 1] !== row.name
+                        || rootSegments.length !== 1 || observedPaths.has(key)) {
+                        throw Error(row.path + ": invalid native system child path.");
+                    }
+                    const parent = segments.slice(0, -1).join(".");
+                    if (parent !== systemRoot && !observedPaths.has(normalized(parent))) {
+                        throw Error(row.path + ": missing native system child parent.");
+                    }
+                    observedPaths.add(key);
+                    nativeChildren.get(normalized(systemRoot)).push({
+                        path: row.path, name: row.name, data_type: row.data_type || "",
+                        level: row.level, offset: row.offset || "",
+                        comment: row.comment || "", metadata: row.metadata || {},
+                    });
+                    continue;
+                }
+                declarableRows.push(row);
+            }
+            parsed = convertTiaUdtDetail({kind:"udt", name:detail.name, members:declarableRows});
+        }
         catch (error) {
             converted.interface_verified = false;
             converted.unverified_reasons.push(key + ": " + error.message);
@@ -65,14 +104,9 @@ export function convertTiaFbDetail(detail) {
         const rawSystem = new Set(rows.filter(row => row.system_instance === true && row.level === 0)
             .map(row => normalized(row.path)));
         for (const member of parsed.fields) {
-            if (rawSystem.has(normalized(member.name))) member.system_instance = true;
-        }
-        // A system member must be an opaque top-level declaration. Its XML
-        // children describe Siemens internals and cannot become editable data.
-        for (const row of rows) {
-            if (row.system_instance === true && row.level !== 0) {
-                converted.interface_verified = false;
-                converted.unverified_reasons.push(row.path + ": system-instance internals are opaque.");
+            if (rawSystem.has(normalized(member.name))) {
+                member.system_instance = true;
+                member.system_preview = nativeChildren.get(normalized(member.name)) || [];
             }
         }
         converted[key] = {name: key === "inout" ? "InOut" : key[0].toUpperCase() + key.slice(1), members:parsed.fields};

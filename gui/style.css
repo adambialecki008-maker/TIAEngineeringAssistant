@@ -2869,3 +2869,11 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .program-block-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
 .program-block-actions button { padding: 7px 10px; }
 .program-source-details .device-config-preview { max-height: 380px; overflow: auto; }
+
+
+/* Native timer/counter internal fields: only real exported TIA XML projections. */
+.native-instance-preview { padding: 10px; margin: 0 0 8px; border: 1px solid var(--ui-border-soft, #365268); border-radius: 6px; }
+.native-instance-preview .hint { margin: 0 0 8px; }
+.native-instance-fields { width: 100%; border-collapse: collapse; }
+.native-instance-fields th, .native-instance-fields td { padding: 6px 10px; font-size: 12px; }
+.native-instance-fields td:first-child { font-family: Consolas, monospace; }

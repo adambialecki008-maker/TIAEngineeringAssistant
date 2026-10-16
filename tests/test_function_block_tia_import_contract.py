@@ -98,3 +98,53 @@ def test_fb_import_ui_is_wired_to_read_only_program_block_endpoints():
     assert 'source_mode: "tia_read_only"' in converter
     assert 'New Function Block' not in page
     assert 'id="tia-fc-scan"' in page and 'function-specifications' in fc_ui
+
+
+def test_native_system_children_are_read_only_projection_not_extra_fb_declarations(monkeypatch):
+    from engine.function_block import FunctionBlockSpecification
+
+    source = """<Document><SW.Blocks.FB><AttributeList><Interface><Sections>
+      <Section Name="Static"><Member Name="TON_Unblocked" Datatype="TON_TIME">
+        <Sections><Section Name="Static">
+          <Member Name="PT" Datatype="Time" />
+          <Member Name="ET" Datatype="Time" />
+          <Member Name="IN" Datatype="Bool" />
+          <Member Name="Q" Datatype="Bool" />
+        </Section></Sections>
+      </Member></Section>
+    </Sections></Interface></AttributeList></SW.Blocks.FB></Document>"""
+
+    def adapter(*arguments):
+        Path(arguments[-1]).write_text(source, encoding="utf-8")
+        return ["PROGRAM_BLOCK_EXPORTED|Logic|FB_Timer|FB|17|LAD|true|100|40"]
+
+    monkeypatch.setattr(program, "run_adapter", adapter)
+    response = client.get("/api/v1/tia/plc-program-block", params={
+        "process_id": 22, "device_name": "Station", "plc_name": "PLC",
+        "group_path": "Logic", "name": "FB_Timer", "include_source": "true",
+    })
+    assert response.status_code == 200, response.text
+    rows = response.json()["members"]
+    assert [row["path"] for row in rows] == [
+        "TON_Unblocked", "TON_Unblocked.PT", "TON_Unblocked.ET",
+        "TON_Unblocked.IN", "TON_Unblocked.Q",
+    ]
+    assert rows[0]["system_instance"] is True
+    assert rows[1]["system_instance"] is not True
+    assert response.json()["source_xml"] == source
+
+    # The read-only projection may be stored on a native FB member, but never
+    # treated as editable Struct or independent declarations.
+    spec = FunctionBlockSpecification.model_validate({
+        "name": "FB_Timer", "source_mode": "tia_read_only", "source_xml": source,
+        "static": {"name": "Static", "members": [{
+            "name": "TON_Unblocked", "data_type": "TON_TIME", "system_instance": True,
+            "system_preview": [{
+                "name": row["name"], "path": row["path"], "level": row["level"],
+                "data_type": row["data_type"],
+            } for row in rows[1:]],
+        }]},
+    })
+    assert len(spec.static.members) == 1
+    assert spec.static.members[0].struct_members is None
+    assert len(spec.static.members[0].system_preview) == 4

@@ -15,6 +15,20 @@ ARRAY_MIN_BOUND = -32768
 ARRAY_MAX_BOUND = 32767
 
 
+class SystemMemberPreview(BaseModel):
+    """Opaque, read-only child observed in a Siemens XML native instance.
+
+    It is a display projection, not a PLC declaration or editable Struct.
+    """
+    path: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    data_type: str = ""
+    level: int = Field(ge=1)
+    offset: str = ""
+    comment: str = ""
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
 class TiaMember(BaseModel):
     name: str = Field(min_length=1)
 
@@ -35,6 +49,7 @@ class TiaMember(BaseModel):
     # This marker is accepted only by the FB Static-context validator below;
     # UDT and global DB specifications explicitly reject it.
     system_instance: bool = False
+    system_preview: list[SystemMemberPreview] = Field(default_factory=list)
 
     # ARRAY
     array_element_type: str | None = None
@@ -49,6 +64,21 @@ class TiaMember(BaseModel):
         self,
     ):
         data_type = self.data_type.strip().lower()
+
+        if self.system_preview and not self.system_instance:
+            raise ValueError("Native system preview requires a system instance.")
+        if self.system_preview:
+            parent = self.name.casefold() + "."
+            paths = set()
+            for row in self.system_preview:
+                if not row.path.casefold().startswith(parent):
+                    raise ValueError("Native system preview path must be below its instance.")
+                folded = row.path.casefold()
+                if folded in paths:
+                    raise ValueError("Duplicate native system preview path.")
+                paths.add(folded)
+                if len(row.path.split(".")) != row.level + 1:
+                    raise ValueError("Native system preview level does not match path.")
 
         if data_type == "array":
             self._validate_array()
@@ -170,6 +200,8 @@ class TiaMember(BaseModel):
             if self.system_instance and str(system_type.get("kind", "")).endswith("_instance"):
                 if self.start_value is not None:
                     raise ValueError("System instances cannot have an editable Start value.")
+                if self.struct_members is not None or self.array_element_type is not None:
+                    raise ValueError("Native instances cannot have editable child declarations.")
                 return
             raise ValueError(
                 f"{self.data_type} is a Siemens {system_type['kind'].replace('_', ' ')}. "

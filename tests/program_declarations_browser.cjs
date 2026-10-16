@@ -10,7 +10,15 @@ const FB = {
     interface_verified: false, declaration_draft: true,
     input: section("Input", [member("Start")]),
     output: section("Output"), inout: section("InOut"),
-    static: section("Static"), temp: section("Temp"),
+    static: section("Static", [{
+        name: "TON_Unblocked", data_type: "TON_TIME", system_instance: true,
+        system_preview: [
+            {name: "PT", path: "TON_Unblocked.PT", data_type: "Time", level: 1},
+            {name: "ET", path: "TON_Unblocked.ET", data_type: "Time", level: 1},
+            {name: "IN", path: "TON_Unblocked.IN", data_type: "Bool", level: 1},
+            {name: "Q", path: "TON_Unblocked.Q", data_type: "Bool", level: 1},
+        ],
+    }]), temp: section("Temp"),
     constant: section("Constant"),
 };
 const FC = {
@@ -51,6 +59,36 @@ const FC = {
         assert.equal(await input.locator("tr[data-member-path]").count(), 1);
         await output.locator(":scope > summary").click();
         assert.equal(await output.evaluate(el => el.open), true);
+        const staticSection = fb.locator(".program-declaration-section").nth(3);
+        assert.equal(await staticSection.evaluate(el => el.open), true);
+        await staticSection.locator("tr[data-member-path]").first()
+            .locator("button.member-tree-toggle").click();
+        const preview = staticSection.locator(".native-instance-preview");
+        assert.equal(await preview.locator("[data-native-member-path]").count(), 4);
+        assert.deepEqual(await preview.locator("[data-native-member-path]").evaluateAll(
+            rows => rows.map(el => el.getAttribute("data-native-member-path"))), [
+                "TON_Unblocked.PT", "TON_Unblocked.ET", "TON_Unblocked.IN", "TON_Unblocked.Q",
+            ]);
+        assert.equal(await staticSection.locator("tr[data-member-path]").count(), 1);
+        const converted = await page.evaluate(async () => {
+            const {convertTiaFbDetail} = await import("/gui/js/fb_import_converter.js");
+            return convertTiaFbDetail({
+                kind: "FB", name: "FB_Original", programming_language: "LAD",
+                source_xml: "<SW.Blocks.FB/>",
+                members: [
+                    {section: "Static", path:"TON_Unblocked", name:"TON_Unblocked",
+                     data_type:"TON_TIME", level:0, system_instance:true},
+                    ...["PT","ET","IN","Q"].map((name, index) => ({
+                        section: "Static", path:"TON_Unblocked."+name, name,
+                        data_type:index<2 ? "Time" : "Bool", level:1,
+                    })),
+                ],
+            });
+        });
+        assert.equal(converted.interface_verified, true);
+        assert.equal(converted.static.members.length, 1);
+        assert.deepEqual(converted.static.members[0].system_preview.map(x=>x.name),
+            ["PT","ET","IN","Q"]);
         await fb.locator(".program-meta-details > summary").click();
         assert.match(await fb.locator(".program-meta-details").innerText(),
             /Local declaration drafts are editable/);

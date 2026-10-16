@@ -123,6 +123,9 @@ function validateGroup(members, path, types, udts) {
                 return location + ": unknown data type " + type + ".";
             }
         }
+        if (member.system_preview?.length && !member.system_instance) {
+            return location + ": native internal fields cannot become editable declarations.";
+        }
         const startError = validateStartValue(member, location);
         if (startError) return startError;
     }
@@ -408,9 +411,19 @@ export function createMemberEditor({
             message.textContent = "Member name must be unique in this structure.";
             return;
         }
+        const nativeSelected = allowSystemInstances && getSystemInstanceTypes(projectConfig.plc_family)
+            .some(entry => normalized(entry.name) === normalized(dataType));
+        const systemInstance = nativeSelected || (member?.system_instance === true
+            && normalized(member.data_type) === normalized(dataType));
         const candidate = {
             name,
             data_type: dataType,
+            system_instance: systemInstance,
+            // Keep only the exported, read-only projection for the unchanged
+            // native type/name. A changed declaration cannot inherit it.
+            system_preview: systemInstance && member?.system_instance === true
+                && member.name === name && member.data_type === dataType
+                ? structuredClone(member.system_preview || []) : [],
             comment: commentInput.value.trim() || null,
             start_value: startValueInput.disabled
                 ? null : (startValueInput.value.trim() || null),
@@ -625,7 +638,48 @@ export function createMemberTree({
                 activeClose = closeEditor;
                 expanded = true;
                 dirty = false;
-                editCell.replaceChildren(createMemberEditor({
+                editCell.replaceChildren();
+                // XML children of a Siemens system instance stay an opaque,
+                // non-editable projection. Never render them as a member tree.
+                if (member.system_instance === true) {
+                    const preview = document.createElement("div");
+                    preview.className = "native-instance-preview";
+                    const label = document.createElement("p");
+                    label.className = "hint";
+                    label.textContent = member.system_preview?.length
+                        ? "Native IEC instance — internal fields from exported TIA XML (read-only)."
+                        : "Native IEC instance — no internal field structure available in this TIA export.";
+                    preview.appendChild(label);
+                    if (member.system_preview?.length) {
+                        const table = document.createElement("table");
+                        table.className = "native-instance-fields";
+                        const header = document.createElement("thead");
+                        const titleRow = document.createElement("tr");
+                        for (const title of ["Name", "Data type", "Start value", "Comment"]) {
+                            const th = document.createElement("th");
+                            th.textContent = title;
+                            titleRow.appendChild(th);
+                        }
+                        header.appendChild(titleRow);
+                        table.appendChild(header);
+                        const entries = document.createElement("tbody");
+                        for (const child of member.system_preview) {
+                            const nativeRow = document.createElement("tr");
+                            nativeRow.dataset.nativeMemberPath = child.path;
+                            const depth = Math.max(0, (child.level || 1) - 1);
+                            const name = createTextCell(child.name);
+                            name.style.paddingLeft = 12 + depth * 18 + "px";
+                            nativeRow.append(name, createTextCell(child.data_type || "—"),
+                                createTextCell(child.metadata?.start_value || "—"),
+                                createTextCell(child.comment || "—"));
+                            entries.appendChild(nativeRow);
+                        }
+                        table.appendChild(entries);
+                        preview.appendChild(table);
+                    }
+                    editCell.appendChild(preview);
+                }
+                editCell.appendChild(createMemberEditor({
                     prefix: prefix + "-edit-" + memberPath.join("-"),
                     existingMembers: list,
                     excludeUdtName: ownerUdtName,
