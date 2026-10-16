@@ -60,13 +60,29 @@ export function initProgramDependencies() {
                 const details = document.createElement("details");
                 const title = document.createElement("summary");
                 title.textContent = "Unverified / unresolved (" + report.unresolved.length + ")";
-                const list = document.createElement("ul");
-                for (const entry of report.unresolved) {
-                    const item = document.createElement("li");
-                    item.textContent = entry.object + ": " + entry.reason;
-                    list.appendChild(item);
+                const wrapper = document.createElement("div");
+                wrapper.className = "table-wrapper";
+                const table = document.createElement("table");
+                table.className = "management-table program-dependency-table";
+                const thead = document.createElement("thead");
+                const head = document.createElement("tr");
+                for (const label of ["Object", "Declaration", "Issue", "Details"]) {
+                    const th = document.createElement("th");
+                    th.textContent = label;
+                    head.appendChild(th);
                 }
-                details.append(title, list);
+                thead.appendChild(head);
+                table.appendChild(thead);
+                const body = document.createElement("tbody");
+                for (const entry of report.unresolved) {
+                    const row = document.createElement("tr");
+                    for (const value of [entry.object, entry.member, entry.category, entry.reason])
+                        row.appendChild(textCell(value));
+                    body.appendChild(row);
+                }
+                table.appendChild(body);
+                wrapper.appendChild(table);
+                details.append(title, wrapper);
                 results.appendChild(details);
             }
             const ordered = document.createElement("p");

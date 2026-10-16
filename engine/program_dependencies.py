@@ -28,12 +28,17 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
     nodes, edges, unresolved = [], [], []
     unresolved_keys = set()
 
-    def add_unresolved(object_name, reason):
+    def add_unresolved(object_name, reason, *, member="", category="Unverified"):
         """Keep the report readable when the same declaration is visited twice."""
-        key = (object_name.casefold(), reason)
+        key = (object_name.casefold(), member, category, reason)
         if key not in unresolved_keys:
             unresolved_keys.add(key)
-            unresolved.append({"object": object_name, "reason": reason})
+            unresolved.append({
+                "object": object_name,
+                "member": member,
+                "category": category,
+                "reason": reason,
+            })
     for kind, objects in (("UDT", project.udts), ("DB", project.dbs),
                           ("FB", project.fbs), ("FC", project.fcs),
                           ("Instance DB", project.instance_dbs)):
@@ -69,8 +74,9 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
                     # dependency visible for manual review instead.
                     add_unresolved(
                         obj.name,
-                        section_label + "." + path + ": " + data_type
-                        + " is neither a local UDT/FB nor a registered Siemens type.",
+                        data_type + " is neither a local UDT/FB nor a registered Siemens type.",
+                        member=section_label + "." + path,
+                        category="Unknown type",
                     )
 
     for kind, items in (("UDT", project.udts), ("DB", project.dbs),
@@ -80,9 +86,11 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
             if kind in {"FB", "FC"}:
                 if obj.created_locally:
                     add_unresolved(obj.name,
-                                   "Locally created declarations only; no PLC program or verified TIA block.")
+                                   "Locally created declarations only; no PLC program or verified TIA block.",
+                                   category="Local declaration")
                 elif obj.source_mode != "tia_read_only" or not obj.interface_verified:
-                    add_unresolved(obj.name, "Block interface is not a verified TIA snapshot.")
+                    add_unresolved(obj.name, "Block interface is not a verified TIA snapshot.",
+                                   category="Unverified interface")
     for obj in project.instance_dbs:
         if isinstance(obj, InstanceDbSnapshot):
             if obj.relationship_status == "reported_by_openness" and obj.function_block:
@@ -94,15 +102,19 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
                 if not owner:
                     add_unresolved(obj.name,
                                    "Owning Function Block reported by Openness is not present in the local FB inventory: "
-                                   + obj.function_block + ".")
+                                   + obj.function_block + ".",
+                                   category="Missing FB owner")
                 elif not owner.interface_verified:
                     add_unresolved(obj.name,
-                                   "Owning Function Block interface is unverified: " + owner.name + ".")
+                                   "Owning Function Block interface is unverified: " + owner.name + ".",
+                                   category="Unverified FB owner")
                 elif owner.number is not None and obj.instance_of_number != owner.number:
                     add_unresolved(obj.name,
-                                   "Openness owner number does not match the local FB snapshot: " + owner.name + ".")
+                                   "Openness owner number does not match the local FB snapshot: " + owner.name + ".",
+                                   category="FB owner mismatch")
             else:
-                add_unresolved(obj.name, "Owning Function Block not reported by TIA Openness.")
+                add_unresolved(obj.name, "Owning Function Block not reported by TIA Openness.",
+                               category="Missing FB owner")
         else:
             edges.append({"dependency": obj.function_block, "dependent": obj.name,
                           "dependent_kind": "Instance DB", "member": "",

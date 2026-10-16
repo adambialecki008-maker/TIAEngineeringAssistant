@@ -113,6 +113,8 @@ const FC = {
         await page.locator("#program-dependencies-run").click();
         const dependencyResults = page.locator("#program-dependencies-results");
         await dependencyResults.locator("details > summary").click();
+        assert.deepEqual(await dependencyResults.locator("details th").allTextContents(),
+            ["Object", "Declaration", "Issue", "Details"]);
         assert.match(await dependencyResults.innerText(), /Input\.RemoteOnly.*UDT_RemoteOnly/s);
         assert.match(await dependencyResults.innerText(), /FB_NotImported/);
         console.log("FB/FC compact declarations, snapshot statuses and LAD terminology: PASS");

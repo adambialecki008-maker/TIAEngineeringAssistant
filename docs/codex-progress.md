@@ -322,3 +322,17 @@
   `pytest -q` **525 passed**; `node --check gui/js/program_dependencies.js`
   passed. Playwright validation will run in GitHub Actions after push.
 
+## Structured offline dependency findings — 2026-10-16
+
+- The read-only UDT/DB/FB/FC/Instance DB dependency report now returns each
+  unresolved finding as an object, declaration path, issue category and detail.
+  Unknown types therefore identify their exact declaration, while incomplete
+  Instance DB ownership remains explicitly marked for manual review.
+- The Offline dependency analysis panel renders these findings in an accessible
+  four-column table under its existing disclosure. It performs no TIA write and
+  does not infer missing Siemens or local objects.
+- Regression coverage verifies the API shape and the visible browser table.
+- Validation: `pytest -q` — 525 passed; `node --check` for the report module
+  and browser regression — passed. Playwright Chromium will run in GitHub
+  Actions after push.
+

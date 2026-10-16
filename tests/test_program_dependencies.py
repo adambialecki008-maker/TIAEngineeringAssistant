@@ -71,9 +71,10 @@ def test_report_marks_unknown_types_and_incomplete_instance_db_owner_metadata():
 
     result = report_program_dependencies(project)
 
-    assert any(item["object"] == "FB_Existing" and "Input.RemoteOnly" in item["reason"]
-               and "UDT_RemoteOnly" in item["reason"] for item in result["unresolved"])
-    assert any(item["object"] == "DB_RemoteOwner" and "FB_NotImported" in item["reason"]
+    assert any(item["object"] == "FB_Existing" and item["member"] == "Input.RemoteOnly"
+               and item["category"] == "Unknown type" and "UDT_RemoteOnly" in item["reason"]
                for item in result["unresolved"])
+    assert any(item["object"] == "DB_RemoteOwner" and item["category"] == "Missing FB owner"
+               and "FB_NotImported" in item["reason"] for item in result["unresolved"])
     assert any(edge["dependent"] == "DB_RemoteOwner" and edge["relation"] == "instance of"
                for edge in result["edges"])
