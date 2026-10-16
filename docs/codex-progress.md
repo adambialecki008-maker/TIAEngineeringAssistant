@@ -26,6 +26,21 @@
   add richer dependency/preflight reporting for FB/FC declaration drafts, and
   validate browser flows once the local Playwright dependency is available.
 
+## Read-only Instance DB inventory
+
+- Added an Instance DB inventory in the FB/FC area. It accepts only adapter
+  entries whose concrete TIA block kind is `InstanceDB`, stores them per local
+  profile, and performs no TIA write.
+- The model deliberately keeps `function_block` empty and its relationship
+  `Unverified`: the current read-only adapter inventory identifies Instance
+  DBs but does not provide reliable owning-FB metadata. The UI never guesses
+  from names or matching layouts.
+- Validation: dedicated model/API tests — 2 passed; full `pytest -q` — 499
+  passed.
+- Commit: `e2a4c99` (`feat(tia): add read-only instance DB inventory`).
+- Remaining: obtain an evidenced Openness/XML owner relation before rendering
+  a verified FB-to-Instance-DB link or enabling structural previews from it.
+
 ## Read-only LAD/KOP Function Block snapshots
 
 - Extended the TIA FB inventory/import flow to include consistent `LAD` and
