@@ -21,7 +21,7 @@
   passed; all non-Playwright Node scenarios passed (including 41 HMI state
   machine scenarios). Browser-specific Node tests could not start because the
   local checkout has no `playwright` package installed.
-- Commit: pending.
+- Commit: `ca07e88` (`feat(program): add local FB and FC declaration drafts`).
 - Remaining: parse actual Instance DB-to-FB links from verified TIA exports,
   add richer dependency/preflight reporting for FB/FC declaration drafts, and
   validate browser flows once the local Playwright dependency is available.
