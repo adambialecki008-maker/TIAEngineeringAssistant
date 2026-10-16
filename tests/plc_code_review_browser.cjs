@@ -62,7 +62,9 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
   running=false;
   await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
   await page.waitForFunction(()=>
-   document.getElementById("header-tia-live-status")?.textContent?.includes("disconnected"));
+   document.getElementById("header-tia-live-status")?.classList.contains("connection-offline"));
+  assert.equal(await page.locator("#header-tia-live-status").innerText(),
+    "TIA Portal PID 321");
   await page.locator("#review-export-llm").click();
   await page.waitForFunction(() => document.getElementById("review-export-llm-status")?.textContent?.includes("no longer running"));
   assert.match(await page.locator("#review-export-llm-status").innerText(),/no longer running/);
