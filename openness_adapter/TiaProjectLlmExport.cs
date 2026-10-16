@@ -34,6 +34,9 @@ namespace TiaOpennessAdapter
                 if (project == null) return code;
                 Directory.CreateDirectory(directory);
                 var report = new ProjectLlmExport(directory);
+                try
+                {
+                report.Progress("PROJECT", "starting open project export");
                 report.Record("PROJECT", project.Name, "", "open project", "");
                 var seenPlcs = new HashSet<object>(ReferenceEqualityComparer.Instance);
                 var seenHmi = new HashSet<object>(ReferenceEqualityComparer.Instance);
@@ -41,18 +44,23 @@ namespace TiaOpennessAdapter
                 foreach (Device device in EnumerateDevices(project))
                 {
                     deviceIndex++;
-                    report.Record("DEVICE", device.Name, "",
+                    string deviceName = "device_" + deviceIndex;
+                    report.Progress("DEVICE_INDEX", deviceName);
+                    try
+                    {
+                    deviceName = device.Name;
+                    report.Progress("DEVICE", deviceName);
+                    report.Record("DEVICE", deviceName, "",
                         device.TypeIdentifier ?? "", "");
                     string pnName = ReadProfinetDeviceName(device);
                     if (!string.IsNullOrWhiteSpace(pnName))
-                        report.Record("PROFINET_DEVICE_NAME", device.Name, "",
+                        report.Record("PROFINET_DEVICE_NAME", deviceName, "",
                             pnName, "");
-                    try
-                    {
                         foreach (DeviceItemPath itemPath in EnumerateDeviceItems(device))
                         {
+                            report.Progress("DEVICE_ITEM", deviceName + "/" + itemPath.Path);
                             DeviceItem item = itemPath.Item;
-                            report.Record("HARDWARE", device.Name, itemPath.Path,
+                            report.Record("HARDWARE", deviceName, itemPath.Path,
                                 (item.TypeIdentifier ?? "") + " | plugged=" +
                                 item.IsPlugged + " | addresses=" + item.Addresses.Count
                                 + " | channels=" + item.Channels.Count, "");
@@ -61,7 +69,7 @@ namespace TiaOpennessAdapter
                                 if ((address.IoType == AddressIoType.Input ||
                                      address.IoType == AddressIoType.Output) &&
                                      address.StartAddress >= 0)
-                                    report.Record("IO_ADDRESS", device.Name, itemPath.Path,
+                                    report.Record("IO_ADDRESS", deviceName, itemPath.Path,
                                         address.IoType + " start=" + address.StartAddress
                                         + " length=" + address.Length, "");
                             }
@@ -76,7 +84,7 @@ namespace TiaOpennessAdapter
                                 if (!TryGetIntAttribute(channel, "ChannelWidth",
                                                         out int channelWidth))
                                     channelWidth = 0;
-                                report.Record("IO_CHANNEL", device.Name, itemPath.Path,
+                                report.Record("IO_CHANNEL", deviceName, itemPath.Path,
                                     "channel=" + channel.Number + " type=" + channel.Type
                                     + " direction=" + type + " address=" + channelAddress
                                     + " width=" + channelWidth, "");
@@ -93,35 +101,45 @@ namespace TiaOpennessAdapter
                                 if (seenPlcs.Add(plc))
                                 {
                                     string folder = "plc/" +
-                                        ProjectLlmExport.SafeName(device.Name) + "_" +
+                                        ProjectLlmExport.SafeName(deviceName) + "_" +
                                         deviceIndex + "/" +
                                         ProjectLlmExport.SafeName(plc.Name);
                                     ExportController(report, plc, folder,
-                                        device.Name + "/" + plc.Name);
+                                        deviceName + "/" + plc.Name);
                                 }
                             }
                             else if (seenHmi.Add(software))
                             {
                                 string softwareName = ReadObjectName(software);
                                 string folder = "hmi/" +
-                                    ProjectLlmExport.SafeName(device.Name) + "_" +
+                                    ProjectLlmExport.SafeName(deviceName) + "_" +
                                     deviceIndex + "/" +
                                     ProjectLlmExport.SafeName(softwareName);
-                                report.Record("SOFTWARE", device.Name,
+                                report.Record("SOFTWARE", deviceName,
                                     itemPath.Path, software.GetType().FullName, "");
                                 ExportHmiSoftware(report, software, folder,
-                                    device.Name + "/" + softwareName);
+                                    deviceName + "/" + softwareName);
                             }
                         }
                     }
                     catch (Exception e) {
-                        report.Failure("DEVICE_TRAVERSAL", device.Name, e.Message);
+                        Exception rootError = e.GetBaseException();
+                        report.Failure("DEVICE_TRAVERSAL", deviceName, rootError.Message);
+                        // An invalidated Openness session must be abandoned,
+                        // never traversed further after a TIA crash/disposal.
+                        if (rootError is EngineeringObjectDisposedException ||
+                            rootError is NonRecoverableException)
+                            throw;
                     }
                 }
                 report.Record("COVERAGE", "Entire opened TIA project", "",
                     "All enumerated devices and Openness-supported objects. "
                     + "Unavailable/protected HMI and hardware data is logged as missing.", "");
-                report.Close();
+                }
+                finally
+                {
+                    report.Close();
+                }
                 Console.WriteLine("LLM_PROJECT_EXPORTED|" +
                     SanitizeOutput(project.Name) + "|" +
                     report.Succeeded + "|" + report.Failed);
@@ -280,6 +298,7 @@ namespace TiaOpennessAdapter
             private readonly string root;
             private readonly StreamWriter inventory;
             private readonly StreamWriter missing;
+            private readonly StreamWriter progress;
             private int index;
             public int Succeeded { get; private set; }
             public int Failed { get; private set; }
@@ -291,6 +310,8 @@ namespace TiaOpennessAdapter
                     false, new UTF8Encoding(false));
                 missing = new StreamWriter(Path.Combine(root, "TIA_MISSING.tsv"),
                     false, new UTF8Encoding(false));
+                progress = new StreamWriter(Path.Combine(root, "TIA_EXPORT_PROGRESS.log"),
+                    false, new UTF8Encoding(false)) { AutoFlush = true };
                 inventory.WriteLine("Kind\tObject\tPath\tMetadata\tFile");
                 missing.WriteLine("Kind\tObject\tReason");
             }
@@ -308,6 +329,14 @@ namespace TiaOpennessAdapter
             private static string Field(string value)
             {
                 return (value ?? "").Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
+            }
+
+            public void Progress(string kind, string name)
+            {
+                // Written before every potentially expensive Openness operation.
+                // The Python layer can report the last action if TIA aborts.
+                progress.WriteLine(DateTime.UtcNow.ToString("o") + "\t" +
+                    Field(kind) + "\t" + Field(name));
             }
 
             public void Record(string kind, string name, string path, string meta, string file)
@@ -346,6 +375,7 @@ namespace TiaOpennessAdapter
                 string file = "";
                 try
                 {
+                    Progress(kind, name);
                     string absolute = Allocate(path);
                     export(new FileInfo(absolute));
                     if (!File.Exists(absolute) || new FileInfo(absolute).Length == 0)
@@ -353,7 +383,12 @@ namespace TiaOpennessAdapter
                     file = absolute.Substring(root.Length + 1).Replace('\\', '/');
                     Succeeded++;
                 }
-                catch (Exception e) { Failure(kind, name, e.GetBaseException().Message); }
+                catch (Exception e) {
+                    Exception rootError = e.GetBaseException();
+                    Failure(kind, name, rootError.Message);
+                    if (rootError is EngineeringObjectDisposedException ||
+                        rootError is NonRecoverableException) throw;
+                }
                 Record(kind, name, "", item.GetType().Name, file);
             }
 
@@ -362,6 +397,7 @@ namespace TiaOpennessAdapter
                 string file = "";
                 try
                 {
+                    Progress("PLC_TAG_TABLE", name);
                     string absolute = Allocate(path);
                     using (var output = new StreamWriter(absolute, false, new UTF8Encoding(false)))
                     {
@@ -377,7 +413,12 @@ namespace TiaOpennessAdapter
                     file = absolute.Substring(root.Length + 1).Replace('\\', '/');
                     Succeeded++;
                 }
-                catch (Exception e) { Failure("PLC_TAG_TABLE", name, e.Message); }
+                catch (Exception e) {
+                    Exception rootError = e.GetBaseException();
+                    Failure("PLC_TAG_TABLE", name, rootError.Message);
+                    if (rootError is EngineeringObjectDisposedException ||
+                        rootError is NonRecoverableException) throw;
+                }
                 Record("PLC_TAG_TABLE", name, "", "tab-separated tags", file);
             }
 
@@ -385,7 +426,12 @@ namespace TiaOpennessAdapter
             {
                 try { return item.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)
                     ?.GetValue(item, null); }
-                catch { return null; }
+                catch (Exception e) {
+                    Exception rootError = e.GetBaseException();
+                    if (rootError is EngineeringObjectDisposedException ||
+                        rootError is NonRecoverableException) throw;
+                    return null;
+                }
             }
 
             public static bool HasExportMethod(object item)
@@ -398,6 +444,7 @@ namespace TiaOpennessAdapter
             {
                 try
                 {
+                    Progress(kind, name);
                     string absolute = Allocate(path);
                     var methods = item.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
                         .Where(m => m.Name == "Export").OrderBy(m => m.GetParameters().Length);
@@ -427,7 +474,12 @@ namespace TiaOpennessAdapter
                     Record(kind, name, "", item.GetType().FullName,
                         absolute.Substring(root.Length + 1).Replace('\\', '/'));
                 }
-                catch (Exception e) { Failure(kind, name, e.GetBaseException().Message); }
+                catch (Exception e) {
+                    Exception rootError = e.GetBaseException();
+                    Failure(kind, name, rootError.Message);
+                    if (rootError is EngineeringObjectDisposedException ||
+                        rootError is NonRecoverableException) throw;
+                }
             }
 
             public void Close()
@@ -436,6 +488,7 @@ namespace TiaOpennessAdapter
                 missing.Flush();
                 inventory.Dispose();
                 missing.Dispose();
+                progress.Dispose();
             }
         }
 
