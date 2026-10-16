@@ -424,25 +424,19 @@ export function renderUdts(
             udtIndex
         ) => {
 
-            const details =
-                document.createElement(
-                    "details"
-                );
+            const onlyItem = projectConfig.udts.length === 1;
+            const details = document.createElement(onlyItem ? "section" : "details");
+            if (onlyItem) details.className = "single-engineering-item";
 
 
             details.dataset.name =
                 udt.name;
 
-            details.open =
-                openNames.has(
-                    udt.name
-                );
+            if (!onlyItem) details.open = openNames.has(udt.name);
 
 
-            const summary =
-                document.createElement(
-                    "summary"
-                );
+            const summary = document.createElement(onlyItem ? "h4" : "summary");
+            if (onlyItem) summary.className = "single-engineering-item-title";
 
 
             summary.textContent =
