@@ -43,11 +43,11 @@ def test_multi_instance_cycles_and_iec_context_are_reported_from_loaded_source()
 
 def test_scl_quoted_identifiers_and_array_of_udt_are_resolved():
     report = analyze_files([
-        ReviewInputFile(name="MotorType.scl", content='TYPE "UDT_Motor"\\nEND_TYPE'),
+        ReviewInputFile(name="MotorType.scl", content='TYPE "UDT_Motor"\nEND_TYPE'),
         ReviewInputFile(name="Motor.scl", content=(
-            'FUNCTION_BLOCK "FB_Motor"\\nVAR_INPUT\\n'
-            '    "Motors" : ARRAY[1..4] OF "UDT_Motor";\\n'
-            '    "Label" : STRING[24];\\nEND_VAR\\n'
+            'FUNCTION_BLOCK "FB_Motor"\nVAR_INPUT\n'
+            '    "Motors" : ARRAY[1..4] OF "UDT_Motor";\n'
+            '    "Label" : STRING[24];\nEND_VAR\n'
         )),
     ])
     assert report.files[1].name == "FB_Motor"
@@ -101,20 +101,20 @@ def test_iec_projection_same_names_and_nested_structs_do_not_false_flag_duplicat
 def test_multi_instance_cycles_are_static_only_and_case_insensitive():
     report = analyze_files([
         ReviewInputFile(name="one.scl", content=(
-            'FUNCTION_BLOCK "FB_One"\\nVAR_INPUT\\n InputRef : "FB_Two";\\nEND_VAR\\n'
+            'FUNCTION_BLOCK "FB_One"\nVAR_INPUT\n InputRef : "FB_Two";\nEND_VAR\n'
         )),
         ReviewInputFile(name="two.scl", content=(
-            'FUNCTION_BLOCK "FB_Two"\\nVAR_STATIC\\n Back : "fb_one";\\nEND_VAR\\n'
+            'FUNCTION_BLOCK "FB_Two"\nVAR_STATIC\n Back : "fb_one";\nEND_VAR\n'
         )),
     ])
     assert not any(f.category == "Cyclic multi-instance dependency" for f in report.findings)
 
     report = analyze_files([
         ReviewInputFile(name="one.scl", content=(
-            'FUNCTION_BLOCK "FB_One"\\nVAR_STATIC\\n Child : "fb_two";\\nEND_VAR'
+            'FUNCTION_BLOCK "FB_One"\nVAR_STATIC\n Child : "fb_two";\nEND_VAR'
         )),
         ReviewInputFile(name="two.scl", content=(
-            'FUNCTION_BLOCK "FB_Two"\\nVAR_STATIC\\n Back : "FB_ONE";\\nEND_VAR'
+            'FUNCTION_BLOCK "FB_Two"\nVAR_STATIC\n Back : "FB_ONE";\nEND_VAR'
         )),
     ])
     cycles = [f for f in report.findings if f.category == "Cyclic multi-instance dependency"]
@@ -130,8 +130,8 @@ def test_multiple_xml_blocks_or_scl_headers_report_partial_not_misattributed():
     assert xml.block_type == "Unknown"
     assert "Multiple TIA blocks" in xml.parsing_warnings[0]
     scl = analyze_files([ReviewInputFile(name="many.scl", content=(
-        'FUNCTION_BLOCK FB_A\\nVAR_INPUT\\n Value : Bool;\\nEND_VAR\\n'
-        'FUNCTION_BLOCK FB_B\\nVAR_INPUT\\n Flag : Bool;\\nEND_VAR'
+        'FUNCTION_BLOCK FB_A\nVAR_INPUT\n Value : Bool;\nEND_VAR\n'
+        'FUNCTION_BLOCK FB_B\nVAR_INPUT\n Flag : Bool;\nEND_VAR'
     ))]).files[0]
     assert scl.name == "FB_A"
     assert scl.verification_status == "partial"

@@ -22,12 +22,12 @@ MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_AI_CHUNK_CHARS = 6000
 MAX_AI_CHUNKS_PER_FILE = 12
 SUPPORTED_SUFFIXES = {".scl", ".xml"}
-_IDENTIFIER = r'(?:"[^"\\r\\n]+"|[A-Za-z_][A-Za-z0-9_]*)'
+_IDENTIFIER = r'(?:"[^"\r\n]+"|[A-Za-z_][A-Za-z0-9_]*)'
 _BLOCK = re.compile(
-    r"^\\s*(FUNCTION_BLOCK|FUNCTION|DATA_BLOCK|TYPE|ORGANIZATION_BLOCK)\\s+(" + _IDENTIFIER + r")", re.I,
+    r"^\s*(FUNCTION_BLOCK|FUNCTION|DATA_BLOCK|TYPE|ORGANIZATION_BLOCK)\s+(" + _IDENTIFIER + r")", re.I,
 )
-_DECL = re.compile(r"^\\s*(" + _IDENTIFIER + r")\\s*:\\s*([^;]+)\\s*;", re.I)
-_ARRAY_OF = re.compile(r"^ARRAY\\s*\\[[^]]+\\]\\s*OF\\s*(.+)$", re.I)
+_DECL = re.compile(r"^\s*(" + _IDENTIFIER + r")\s*:\s*([^;]+)\s*;", re.I)
+_ARRAY_OF = re.compile(r"^ARRAY\s*\[[^]]+\]\s*OF\s*(.+)$", re.I)
 _DANGEROUS_XML = re.compile(r"<!\s*(?:DOCTYPE|ENTITY)\b", re.I)
 _LINE_LOCATION = re.compile(r"^line\s+(\d+)$", re.I)
 _NETWORK_LOCATION = re.compile(r"^network\s+(\d+)$", re.I)
@@ -117,7 +117,7 @@ def _type_reference(data_type: str) -> str:
     if value.casefold() in {"struct", "array"}:
         return ""
     # STRING[20] and WSTRING[20] are parameterized primitive types.
-    if re.match(r"^(?:W?STRING)\\s*\\[\\s*\\d+\\s*\\]$", value, re.I):
+    if re.match(r"^(?:W?STRING)\s*\[\s*\d+\s*\]$", value, re.I):
         return value.split("[", 1)[0].strip()
     return _identifier(value)
 
@@ -196,7 +196,7 @@ def _xml(file: ReviewInputFile) -> ReviewBlock:
         )
     target = objects[0] if objects else root
     root_name = xml_local_name(target.tag)
-    filename = file.name.replace("\\\\", "/").rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    filename = file.name.replace("\\", "/").rsplit("/", 1)[-1].rsplit(".", 1)[0]
     attributes = next((child for child in target if xml_local_name(child.tag).casefold() == "attributelist"), None)
     xml_name = (_direct_text(attributes, "Name") if attributes is not None else "") or xml_attribute(target, "Name")
     source_name = xml_name or xml_attribute(root, "Name") or filename
