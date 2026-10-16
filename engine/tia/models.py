@@ -127,6 +127,10 @@ class PlcDataBlockInfo(BaseModel):
     number: int
     block_kind: str
     is_consistent: bool
+    # Read directly from InstanceDB.GetAttribute; absent until evidenced.
+    instance_of_name: str | None = None
+    instance_of_type: str | None = None
+    instance_of_number: int | None = None
 
 
 class PlcUdtInfo(BaseModel):

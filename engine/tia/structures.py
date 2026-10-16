@@ -22,6 +22,7 @@ router = APIRouter()
 @router.get(
     "/plc-structures",
     response_model=PlcStructuresInfo,
+    response_model_exclude_none=True,
 )
 def get_plc_structures(
     process_id: int = Query(
@@ -48,6 +49,7 @@ def get_plc_structures(
 
     data_blocks = []
     udts = []
+    instance_owners = {}
 
 
     for line in lines:
@@ -87,6 +89,25 @@ def get_plc_structures(
                 continue
 
 
+        elif line.startswith("PLC_INSTANCE_DB_OWNER|"):
+            # Optional, direct read-only metadata from InstanceDB in Openness.
+            parts = line.split("|", 5)
+            if len(parts) != 6 or not parts[2] or not parts[3] or parts[4] != "FB":
+                continue
+            try:
+                number = int(parts[5])
+            except ValueError:
+                continue
+            if number < 0:
+                continue
+            key = (parts[1].casefold(), parts[2].casefold())
+            value = (parts[3], parts[4], number)
+            if key in instance_owners and instance_owners[key] != value:
+                # Conflicting metadata must never be treated as verified.
+                instance_owners[key] = None
+            elif key not in instance_owners:
+                instance_owners[key] = value
+
         elif line.startswith(
             "PLC_UDT|"
         ):
@@ -115,6 +136,14 @@ def get_plc_structures(
                 )
             )
 
+
+    for block in data_blocks:
+        if block.block_kind.casefold() != "instancedb":
+            continue
+        owner = instance_owners.get((block.group_path.casefold(), block.name.casefold()))
+        if owner is None:
+            continue
+        block.instance_of_name, block.instance_of_type, block.instance_of_number = owner
 
     data_blocks.sort(
         key=lambda item: (

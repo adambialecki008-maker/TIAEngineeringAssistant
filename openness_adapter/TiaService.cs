@@ -5553,6 +5553,42 @@ namespace TiaOpennessAdapter
                 "|" +
                 dataBlock.IsConsistent
             );
+
+            // Metadata-only lookup, no project write. Siemens Openness V21
+            // exposes InstanceOfName, InstanceOfType and InstanceOfNumber
+            // for an InstanceDB. Omit the association if any attribute is
+            // missing or unreadable: never infer the FB from a DB name.
+            if (dataBlock is InstanceDB)
+            {
+                try
+                {
+                    object instanceName = dataBlock.GetAttribute("InstanceOfName");
+                    object instanceType = dataBlock.GetAttribute("InstanceOfType");
+                    object instanceNumber = dataBlock.GetAttribute("InstanceOfNumber");
+                    string ownerName = instanceName == null ? "" : instanceName.ToString();
+                    string ownerType = instanceType == null ? "" : instanceType.ToString();
+                    int ownerNumber;
+                    if (!String.IsNullOrWhiteSpace(ownerName)
+                        && String.Equals(ownerType, "FB", StringComparison.OrdinalIgnoreCase)
+                        && instanceNumber != null
+                        && Int32.TryParse(instanceNumber.ToString(), out ownerNumber)
+                        && ownerNumber >= 0)
+                    {
+                        Console.WriteLine(
+                            "PLC_INSTANCE_DB_OWNER|"
+                            + SanitizeOutput(groupPath) + "|"
+                            + SanitizeOutput(dataBlock.Name) + "|"
+                            + SanitizeOutput(ownerName) + "|FB|"
+                            + ownerNumber.ToString(CultureInfo.InvariantCulture)
+                        );
+                    }
+                }
+                catch (Exception)
+                {
+                    // Older CPU/export variants may not expose the owner.
+                    // Keep that DB explicitly Unverified; inventory survives.
+                }
+            }
         }
 
 

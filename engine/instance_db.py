@@ -23,13 +23,21 @@ class InstanceDbSnapshot(BaseModel):
     block_kind: str = "InstanceDB"
     is_consistent: bool = False
     source_mode: Literal["tia_read_only"] = "tia_read_only"
-    function_block: None = None
-    relationship_status: Literal["unverified"] = "unverified"
+    function_block: str | None = None
+    # Present only if returned by Siemens Openness; never inferred locally.
+    instance_of_type: str | None = None
+    instance_of_number: int | None = Field(default=None, ge=0)
+    relationship_status: Literal["unverified", "reported_by_openness"] = "unverified"
 
     @model_validator(mode="after")
     def validate_instance_kind(self):
         if self.block_kind.casefold() != "instancedb":
             raise ValueError("Instance DB snapshots require block_kind InstanceDB.")
+        if self.relationship_status == "reported_by_openness":
+            if not self.function_block or self.instance_of_type != "FB" or self.instance_of_number is None:
+                raise ValueError("Instance DB owner needs direct FB name/type/number from Openness.")
+        elif self.function_block is not None or self.instance_of_type is not None or self.instance_of_number is not None:
+            raise ValueError("Unverified Instance DB cannot claim an owner.")
         return self
 
 

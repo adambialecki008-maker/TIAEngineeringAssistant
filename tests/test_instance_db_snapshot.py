@@ -50,3 +50,25 @@ def test_unverified_instance_db_inventory_does_not_break_udt_db_preflight_models
     assert "UDT_Sensor" in source
     assert "DB_Config" in source
     assert "DB_ActualInstance" not in source
+
+
+def test_instance_db_accepts_direct_openness_metadata_but_not_guessed_owner():
+    from pydantic import ValidationError
+    reported = InstanceDbSnapshot.model_validate({
+        "name": "DB_Motor", "block_kind": "InstanceDB",
+        "function_block": "FB_Motor", "instance_of_type": "FB",
+        "instance_of_number": 7, "relationship_status": "reported_by_openness",
+    })
+    assert reported.function_block == "FB_Motor"
+    for invalid in (
+        {"function_block": "FB_Guessed"},
+        {"relationship_status": "reported_by_openness", "function_block": "FB_Motor"},
+        {"relationship_status": "reported_by_openness", "function_block": "FB_Motor",
+         "instance_of_type": "UDT", "instance_of_number": 7},
+    ):
+        try:
+            InstanceDbSnapshot.model_validate({"name": "DB_Bad", **invalid})
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError("Unverified or incomplete owner must be rejected")
