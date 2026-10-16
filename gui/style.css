@@ -2897,7 +2897,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 :root {
     --ui-heading-font: var(--ui-font, Arial, Helvetica, sans-serif);
     --ui-heading-page: 24px;
-    --ui-heading-section: 16px;
+    --ui-heading-section: 15px;
     --ui-heading-subsection: 14px;
     --ui-heading-weight: 700;
 }
@@ -3005,11 +3005,13 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     --ui-collapse-border: #2f4c61;
     --ui-collapse-text: #f2f7fb;
     --ui-collapse-radius: 6px;
-    --ui-collapse-height: 62px;
-    --ui-collapse-horizontal: 22px;
+    --ui-collapse-height: 54px;
+    --ui-collapse-horizontal: 18px;
+    --ui-collapse-pad-block: 12px;
 }
 .app-content :is(
     details.ui-disclosure.card,
+    details.device-section.card,
     #overview-profile-management > details.card,
     #overview-tia-controls > details.card,
     #data-libraries-root > details.card
@@ -3023,6 +3025,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 }
 .app-content :is(
     details.ui-disclosure.card > summary.ui-disclosure-heading,
+    details.device-section.card > summary,
     #overview-profile-management > details.card > summary,
     #overview-tia-controls > details.card > summary,
     #data-libraries-root > details.card > summary
@@ -3032,7 +3035,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     gap: 12px;
     box-sizing: border-box;
     min-height: var(--ui-collapse-height);
-    padding: 15px var(--ui-collapse-horizontal);
+    padding: var(--ui-collapse-pad-block) var(--ui-collapse-horizontal);
     margin: 0;
     border: 0;
     border-bottom: 1px solid transparent;
@@ -3048,6 +3051,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 }
 .app-content :is(
     details.ui-disclosure.card > summary.ui-disclosure-heading,
+    details.device-section.card > summary,
     #overview-profile-management > details.card > summary,
     #overview-tia-controls > details.card > summary,
     #data-libraries-root > details.card > summary
@@ -3056,6 +3060,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 }
 .app-content :is(
     details.ui-disclosure.card,
+    details.device-section.card,
     #overview-profile-management > details.card,
     #overview-tia-controls > details.card,
     #data-libraries-root > details.card
@@ -3064,6 +3069,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 }
 .app-content :is(
     details.ui-disclosure.card > summary.ui-disclosure-heading,
+    details.device-section.card > summary,
     #overview-profile-management > details.card > summary,
     #overview-tia-controls > details.card > summary,
     #data-libraries-root > details.card > summary
@@ -3082,6 +3088,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 }
 .app-content :is(
     details.ui-disclosure.card,
+    details.device-section.card,
     #overview-profile-management > details.card,
     #overview-tia-controls > details.card,
     #data-libraries-root > details.card
@@ -3130,7 +3137,7 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 }
 .app-content .overview-help.ui-static-card > h3 {
     margin: 0;
-    padding: 17px var(--ui-collapse-horizontal);
+    padding: var(--ui-collapse-pad-block) var(--ui-collapse-horizontal);
     min-height: var(--ui-collapse-height);
     box-sizing: border-box;
     display: flex;
@@ -3149,15 +3156,45 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     padding: 18px var(--ui-collapse-horizontal) 20px;
 }
 @media (max-width: 700px) {
-    .app-content details.ui-disclosure > .ui-disclosure-body {
-        padding: 12px;
-    }
-    .app-content details.ui-disclosure > summary.ui-disclosure-heading {
-        padding: 14px 16px;
-    }
+    :root { --ui-collapse-horizontal: 16px; }
+    .app-content details.ui-disclosure > .ui-disclosure-body { padding: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
     .app-content details.ui-disclosure > summary.ui-disclosure-heading::before {
         transition: none;
     }
+}
+
+/* Single objects do not need a second fold below their main section.
+   Their identity remains visible; member trees and multi-item lists retain
+   independent disclosure behavior. */
+.app-content .single-engineering-item {
+    display: block;
+    margin: 8px 0 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+.app-content .single-engineering-item > .single-engineering-item-title {
+    margin: 0 0 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ui-text, #ecf4fa);
+    font-family: var(--ui-heading-font);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: default;
+}
+.app-content .single-engineering-item > .details-content { padding: 0; }
+.app-content .member-declaration-section.single-engineering-item {
+    margin: 10px 0;
+    padding: 0;
+}
+.app-content .member-declaration-section.single-engineering-item > .single-engineering-item-title {
+    padding: 0 0 6px;
+    color: var(--ui-text-muted, #b4c7d6);
 }
