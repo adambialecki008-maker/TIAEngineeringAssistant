@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const {revealEngineeringItem} = require("./ui_disclosures.cjs");
 const artifacts = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwright";
 
 (async () => {
@@ -38,9 +39,7 @@ const artifacts = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwrig
         });
         async function openTab(tab) {
             await page.locator('[data-tab="' + tab + '"]').click();
-            const details = page.locator("#" + tab + "-container > details").first();
-            if (!(await details.evaluate(el => el.open)))
-                await details.locator(":scope > summary").click();
+            await revealEngineeringItem(page, "#" + tab + "-container");
         }
         const checkbox = (owner, name, flag) => page.locator(
             'tr[data-member-path="' + owner + ':0"] input.member-attribute-checkbox'
@@ -75,7 +74,7 @@ const artifacts = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwrig
         const dbAccessible = checkbox(key, "Ready", "Accessible from HMI/OPC UA");
         const dbWritable = checkbox(key, "Ready", "Writable from HMI/OPC UA");
         const dbRetain = checkbox(key, "Ready", "Retain");
-        assert.equal(await page.locator("#db-container .member-declaration-section > summary")
+        assert.equal(await page.locator("#db-container .member-declaration-section > h4")
             .innerText(),"Static (1 variables)");
         assert.equal(await dbVisible.isChecked(),true);
         assert.equal(await dbAccessible.isChecked(),false);
