@@ -124,6 +124,10 @@ const {openSection} = require("./ui_disclosures.cjs");
         await page.keyboard.press("Enter");
         assert.equal(await editor.evaluate(el => el.open),true);
         assert.equal(await page.locator("#new-fb-name").isVisible(),true);
+        await page.waitForFunction(() => {
+            const stored = JSON.parse(localStorage.getItem("tiaEngineeringAssistant.sections.v1") || "{}");
+            return stored["fb-editor"] === true;
+        }, null, {timeout:3000});
         await page.reload();
         await page.locator('[data-tab="project"]').click();
         assert.equal(await help.locator(":scope > .hint").isVisible(), true,
