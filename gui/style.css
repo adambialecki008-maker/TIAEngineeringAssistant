@@ -2993,3 +2993,171 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     .app-content details.ui-disclosure > .ui-disclosure-body { padding: 12px; }
     .app-content details.ui-disclosure > summary.ui-disclosure-heading { padding: 12px; }
 }
+
+
+/* Uniform collapsed engineering panel geometry, matching the UDT tab.
+   A single rule covers dynamically created Overview/library disclosures
+   and the static cards converted by engineering_disclosures.js.
+   Nested editor/TIA/HMI accordions deliberately retain their own density. */
+:root {
+    --ui-collapse-bg: #223341;
+    --ui-collapse-hover: #294152;
+    --ui-collapse-border: #2f4c61;
+    --ui-collapse-text: #f2f7fb;
+    --ui-collapse-radius: 6px;
+    --ui-collapse-height: 62px;
+    --ui-collapse-horizontal: 22px;
+}
+.app-content :is(
+    details.ui-disclosure.card,
+    #overview-profile-management > details.card,
+    #overview-tia-controls > details.card,
+    #data-libraries-root > details.card
+) {
+    padding: 0;
+    border: 1px solid var(--ui-collapse-border);
+    border-radius: var(--ui-collapse-radius);
+    overflow: hidden;
+    background: var(--ui-surface, #182630);
+    box-shadow: none;
+}
+.app-content :is(
+    details.ui-disclosure.card > summary.ui-disclosure-heading,
+    #overview-profile-management > details.card > summary,
+    #overview-tia-controls > details.card > summary,
+    #data-libraries-root > details.card > summary
+) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-height: var(--ui-collapse-height);
+    padding: 15px var(--ui-collapse-horizontal);
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    border-radius: 0;
+    background: var(--ui-collapse-bg);
+    color: var(--ui-collapse-text);
+    font-family: var(--ui-heading-font);
+    font-size: var(--ui-heading-section);
+    font-weight: var(--ui-heading-weight);
+    line-height: 1.35;
+    list-style: none;
+    cursor: pointer;
+}
+.app-content :is(
+    details.ui-disclosure.card > summary.ui-disclosure-heading,
+    #overview-profile-management > details.card > summary,
+    #overview-tia-controls > details.card > summary,
+    #data-libraries-root > details.card > summary
+):hover {
+    background: var(--ui-collapse-hover);
+}
+.app-content :is(
+    details.ui-disclosure.card,
+    #overview-profile-management > details.card,
+    #overview-tia-controls > details.card,
+    #data-libraries-root > details.card
+)[open] > summary {
+    border-bottom: 1px solid var(--ui-collapse-border);
+}
+.app-content :is(
+    details.ui-disclosure.card > summary.ui-disclosure-heading,
+    #overview-profile-management > details.card > summary,
+    #overview-tia-controls > details.card > summary,
+    #data-libraries-root > details.card > summary
+)::before {
+    content: "";
+    box-sizing: border-box;
+    display: inline-block;
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    margin: 0;
+    border-right: 2px solid var(--ui-blue-accent);
+    border-bottom: 2px solid var(--ui-blue-accent);
+    transform: rotate(-45deg);
+    transition: transform 130ms ease;
+}
+.app-content :is(
+    details.ui-disclosure.card,
+    #overview-profile-management > details.card,
+    #overview-tia-controls > details.card,
+    #data-libraries-root > details.card
+)[open] > summary::before {
+    transform: rotate(45deg);
+}
+.app-content details.ui-disclosure.card > summary.ui-disclosure-heading > h3 {
+    margin: 0;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+}
+.app-content details.ui-disclosure > .ui-disclosure-body {
+    padding: 18px var(--ui-collapse-horizontal) 20px;
+    background: var(--ui-surface, #182630);
+}
+.app-content #overview-profile-management > details.card > :not(summary) {
+    margin: 0;
+    padding: 18px var(--ui-collapse-horizontal) 20px;
+}
+.app-content #overview-tia-controls > details.card > :not(summary) {
+    margin-left: var(--ui-collapse-horizontal);
+    margin-right: var(--ui-collapse-horizontal);
+}
+.app-content #overview-tia-controls > details.card > :last-child {
+    margin-bottom: 18px;
+}
+.app-content #overview-tia-controls > details.card > summary + * {
+    margin-top: 18px;
+}
+.app-content #data-libraries-root > details.card > :not(summary) {
+    margin: 0;
+    padding: 18px var(--ui-collapse-horizontal) 20px;
+}
+/* Overview engineering context is a fixed information card, not an accordion.
+   Its title shares the section font and color but has no chevron. */
+.app-content .overview-help.ui-static-card {
+    padding: 0;
+    border: 1px solid var(--ui-collapse-border);
+    border-radius: var(--ui-collapse-radius);
+    overflow: hidden;
+    background: var(--ui-surface, #182630);
+    box-shadow: none;
+}
+.app-content .overview-help.ui-static-card > h3 {
+    margin: 0;
+    padding: 17px var(--ui-collapse-horizontal);
+    min-height: var(--ui-collapse-height);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    background: var(--ui-collapse-bg);
+    border-bottom: 1px solid var(--ui-collapse-border);
+    color: var(--ui-collapse-text);
+    font-family: var(--ui-heading-font);
+    font-size: var(--ui-heading-section);
+    font-weight: var(--ui-heading-weight);
+    line-height: 1.35;
+}
+.app-content .overview-help.ui-static-card > .hint {
+    display: block;
+    margin: 0;
+    padding: 18px var(--ui-collapse-horizontal) 20px;
+}
+@media (max-width: 700px) {
+    .app-content details.ui-disclosure > .ui-disclosure-body {
+        padding: 12px;
+    }
+    .app-content details.ui-disclosure > summary.ui-disclosure-heading {
+        padding: 14px 16px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .app-content details.ui-disclosure > summary.ui-disclosure-heading::before {
+        transition: none;
+    }
+}

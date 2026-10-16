@@ -8,7 +8,7 @@ const PREF_KEY = "tiaEngineeringAssistant.sections.v1";
 // choice is kept until explicitly changed, including after project switches.
 const SECTIONS = [
     {tab: "project", index: 0, selector: ".overview-help", id: "overview-help",
-     label: "Engineering context — getting started", open: false},
+     label: "Engineering context — getting started", static: true},
     {tab: "plc", index: 0, id: "plc-tags", label: "PLC tags", open: false},
     {tab: "plc", index: 1, id: "plc-program", label: "PLC program", open: false},
     {tab: "plc", index: 2, id: "plc-structures", label: "PLC data structures", open: false},
@@ -57,6 +57,13 @@ function staticCards(tab) {
 
 function enhanceCard(card, spec, state) {
     if (!card || card.classList.contains("ui-disclosure")) return;
+    if (spec.static) {
+        // Informational context is always present. Ignore any stale
+        // persisted disclosure preference from earlier versions.
+        card.dataset.uiSection = spec.id;
+        card.classList.add("ui-static-card");
+        return;
+    }
     const originalHeading = card.querySelector(":scope > h3, :scope > .card-header h3");
     const details = document.createElement("details");
     details.className = card.className + " ui-disclosure";

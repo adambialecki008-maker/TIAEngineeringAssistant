@@ -1,3 +1,17 @@
+## Permanent Overview context and uniform collapsed panels — 2026-10-16
+
+- Kept "Engineering context — getting started" permanently visible as an
+  information card, not a `details` accordion; an old saved closed state no
+  longer hides its instructions.
+- Matched every top-level closed engineering panel to the same visual styling
+  used by Application UDTs: background, height, padding, font weight and size,
+  border, radius and blue chevron. Applies to the Overview profile/TIA controls,
+  PLC, UDT, DB, FB/FC, Source preview and Data & Libraries panels.
+- Kept nested UDT/DB/IEC declarations and HMI-specific accordions unchanged.
+- Added Playwright checks for static visible context and equivalent computed
+  closed-header visual metrics on all main tabs. No PLC source or TIA project
+  changed.
+
 ## Collapsible engineering menus and heading typography — 2026-10-16
 
 - Applied a shared top-level disclosure pattern to Overview, PLC tags/program/
