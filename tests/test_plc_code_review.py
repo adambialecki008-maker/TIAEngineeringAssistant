@@ -137,3 +137,81 @@ def test_multiple_xml_blocks_or_scl_headers_report_partial_not_misattributed():
     assert scl.verification_status == "partial"
     assert len(scl.declarations) == 1
     assert "Several SCL block headers" in scl.parsing_warnings[0]
+
+
+def test_scl_udt_type_struct_fields_and_nested_array_dependencies():
+    report = analyze_files([
+        ReviewInputFile(name="motor.scl", content='TYPE "UDT_Motor"\nSTRUCT\n Enabled : Bool;\nEND_STRUCT;\nEND_TYPE'),
+        ReviewInputFile(name="pump.scl", content=(
+            'TYPE "UDT_Pump"\nVERSION : 0.1\nSTRUCT\n'
+            ' Motor : "UDT_Motor";\n'
+            ' Settings : Struct\n'
+            '   Speed : Real;\n'
+            '   Modes : ARRAY[0..2] OF "UDT_Motor";\n'
+            ' END_STRUCT;\n'
+            'END_STRUCT;\nEND_TYPE'
+        )),
+    ])
+    block = report.files[1]
+    assert block.verification_status == "parsed"
+    assert [(row.name, row.section, row.data_type) for row in block.declarations] == [
+        ("Motor", "Struct", '"UDT_Motor"'),
+        ("Settings", "Struct", "Struct"),
+        ("Settings.Speed", "Struct", "Real"),
+        ("Settings.Modes", "Struct", 'ARRAY[0..2] OF "UDT_Motor"'),
+    ]
+    assert block.dependencies == ["UDT_Motor"]
+    assert not report.findings
+
+
+def test_scl_nested_struct_fields_in_fb_and_missing_closing_struct_is_partial():
+    report = analyze_files([
+        ReviewInputFile(name="drive.scl", content=(
+            'FUNCTION_BLOCK "FB_Drive"\nVAR_STATIC\n'
+            ' Drive : Struct\n'
+            '  Run : Bool;\n'
+            '  Details : Struct\n'
+            '   Fault : Bool;\n'
+            '  END_STRUCT;\n'
+            ' END_STRUCT;\n'
+            ' Timer : TON_TIME;\nEND_VAR'
+        )),
+        ReviewInputFile(name="incomplete.scl", content='TYPE "UDT_Bad"\nSTRUCT\n Missing : Struct\n Running : Bool;\nEND_TYPE'),
+    ])
+    assert [m.name for m in report.files[0].declarations] == [
+        "Drive", "Drive.Run", "Drive.Details", "Drive.Details.Fault", "Timer",
+    ]
+    assert not report.findings
+    assert report.files[1].verification_status == "partial"
+    assert any("Unclosed STRUCT" in warning for warning in report.files[1].parsing_warnings)
+
+
+def test_simaticml_program_network_member_is_not_interface_declaration():
+    source = (
+        '<Document><SW.Blocks.FC><AttributeList><Name>FC_Calc</Name>'
+        '<ProgrammingLanguage>FBD</ProgrammingLanguage>'
+        '<Interface><Sections><Section Name="Input">'
+        '<Member Name="Source" Datatype="Bool"/></Section></Sections></Interface>'
+        '</AttributeList><ObjectList><SW.Blocks.CompileUnit>'
+        '<Network><Member Name="Source" Datatype="Int"/>'
+        '<Member Name="Ghost" Datatype="UDT_NotExported"/></Network>'
+        '</SW.Blocks.CompileUnit></ObjectList></SW.Blocks.FC></Document>'
+    )
+    report = analyze_files([ReviewInputFile(name="fc-export.xml", content=source)])
+    assert (report.files[0].name, report.files[0].language) == ("FC_Calc", "FBD")
+    assert [(x.name, x.data_type) for x in report.files[0].declarations] == [("Source", "Bool")]
+    assert report.files[0].networks == ["network 1"]
+    assert not report.findings
+
+
+def test_simaticml_missing_interface_reports_partial_without_scanning_program_members():
+    source = (
+        '<Document><SW.Blocks.FB><AttributeList><Name>FB_OnlyLogic</Name></AttributeList>'
+        '<ObjectList><SW.Blocks.CompileUnit><Member Name="Bad" Datatype="UnknownType"/>'
+        '</SW.Blocks.CompileUnit></ObjectList></SW.Blocks.FB></Document>'
+    )
+    report = analyze_files([ReviewInputFile(name="logic.xml", content=source)])
+    assert report.files[0].declarations == []
+    assert report.files[0].networks == ["network 1"]
+    assert "No supported declaration Interface/Sections" in report.files[0].parsing_warnings[0]
+    assert not report.findings

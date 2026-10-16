@@ -474,3 +474,19 @@
 - Added offline tests for these concrete edge cases. Existing TIA import, HMI,
   Openness adapter and original PLC files are unchanged; analysis is read-only.
 
+
+
+## AI Code Review SCL UDT bodies and SimaticML interface isolation — 2026-10-16
+
+- Read-only SCL analyzer now recognizes UDT TYPE/STRUCT bodies without a VAR
+  section, including nested Struct declarations and ARRAY OF dependencies.
+  A truncated/unclosed Struct is marked partial, never treated as verified.
+- SimaticML declaration scan is restricted to a block's actual
+  AttributeList/Interface/Sections subtree. Source-network / CompileUnit
+  members are not confused with data declarations or missing UDT dependencies.
+- Legacy small XML fixtures with direct Section children remain supported.
+  Missing interface data in a recognized SimaticML export is explicitly
+  reported as partial; the parser never guesses a declaration from ladder
+  networks.
+- Added dedicated offline regression tests. Existing TIA Openness import,
+  HMI translations, and user files are unchanged. No writes to PLCs.

@@ -122,6 +122,11 @@ def _type_reference(data_type: str) -> str:
     return _identifier(value)
 
 
+_SCL_STRUCT_OPEN = re.compile(
+    r"^\s*(" + _IDENTIFIER + r")\s*:\s*STRUCT\s*;?\s*(?://.*)?$", re.I,
+)
+
+
 def _scl(file: ReviewInputFile) -> ReviewBlock:
     block = ReviewBlock(source_file=file.name, name=file.name, block_type="Unknown", language="SCL")
     sections = {
@@ -130,6 +135,9 @@ def _scl(file: ReviewInputFile) -> ReviewBlock:
         "VAR_TEMP": "Temp", "VAR_CONSTANT": "Constant",
     }
     section = ""
+    in_type_struct = False
+    struct_path: list[str] = []
+
     for line_no, line in enumerate(file.content.splitlines(), 1):
         hit = _BLOCK.match(line)
         if hit:
@@ -140,16 +148,40 @@ def _scl(file: ReviewInputFile) -> ReviewBlock:
                 )
                 break
             block.block_type, block.name = hit.group(1).upper(), _identifier(hit.group(2))
+
         token = line.strip().upper().split(None, 1)[0] if line.strip() else ""
         if token in sections:
-            section = sections[token]
+            section, struct_path = sections[token], []
         elif token == "END_VAR":
-            section = ""
-        elif section and (decl := _DECL.match(line)):
-            block.declarations.append(ReviewDeclaration(
-                name=_identifier(decl.group(1)), data_type=decl.group(2).strip(),
-                section=section, location=f"line {line_no}",
-            ))
+            if struct_path:
+                block.parsing_warnings.append("A nested STRUCT did not close before END_VAR.")
+            section, struct_path = "", []
+        elif block.block_type == "TYPE" and token == "STRUCT" and not section:
+            # Siemens SCL UDT bodies use STRUCT ... END_STRUCT without VAR.
+            section, in_type_struct, struct_path = "Struct", True, []
+        elif token.rstrip(";") == "END_STRUCT" and section:
+            if struct_path:
+                struct_path.pop()
+            elif in_type_struct:
+                section, in_type_struct = "", False
+        elif section:
+            nested = _SCL_STRUCT_OPEN.match(line)
+            if nested:
+                name = _identifier(nested.group(1))
+                path = ".".join([*struct_path, name])
+                block.declarations.append(ReviewDeclaration(
+                    name=path, data_type="Struct", section=section, location=f"line {line_no}",
+                ))
+                struct_path.append(name)
+            elif decl := _DECL.match(line):
+                name = _identifier(decl.group(1))
+                block.declarations.append(ReviewDeclaration(
+                    name=".".join([*struct_path, name]),
+                    data_type=decl.group(2).strip(), section=section, location=f"line {line_no}",
+                ))
+
+    if in_type_struct or struct_path:
+        block.parsing_warnings.append("Unclosed STRUCT; declaration analysis is partial.")
     if block.block_type == "Unknown":
         block.parsing_warnings.append("No supported SCL block header was found.")
     block.verification_status = "partial" if block.parsing_warnings else "parsed"
@@ -242,7 +274,39 @@ def _xml(file: ReviewInputFile) -> ReviewBlock:
         for child in node:
             walk(child, section, parent, structural)
 
-    walk(target)
+    # SimaticML networks are program logic, not declaration interfaces.
+    # Only read members inside the actual Interface/Sections subtree.
+    def immediate(parent: ET.Element | None, local_name: str) -> ET.Element | None:
+        if parent is None:
+            return None
+        return next(
+            (child for child in parent if xml_local_name(child.tag).casefold() == local_name.casefold()),
+            None,
+        )
+
+    interface = immediate(attributes, "Interface") or immediate(target, "Interface")
+    interface_sections = immediate(interface, "Sections")
+    if interface_sections is not None:
+        walk(interface_sections)
+    else:
+        # Legacy/simple XML test fixtures have Section directly under Document
+        # or under a direct Sections wrapper; do not scan ObjectList/CompileUnit.
+        direct_sections = [
+            child for child in target
+            if xml_local_name(child.tag).casefold() in {"section", "sections"}
+        ]
+        if direct_sections:
+            for child in direct_sections:
+                walk(child)
+        elif objects:
+            block.parsing_warnings.append(
+                "No supported declaration Interface/Sections found; "
+                "program networks were not interpreted as declarations."
+            )
+        else:
+            block.parsing_warnings.append(
+                "Unrecognized XML declaration layout; program logic was not interpreted as declarations."
+            )
     units = [
         node for node in target.iter()
         if xml_local_name(node.tag).casefold() in {"sw.blocks.compileunit", "compileunit"}
