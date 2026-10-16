@@ -1717,15 +1717,12 @@ export function initDevicesUi() {
             const template
             of projectConfig.device_config.templates
         ) {
-            const details =
-                document.createElement(
-                    "details"
-                );
+            const onlyTemplate = projectConfig.device_config.templates.length === 1;
+            const details = document.createElement(onlyTemplate ? "section" : "details");
+            if (onlyTemplate) details.className = "single-engineering-item";
 
-            const summary =
-                document.createElement(
-                    "summary"
-                );
+            const summary = document.createElement(onlyTemplate ? "h4" : "summary");
+            if (onlyTemplate) summary.className = "single-engineering-item-title";
 
             summary.textContent =
                 `${template.name} (${template.signals.length} signals)`;
