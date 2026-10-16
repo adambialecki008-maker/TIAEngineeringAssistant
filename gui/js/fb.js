@@ -3,10 +3,11 @@ import {createButton} from "./ui.js";
 import {createMemberTree} from "./member-editor.js";
 import {getSystemInstanceTypes} from "./plc-types.js";
 import {findSectionNameConflict} from "./program_creation.js";
-import {programLanguage, programHeading, programMetadata, programDeclarations, programSection, programActions} from "./program_view.js";
+import {programLanguage, programBlockDisclosure, programMetadata, programDeclarations, programSection, programActions} from "./program_view.js";
 
 const SECTIONS = ["Input", "Output", "InOut", "Static", "Temp", "Constant"];
 const sectionOpenState = new Map();
+const blockOpenState = new Map();
 
 function dependencySummary(fb) {
     const memberType = member => String(member.data_type || "").toLocaleLowerCase() === "array"
@@ -66,10 +67,10 @@ export function renderFunctionBlocks(host, refresh) {
         return;
     }
     for (const fb of projectConfig.fbs) {
-        const card = document.createElement("article");
-        card.className = "card program-block-card";
-        card.appendChild(programHeading(fb, "FB"));
-        card.appendChild(programMetadata(fb, "FB", dependencySummary(fb)));
+        const card = programBlockDisclosure(fb, "FB", blockOpenState);
+        const body = document.createElement("div");
+        body.className = "program-block-body";
+        body.appendChild(programMetadata(fb, "FB", dependencySummary(fb)));
         const declarations = programDeclarations();
         for (const section of SECTIONS) {
             const key = section.toLowerCase();
@@ -117,7 +118,7 @@ export function renderFunctionBlocks(host, refresh) {
             }
             declarations.appendChild(details);
         }
-        card.appendChild(declarations);
+        body.appendChild(declarations);
         if (fb.source_xml) {
             const source = document.createElement("details");
             source.className = "program-source-details";
@@ -128,7 +129,7 @@ export function renderFunctionBlocks(host, refresh) {
             sourceText.className = "device-config-preview";
             sourceText.textContent = fb.source_xml;
             source.appendChild(sourceText);
-            card.appendChild(source);
+            body.appendChild(source);
         }
         const actions = programActions();
         if (fb.declaration_draft && fb.original_interface) {
@@ -143,7 +144,8 @@ export function renderFunctionBlocks(host, refresh) {
             saveProjectConfig();
             refresh();
         }));
-        card.appendChild(actions);
+        body.appendChild(actions);
+        card.appendChild(body);
         host.appendChild(card);
     }
 }

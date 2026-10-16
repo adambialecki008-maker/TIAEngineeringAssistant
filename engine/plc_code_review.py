@@ -746,6 +746,15 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
             data_type = _type_reference(declaration.data_type)
             if not data_type:
                 continue
+            # TIA Openness exports the implicit FC return as Ret_Val : Void.
+            # Void is a return marker, never a regular declarable PLC type.
+            if (
+                block.block_type in {"FC", "FUNCTION"}
+                and declaration.name.casefold() in {"ret_val", "retval"}
+                and declaration.section.casefold() in {"output", "return"}
+                and data_type.casefold() == "void"
+            ):
+                continue
             registry_entry = type_entry(data_type)
             system_instance = bool(registry_entry and str(registry_entry.get("kind", "")).endswith("_instance"))
             allowed_system_instance = block.block_type in {"FUNCTION_BLOCK", "FB"} and declaration.section.casefold() == "static"

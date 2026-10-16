@@ -75,6 +75,12 @@ const FC = {
         assert.doesNotMatch(await fb.locator(".program-block-header").innerText(), /KOP/);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Legacy.*Unverified/);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Local draft/);
+        assert.equal(await fb.evaluate(el => el.tagName), "DETAILS");
+        assert.equal(await fb.evaluate(el => el.open), false, "FB starts collapsed");
+        assert.equal(await fb.locator(".program-declarations").isVisible(), false);
+        await fb.locator(":scope > summary.program-block-summary").click();
+        assert.equal(await fb.evaluate(el => el.open), true);
+        assert.equal(await fb.locator(".program-declarations").isVisible(), true);
         assert.equal(await fb.locator(".program-declaration-section").count(), 6);
         assert.equal(await fb.locator(".program-declarations").count(), 1);
         const input = fb.locator(".program-declaration-section").first();
@@ -122,6 +128,8 @@ const FC = {
         assert.equal(await fb.locator(".program-state-draft").count(), 1);
 
         const importedFb = page.locator("#fb-container .program-block-card").nth(1);
+        assert.equal(await importedFb.evaluate(el => el.open), false);
+        await importedFb.locator(":scope > summary.program-block-summary").click();
         const importedStatic = importedFb.locator(".program-declaration-section").nth(3);
         if (!await importedStatic.evaluate(el => el.open))
             await importedStatic.locator(":scope > summary").click();
@@ -135,13 +143,29 @@ const FC = {
 
         await openSection(page, "fc-editor");
         const fc = page.locator("#fc-container .program-block-card").first();
+        assert.equal(await fc.evaluate(el => el.tagName), "DETAILS");
+        assert.equal(await fc.evaluate(el => el.open), false, "FC starts collapsed");
+        assert.equal(await fc.locator(".program-declarations").isVisible(), false);
         assert.match(await fc.locator(".program-block-header").innerText(), /FC_Test.*FC.*FBD/s);
+        await fc.locator(":scope > summary.program-block-summary").click();
+        assert.equal(await fc.locator(".program-declarations").isVisible(), true);
         assert.equal(await fc.locator(".program-declaration-section").count(), 5);
         assert.equal(await fc.locator(".program-declaration-section").filter({hasText:"Static"}).count(), 0);
         assert.equal(await fc.locator(".program-source-details").count(), 1);
         await fc.locator(".program-source-details > summary").click();
         assert.match(await fc.locator("pre").innerText(), /SW.Blocks.FC/);
 
+        // Closing an FB/FC must hide all member controls while preserving
+        // the section and card choice through renderer refresh.
+        await fc.locator(":scope > summary.program-block-summary").click();
+        assert.equal(await fc.locator(".program-declarations").isVisible(), false);
+        await fc.locator(":scope > summary.program-block-summary").click();
+        assert.equal(await fc.locator(".program-declarations").isVisible(), true);
+        await page.evaluate(async () => {
+            const {renderFunctions} = await import("/gui/js/fc.js");
+            renderFunctions(document.getElementById("fc-container"), () => undefined);
+        });
+        assert.equal(await page.locator("#fc-container .program-block-card").first().evaluate(el => el.open), true);
         await openSection(page, "program-dependencies");
         await page.locator("#program-dependencies-run").click();
         const dependencyResults = page.locator("#program-dependencies-results");

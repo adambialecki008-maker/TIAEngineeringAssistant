@@ -2,10 +2,11 @@ import {projectConfig, saveProjectConfig} from "./state.js";
 import {createButton} from "./ui.js";
 import {createMemberTree} from "./member-editor.js";
 import {findSectionNameConflict} from "./program_creation.js";
-import {programLanguage, programHeading, programMetadata, programDeclarations, programSection, programActions} from "./program_view.js";
+import {programLanguage, programBlockDisclosure, programMetadata, programDeclarations, programSection, programActions} from "./program_view.js";
 
 const SECTIONS = ["Input", "Output", "InOut", "Temp", "Constant"];
 const sectionOpenState = new Map();
+const blockOpenState = new Map();
 
 function markDraft(fc) {
     fc.declaration_draft = true;
@@ -47,10 +48,10 @@ export function renderFunctions(host, refresh) {
         return;
     }
     for (const fc of projectConfig.fcs) {
-        const card = document.createElement("article");
-        card.className = "card program-block-card";
-        card.appendChild(programHeading(fc, "FC"));
-        card.appendChild(programMetadata(fc, "FC", dependencySummary(fc)));
+        const card = programBlockDisclosure(fc, "FC", blockOpenState);
+        const body = document.createElement("div");
+        body.className = "program-block-body";
+        body.appendChild(programMetadata(fc, "FC", dependencySummary(fc)));
         const declarations = programDeclarations();
         for (const section of SECTIONS) {
             const key = section.toLowerCase();
@@ -69,7 +70,7 @@ export function renderFunctions(host, refresh) {
             }));
             declarations.appendChild(details);
         }
-        card.appendChild(declarations);
+        body.appendChild(declarations);
         if (fc.source_xml) {
             const source = document.createElement("details");
             source.className = "program-source-details";
@@ -80,7 +81,7 @@ export function renderFunctions(host, refresh) {
             code.className = "device-config-preview";
             code.textContent = fc.source_xml;
             source.appendChild(code);
-            card.appendChild(source);
+            body.appendChild(source);
         }
         const actions = programActions();
         if (fc.declaration_draft && fc.original_interface) {
@@ -103,7 +104,8 @@ export function renderFunctions(host, refresh) {
             saveProjectConfig();
             refresh();
         }));
-        card.appendChild(actions);
+        body.appendChild(actions);
+        card.appendChild(body);
         host.appendChild(card);
     }
 }

@@ -75,6 +75,7 @@ const key = "tiaEngineeringAssistant.projectConfig";
         const section = (card, name) => card.locator(".program-declaration-section")
             .filter({has: page.locator("summary > span:first-child", {hasText:name})});
         const addMember = async (card, sectionName, name, dataType) => {
+            assert.equal(await card.evaluate(el => el.open), true);
             const panel = section(card, sectionName);
             if (!(await panel.evaluate(el => el.open))) {
                 await panel.locator(":scope > summary").click();
@@ -90,6 +91,8 @@ const key = "tiaEngineeringAssistant.projectConfig";
         await make("fb", "FB_LocalDrive", 53, "LAD");
         await page.getByText("FB FB_LocalDrive created in the active local profile", {exact:false}).waitFor();
         const fb = page.locator("#fb-container .program-block-card").filter({hasText:"FB_LocalDrive"});
+        assert.equal(await fb.evaluate(el => el.open), false);
+        await fb.locator(":scope > summary.program-block-summary").click();
         assert.match(await fb.locator(".program-block-header").innerText(), /FB_LocalDrive.*FB.*LAD.*53/s);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Local new.*Not in TIA/s);
         assert.equal(await fb.locator(".program-declaration-section").count(), 6);
@@ -110,6 +113,8 @@ const key = "tiaEngineeringAssistant.projectConfig";
         await make("fc", "FC_LocalCalc", 54, "FBD");
         await page.getByText("FC FC_LocalCalc created in the active local profile", {exact:false}).waitFor();
         const fc = page.locator("#fc-container .program-block-card").filter({hasText:"FC_LocalCalc"});
+        assert.equal(await fc.evaluate(el => el.open), false);
+        await fc.locator(":scope > summary.program-block-summary").click();
         assert.match(await fc.locator(".program-block-header").innerText(), /FC_LocalCalc.*FC.*FBD.*54/s);
         assert.equal(await fc.locator(".program-declaration-section").count(), 5);
         assert.equal(await fc.locator(".program-declaration-section").filter({hasText:"Static"}).count(), 0);

@@ -1019,3 +1019,38 @@ def test_flgnet_access_symbol_and_literal_constant_expose_wire_membership():
     assert [(c.port, c.wire_uid) for c in literal.connections] == [("(reference)", "25")]
     assert "TRUE" in gate.connections[1].peers[0]
     assert not result.findings
+
+
+
+def test_fc_void_ret_val_is_valid_return_not_unresolved_dependency():
+    source = (
+        '<Document><SW.Blocks.FC><AttributeList><Name>fc_ErorrsTrack5</Name>'
+        '<ProgrammingLanguage>LAD</ProgrammingLanguage>'
+        '<Interface><Sections>'
+        '<Section Name="Output"><Member Name="Ret_Val" Datatype="Void"/></Section>'
+        '</Sections></Interface></AttributeList>'
+        '<ObjectList><SW.Blocks.CompileUnit/></ObjectList>'
+        '</SW.Blocks.FC></Document>'
+    )
+    report = analyze_files([ReviewInputFile(name="fc_ErorrsTrack5.xml", content=source)])
+    assert report.files[0].name == "fc_ErorrsTrack5"
+    assert [(member.name, member.data_type) for member in report.files[0].declarations] == [
+        ("Ret_Val", "Void"),
+    ]
+    assert not any(f.category == "Unresolved dependency" for f in report.findings)
+    assert not report.findings
+
+
+def test_void_cannot_silently_become_a_regular_input_or_fb_variable_type():
+    report = analyze_files([
+        ReviewInputFile(name="FC_Bad.scl", content=(
+            "FUNCTION FC_Bad : Int\nVAR_INPUT\n Value : Void;\nEND_VAR"
+        )),
+        ReviewInputFile(name="FB_Bad.scl", content=(
+            "FUNCTION_BLOCK FB_Bad\nVAR_OUTPUT\n Ret_Val : Void;\nEND_VAR"
+        )),
+    ])
+    findings = [f for f in report.findings if f.category == "Unresolved dependency"]
+    assert [(f.block, f.evidence) for f in findings] == [
+        ("FC_Bad", "Void"), ("FB_Bad", "Void"),
+    ]

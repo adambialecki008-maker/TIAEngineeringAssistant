@@ -34,6 +34,26 @@ export function programHeading(block, kind) {
     return header;
 }
 
+export function programBlockDisclosure(block, kind, state) {
+    const key = getActiveProjectProfileId() + ":" + kind + ":"
+        + String(block.name).toLocaleLowerCase() + ":" + (block.number ?? "");
+    const card = document.createElement("details");
+    card.className = "card program-block-card";
+    card.dataset.blockKey = key;
+    // An individual FB/FC is collapsed by default. Keep the user's choice
+    // through editor re-renders without storing a property on the TIA snapshot.
+    card.open = state.get(key) ?? false;
+    card.addEventListener("toggle", () => {
+        if (card.isConnected) state.set(key, card.open);
+    });
+    const summary = document.createElement("summary");
+    summary.className = "program-block-summary program-block-header";
+    const heading = programHeading(block, kind);
+    summary.append(...heading.childNodes);
+    card.appendChild(summary);
+    return card;
+}
+
 export function programMetadata(block, kind, dependencies) {
     const details = document.createElement("details");
     details.className = "program-meta-details";

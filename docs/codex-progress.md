@@ -686,3 +686,17 @@
   an FBD gate, with explicit wire UIds and reference membership.
 - Wrote a separate V21 acceptance procedure; without a real V21 export
   from the target TIA project, the gate remains unverified.
+
+## Void return and compact FB/FC cards — 2026-10-16
+
+- Fixed false "Unresolved dependency" for a native FC Output Ret_Val
+  of type Void; Void is an allowed FC return marker only, not a
+  general PLC declaration type or missing UDT.
+- Each FB/FC now renders as a native keyboard-accessible details card with
+  its identity, language, number and verification status always visible.
+  The interface declarations, Details, source XML and actions are inside
+  the fold and hidden by default.
+- Disclosure state is kept per active project profile, block name and kind
+  across editor re-renders. Existing per-section expansion state remains.
+- Added regression coverage for FC Void XML, invalid Void operands,
+  collapsed/restored FB/FC cards and local-editor changes.
