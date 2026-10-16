@@ -307,3 +307,18 @@
   Playwright package is not installed; the pushed GitHub Actions browser job
   remains the authoritative Chromium verification.
 
+## Offline FB/FC and Instance DB dependency diagnostics — 2026-10-16
+
+- The read-only dependency report now identifies declaration types that are
+  neither locally available UDTs/FBs nor registered Siemens types. They are
+  surfaced as manual-review items; the app never invents a replacement type.
+- Instance DB ownership reported directly by Openness is now checked against
+  the local FB inventory, verified interface state and available block number.
+  Missing, unverified or inconsistent owners remain explicitly unresolved.
+- Section/member paths in the report use the same display labels as the UI
+  (`Input`, `Static`, and so on). No Openness call or TIA write occurs.
+- Commit: `23fe241` (`feat(program): report unresolved block dependencies`).
+- Validation: focused dependency/FB/Instance DB tests **25 passed**; full
+  `pytest -q` **525 passed**; `node --check gui/js/program_dependencies.js`
+  passed. Playwright validation will run in GitHub Actions after push.
+
