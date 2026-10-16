@@ -430,3 +430,13 @@
   TIA exports are available. AI suggestions are local-only and must be
   reviewed by an engineer before any PLC change.
 
+## PLC Code Review from loaded TIA snapshots - 2026-10-16
+
+- The AI Code Review page now includes Analyze loaded TIA blocks. It feeds
+  original XML retained by read-only FB/FC snapshots into the existing local
+  deterministic analysis route, rather than creating a second Openness reader.
+- The action requires locally loaded snapshots with original XML, does not
+  contact TIA Portal again and cannot write to the project. Its browser
+  regression verifies the no-contact snapshot workflow alongside Analyze Files
+  and the optional Ollama review.
+

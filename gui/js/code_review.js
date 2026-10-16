@@ -1,4 +1,5 @@
 import {postJson} from "./api.js";
+import {projectConfig} from "./state.js";
 
 function renderReport(report, results) {
     results.replaceChildren();
@@ -40,7 +41,8 @@ export function initCodeReviewUi() {
     const list = document.getElementById("review-files-list"), results = document.getElementById("review-results");
     const download = document.getElementById("review-download"), ai = document.getElementById("review-ai");
     const model = document.getElementById("review-ollama-model");
-    if (!files || !folder || !run || !status || !list || !results || !download || !ai || !model) return;
+    const tiaRun = document.getElementById("review-tia-analyze"), tiaStatus = document.getElementById("review-tia-status");
+    if (!files || !folder || !run || !status || !list || !results || !download || !ai || !model || !tiaRun || !tiaStatus) return;
     let selected = [], report = null, payload = [];
     const refresh = () => {
         selected = [...files.files, ...folder.files].filter(file => /\.(scl|xml)$/i.test(file.name));
@@ -90,6 +92,34 @@ export function initCodeReviewUi() {
             status.classList.add("error");
         } finally {
             ai.disabled = false;
+        }
+    });
+    tiaRun.addEventListener("click", async () => {
+        const snapshots = [...projectConfig.fbs, ...projectConfig.fcs].filter(block =>
+            block?.source_mode === "tia_read_only" && typeof block.source_xml === "string" && block.source_xml.trim());
+        if (!snapshots.length) {
+            tiaStatus.textContent = "No read-only FB/FC snapshots with original TIA XML are loaded.";
+            tiaStatus.classList.add("error");
+            return;
+        }
+        tiaRun.disabled = true;
+        tiaStatus.classList.remove("error");
+        tiaStatus.textContent = "Analyzing " + snapshots.length + " locally loaded TIA block snapshot(s)…";
+        try {
+            payload = snapshots.map(block => ({
+                name:"TIA snapshot/" + block.name + ".xml", content:block.source_xml,
+            }));
+            report = await postJson("/api/v1/code-review/analyze-files", payload);
+            renderReport(report, results);
+            status.textContent = "Read-only deterministic analysis of loaded TIA snapshots complete.";
+            tiaStatus.textContent = snapshots.length + " loaded TIA snapshot(s) analyzed. TIA Portal was not contacted.";
+            download.disabled = false;
+            ai.disabled = false;
+        } catch (error) {
+            tiaStatus.textContent = "TIA snapshot analysis failed: " + error.message;
+            tiaStatus.classList.add("error");
+        } finally {
+            tiaRun.disabled = false;
         }
     });
     download.addEventListener("click", () => {
