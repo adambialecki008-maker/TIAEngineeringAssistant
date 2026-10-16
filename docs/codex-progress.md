@@ -514,3 +514,10 @@
   warnings alongside the pre-existing diagnostics.
 - Updated Chromium interaction test confirms network tables and generated
   Markdown, with all content added as inert text nodes (no HTML injection).
+
+## FlgNet wire presentation clarification — 2026-10-16
+
+- Wire endpoint display uses an unordered separator, not a directional arrow:
+  Siemens export ordering is not a proven execution/signal-flow direction.
+- Duplicate UId detection now uses a linear-time set pass rather than repeated
+  scanning of all network nodes.

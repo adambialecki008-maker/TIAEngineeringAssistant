@@ -301,17 +301,23 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
         ))
 
     # These are structural *review flags*, not confirmed PLC logic/compile errors.
-    ids = [node.uid for node in network.nodes if node.uid]
-    duplicates = sorted({uid for uid in ids if ids.count(uid) > 1})
+    seen_ids: set[str] = set()
+    duplicates: set[str] = set()
+    for node in network.nodes:
+        if not node.uid:
+            continue
+        if node.uid in seen_ids:
+            duplicates.add(node.uid)
+        seen_ids.add(node.uid)
     if duplicates:
         network.warnings.append(
-            "Duplicate part/access/call UId(s) in exported FlgNet: " + ", ".join(duplicates)
+            "Duplicate part/access/call UId(s) in exported FlgNet: " + ", ".join(sorted(duplicates))
         )
     references = {
         endpoint.uid for wire in network.wires for endpoint in wire.endpoints
         if endpoint.kind in {"NameCon", "IdentCon"} and endpoint.uid
     }
-    missing = sorted(references - set(ids))
+    missing = sorted(references - seen_ids)
     if missing:
         network.warnings.append(
             "Connections reference UId(s) absent from recognized Parts: " + ", ".join(missing)

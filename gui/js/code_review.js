@@ -25,7 +25,7 @@ function reportMarkdown(report) {
                 }
                 for (const wire of network.wires || []) {
                     lines.push("- Wire " + markdownText(wire.uid) + ": "
-                        + (wire.endpoints || []).map(endpointText).map(markdownText).join(" → "));
+                        + (wire.endpoints || []).map(endpointText).map(markdownText).join(" ; "));
                 }
                 for (const warning of network.warnings || []) {
                     lines.push("- Requires TIA verification: " + markdownText(warning));
@@ -110,9 +110,9 @@ function renderNetworkTopology(block, parent) {
             (network.nodes || []).map(node => [
                 node.uid, node.kind, node.name, node.symbol, node.scope,
             ]));
-        appendTable(["Wire UId", "Explicit endpoints"],
+        appendTable(["Wire UId", "Listed endpoints (unordered)"],
             (network.wires || []).map(wire => [
-                wire.uid, (wire.endpoints || []).map(endpointText).join(" → "),
+                wire.uid, (wire.endpoints || []).map(endpointText).join(" ; "),
             ]));
         for (const warning of network.warnings || []) {
             const note = document.createElement("p");
