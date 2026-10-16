@@ -95,11 +95,17 @@ const {openSection} = require("./ui_disclosures.cjs");
                 preview: read('[data-ui-section="preview-import"] > summary'),
                 overviewProfile: read('#overview-profile-management > details > summary'),
                 overviewTia: read('#overview-tia-controls > details > summary'),
+                device: read('[data-tab-panel="devices"] > details.device-section > summary'),
             };
         });
         for (const [name, values] of Object.entries(surfaces)) {
             assert.deepEqual(values, surfaces.udt,
                 name + " collapsed section must match the Application UDTs header");
+        }
+        for (const id of ["plc-tags", "plc-program"]) {
+            const node = page.locator('[data-ui-section="' + id + '"]');
+            assert.equal(await node.locator(".ui-disclosure-body > details.tia-inventory-details").count(),0);
+            assert.equal(await node.locator(".ui-disclosure-body > .single-engineering-item > h4").count(),1);
         }
         // Geometric heights can only be compared while their tab is visible.
         await page.locator('[data-tab="udt"]').click();
@@ -109,7 +115,7 @@ const {openSection} = require("./ui_disclosures.cjs");
         const overviewHeight = await page.locator("#overview-profile-management > details > summary")
             .evaluate(el => Math.round(el.getBoundingClientRect().height));
         assert.equal(overviewHeight, udtHeight, "Visible panel header heights match");
-        assert.equal(udtHeight, 62);
+        assert.equal(udtHeight, 54);
         await page.locator('[data-tab="fb"]').click();
         const editor = page.locator('[data-ui-section="fb-editor"]');
         assert.equal(await editor.evaluate(el => el.open),false);
