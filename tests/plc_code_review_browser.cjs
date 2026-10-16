@@ -6,7 +6,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     const browser = await chromium.launch({headless:true, executablePath:process.env.CHROME_PATH});
     try {
         const page = await browser.newPage();
-        await page.route("**/api/v1/code-review/analyze-files", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[{source_file:"FB.scl",name:"FB_Test",block_type:"FUNCTION_BLOCK",language:"SCL",declarations:[],networks:["network 1"],network_details:[{number:1,language:"LAD",nodes:[{uid:"23",kind:"Part",name:"Contact",symbol:"",scope:""}],wires:[{uid:"27",endpoints:[{kind:"NameCon",uid:"23",port:"out"},{kind:"OpenCon",uid:"",port:""}]}],warnings:[],verification_status:"topology only — not logic-verified"}],dependencies:[],parsing_warnings:[],verification_status:"parsed"}],findings:[],file_warnings:[],read_only:true})}));
+        await page.route("**/api/v1/code-review/analyze-files", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[{source_file:"FB.scl",name:"FB_Test",block_type:"FUNCTION_BLOCK",language:"SCL",declarations:[],networks:["network 1"],network_details:[{number:1,language:"LAD",nodes:[{uid:"23",kind:"Part",name:"Contact",symbol:"",scope:""}],wires:[{uid:"27",endpoints:[{kind:"NameCon",uid:"23",port:"out"},{kind:"OpenCon",uid:"",port:""}]}],warnings:[],verification_status:"topology only — not logic-verified"}],calls:[{target:"FC_Calc",location:"line 10",language:"SCL",source:"SCL",instance:"",resolution:"loaded block"}],dependencies:[],parsing_warnings:[],verification_status:"parsed"}],findings:[],file_warnings:[],read_only:true})}));
         await page.route("**/api/v1/code-review/ollama", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[],findings:[{source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",severity:"warning",category:"Style",explanation:"Review suggestion.",suggested_fix:"",evidence:"",detection_method:"AI",verification_status:"AI suggestion — unverified",confidence:0.4}],file_warnings:[],read_only:true})}));
         await page.addInitScript(() => localStorage.setItem("tiaEngineeringAssistant.projectConfig", JSON.stringify({
             plc_family:"", udts:[], dbs:[], fcs:[], instance_dbs:[], device_config:{templates:[],groups:[],mappings:[],mapping_mode:"device"}, tia_target:null,
@@ -25,12 +25,15 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         assert.equal(await topology.count(), 1);
         assert.match(await topology.innerText(), /Network 1/);
         assert.match(await topology.innerText(), /Contact/);
+        assert.match(await page.locator("#review-results .review-block-calls").innerText(), /FC_Calc/);
         assert.match(await topology.innerText(), /NameCon 23.out ; OpenCon/);
         const markdownTopology = page.waitForEvent("download");
         await page.locator("#review-download-markdown").click();
         const topologyDownload = await markdownTopology;
         const topologyText = require("node:fs").readFileSync(await topologyDownload.path(), "utf-8");
         assert.match(topologyText, /LAD\/FBD network topology/);
+        assert.match(topologyText, /Observed FB\/FC calls/);
+        assert.match(topologyText, /FC_Calc/);
         assert.match(topologyText, /Wire 27: NameCon 23\.out ; OpenCon/);
         await page.locator("#review-ai").click();
         await page.waitForSelector("text=AI review complete");

@@ -34,6 +34,21 @@ function reportMarkdown(report) {
             }
         }
     }
+    const callBlocks = report.files.filter(block => (block.calls || []).length);
+    if (callBlocks.length) {
+        lines.push("", "## Observed FB/FC calls (read-only)", "");
+        for (const block of callBlocks) {
+            lines.push("### " + markdownText(block.name) + " — " + markdownText(block.source_file), "");
+            lines.push("| Location | Source | Target | Via instance | Resolution |",
+                "| --- | --- | --- | --- | --- |");
+            for (const call of block.calls) {
+                lines.push("| " + [
+                    call.location, call.source, call.target, call.instance || "—", call.resolution,
+                ].map(markdownText).join(" | ") + " |");
+            }
+            lines.push("");
+        }
+    }
     lines.push("", "## Findings", "");
     if (!report.findings.length) lines.push("No findings reported.");
     for (const finding of report.findings) {
@@ -124,6 +139,38 @@ function renderNetworkTopology(block, parent) {
     }
 }
 
+function renderBlockCalls(block, parent) {
+    if (!(block.calls || []).length) return;
+    const heading = document.createElement("h4");
+    heading.textContent = "Observed FB/FC calls (read-only)";
+    parent.appendChild(heading);
+    const wrapper = document.createElement("div");
+    wrapper.className = "table-wrapper";
+    const table = document.createElement("table");
+    table.className = "management-table review-block-calls";
+    const header = document.createElement("tr");
+    for (const label of ["Location", "Source", "Target", "Via instance", "Resolution"]) {
+        const th = document.createElement("th");
+        th.textContent = label;
+        header.appendChild(th);
+    }
+    const thead = document.createElement("thead");
+    thead.appendChild(header);
+    const tbody = document.createElement("tbody");
+    for (const call of block.calls) {
+        const tr = document.createElement("tr");
+        for (const value of [call.location, call.source, call.target, call.instance || "—", call.resolution]) {
+            const td = document.createElement("td");
+            td.textContent = String(value ?? "");
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+    }
+    table.append(thead, tbody);
+    wrapper.appendChild(table);
+    parent.appendChild(wrapper);
+}
+
 function renderReport(report, results) {
     results.replaceChildren();
     const summary = document.createElement("p");
@@ -140,6 +187,7 @@ function renderReport(report, results) {
         body.textContent = JSON.stringify({declarations:block.declarations, dependencies:block.dependencies, networks:block.networks, warnings:block.parsing_warnings, verification:block.verification_status}, null, 2);
         details.append(title, body);
         renderNetworkTopology(block, details);
+        renderBlockCalls(block, details);
         results.appendChild(details);
     }
     for (const finding of report.findings) {

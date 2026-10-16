@@ -536,3 +536,19 @@
 - Added read-only regression tests for fake declarations in comments, quoted
   symbols, nested comments, and oversized single-line AI input.
 - No Siemens Openness write, HMI translation, or PLC project modifications.
+
+## Offline FB/FC observed call graph — 2026-10-16
+
+- Added conservative read-only FB/FC call observations for SCL execution
+  statements (after BEGIN) and explicit FlgNet CallInfo references.
+- SCL resolves locally declared Static FB instances and named FC calls against
+  the blocks actually uploaded; unloaded functions are marked "requires
+  project context", not a compile error.
+- Observed calls retain source, line/network, instance and resolution status
+  and are shown in the AI Code Review GUI and Markdown exports.
+- Skips comment-only calls, interface declarations, and instruction/library
+  names not verified to represent user FB/FC blocks. No inference of LAD/FBD
+  signal direction or machine behavior; no TIA write.
+- Python regression covers two resolved SCL calls, partial uploads,
+  observed FlgNet CallInfo, and declaration-only sources. Browser assertions
+  cover the read-only call table and Markdown export.

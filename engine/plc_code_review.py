@@ -51,6 +51,7 @@ class ReviewNetworkNode(BaseModel):
     name: str = ""
     scope: str = ""
     symbol: str = ""
+    call_block_type: str = ""
 
 
 class ReviewNetworkEndpoint(BaseModel):
@@ -73,6 +74,15 @@ class ReviewLogicNetwork(BaseModel):
     verification_status: str = "topology only — not logic-verified"
 
 
+class ReviewCall(BaseModel):
+    target: str
+    location: str
+    source: Literal["SCL", "FlgNet"]
+    language: str
+    instance: str = ""
+    resolution: Literal["loaded block", "requires project context"] = "requires project context"
+
+
 class ReviewBlock(BaseModel):
     source_file: str
     name: str
@@ -81,6 +91,7 @@ class ReviewBlock(BaseModel):
     declarations: list[ReviewDeclaration] = Field(default_factory=list)
     networks: list[str] = Field(default_factory=list)
     network_details: list[ReviewLogicNetwork] = Field(default_factory=list)
+    calls: list[ReviewCall] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
     parsing_warnings: list[str] = Field(default_factory=list)
     verification_status: str = "partial"
@@ -331,6 +342,7 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
                     if xml_local_name(component.tag).casefold() == "component"
                 ]
                 symbol = ".".join(name for name in components if name)
+        call_block_type = ""
         if kind == "Call":
             call_info = next(
                 (child for child in node if xml_local_name(child.tag).casefold() == "callinfo"),
@@ -338,8 +350,10 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
             )
             if call_info is not None:
                 name = xml_attribute(call_info, "Name") or name
+                call_block_type = xml_attribute(call_info, "BlockType")
         network.nodes.append(ReviewNetworkNode(
             uid=uid, kind=kind, name=name, scope=scope, symbol=symbol,
+            call_block_type=call_block_type,
         ))
 
     for wire in wires:
@@ -579,8 +593,88 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
                 block.dependencies.append(data_type)
         block.dependencies = sorted(set(block.dependencies), key=str.casefold)
     _add_multi_instance_cycle_findings(report)
+    _observed_calls(report, files)
     _network_diagnostics(report)
     return report
+
+
+_SCL_CALL = re.compile(
+    r"^\s*(?:(?:#?" + _IDENTIFIER + r")\s*:=\s*)?(#?" + _IDENTIFIER + r")\s*\(",
+    re.I,
+)
+
+
+def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[ReviewCall]:
+    """Observe statement-start calls after BEGIN; never scan interface/comments."""
+    if block.block_type not in {"FUNCTION_BLOCK", "FUNCTION", "ORGANIZATION_BLOCK"}:
+        return []
+    static = {
+        member.name.casefold(): _type_reference(member.data_type)
+        for member in block.declarations if member.section.casefold() == "static"
+        and "." not in member.name
+    }
+    body = False
+    calls: list[ReviewCall] = []
+    for line_number, line in enumerate(_scl_without_comments(file.content)[0], 1):
+        token = line.strip().upper().split(None, 1)[0] if line.strip() else ""
+        if token == "BEGIN":
+            body = True
+            continue
+        if token in {"END_FUNCTION_BLOCK", "END_FUNCTION", "END_ORGANIZATION_BLOCK"}:
+            body = False
+        if not body:
+            continue
+        match = _SCL_CALL.match(line)
+        if not match:
+            continue
+        raw = _identifier(match.group(1).lstrip("#"))
+        declared_type = static.get(raw.casefold())
+        target = declared_type or raw
+        if not target or type_entry(target):
+            continue
+        # Other calls may be instructions, standard library methods, or
+        # expressions that the lightweight scanner cannot authenticate.
+        if declared_type is None and not target.casefold().startswith(("fc_", "fb_")):
+            continue
+        calls.append(ReviewCall(
+            target=target, location=f"line {line_number}", source="SCL",
+            language="SCL", instance=raw if declared_type else "",
+        ))
+    return calls
+
+
+def _observed_calls(report: ReviewReport, sources: list[ReviewInputFile]) -> None:
+    """Resolve against only files supplied in this analysis, never invent links."""
+    loaded: dict[str, ReviewBlock] = {}
+    for block in report.files:
+        if block.block_type in {"FB", "FC", "FUNCTION_BLOCK", "FUNCTION"}:
+            loaded.setdefault(block.name.casefold(), block)
+    by_filename = {source.name: source for source in sources}
+    for block in report.files:
+        source = by_filename.get(block.source_file)
+        if block.language == "SCL" and source and _suffix(source.name) == ".scl":
+            block.calls.extend(_scl_observed_calls(source, block))
+        for network in block.network_details:
+            for node in network.nodes:
+                if node.kind != "Call" or not node.name:
+                    continue
+                if node.call_block_type.upper() not in {"FB", "FC"} and node.name.casefold() not in loaded:
+                    # Skip system/instruction calls without a confirmed
+                    # exported FB/FC designation or a loaded block definition.
+                    continue
+                if type_entry(node.name):
+                    continue
+                block.calls.append(ReviewCall(
+                    target=node.name, location=f"network {network.number}",
+                    source="FlgNet", language=network.language or block.language,
+                ))
+        for call in block.calls:
+            target = loaded.get(call.target.casefold())
+            if target is not None:
+                call.target = target.name
+                call.resolution = "loaded block"
+                block.dependencies.append(target.name)
+        block.dependencies = sorted(set(block.dependencies), key=str.casefold)
 
 
 def _add_multi_instance_cycle_findings(report: ReviewReport) -> None:

@@ -339,3 +339,64 @@ def test_scl_comment_after_block_header_does_not_hide_second_real_block():
     assert report.files[0].name == "FB_First"
     assert report.files[0].verification_status == "partial"
     assert any("Several SCL block headers" in warning for warning in report.files[0].parsing_warnings)
+
+
+def test_scl_fb_instance_and_fc_calls_resolve_only_loaded_blocks():
+    report = analyze_files([
+        ReviewInputFile(name="run.scl", content=(
+            'FUNCTION_BLOCK "FB_Run"\nVAR_STATIC\n Motor : "FB_Motor";\nEND_VAR\n'
+            'VAR_INPUT\n Value : Int;\nEND_VAR\n'
+            'BEGIN\n#Motor(IN := TRUE);\n#Value := "FC_Scale"(X := 3);\n'
+            '// "FC_Ghost"();\n#Motor := 1;\nEND_FUNCTION_BLOCK'
+        )),
+        ReviewInputFile(name="motor.scl", content='FUNCTION_BLOCK "FB_Motor"\nEND_FUNCTION_BLOCK'),
+        ReviewInputFile(name="scale.scl", content='FUNCTION "FC_Scale" : Int\nEND_FUNCTION'),
+    ])
+    calls = report.files[0].calls
+    assert [(c.target, c.location, c.instance, c.resolution) for c in calls] == [
+        ("FB_Motor", "line 9", "Motor", "loaded block"),
+        ("FC_Scale", "line 10", "", "loaded block"),
+    ]
+    assert {"FB_Motor", "FC_Scale"} <= set(report.files[0].dependencies)
+    assert not any(c.target == "FC_Ghost" for c in calls)
+
+
+def test_scl_unloaded_function_call_is_context_not_false_error():
+    report = analyze_files([ReviewInputFile(name="run.scl", content=(
+        'FUNCTION_BLOCK FB_Run\nBEGIN\n"FC_External"(Value := 1);\n'
+        'ABS(-7);\nEND_FUNCTION_BLOCK'
+    ))])
+    assert len(report.files[0].calls) == 1
+    assert report.files[0].calls[0].target == "FC_External"
+    assert report.files[0].calls[0].resolution == "requires project context"
+    assert report.findings == []
+
+
+def test_flgnet_explicit_callinfo_resolves_only_loaded_fb_fc():
+    flgnet = (
+        '<Document><SW.Blocks.FB><AttributeList><Name>FB_Master</Name></AttributeList>'
+        '<ObjectList><SW.Blocks.CompileUnit><NetworkSource>'
+        '<FlgNet><Parts><Call UId="1"><CallInfo Name="FC_Compute" BlockType="FC"/></Call>'
+        '<Call UId="2"><CallInfo Name="FB_Remote" BlockType="FB"/></Call></Parts>'
+        '<Wires/></FlgNet></NetworkSource></SW.Blocks.CompileUnit></ObjectList>'
+        '</SW.Blocks.FB></Document>'
+    )
+    report = analyze_files([
+        ReviewInputFile(name="master.xml", content=flgnet),
+        ReviewInputFile(name="compute.scl", content="FUNCTION FC_Compute : Int\nEND_FUNCTION"),
+    ])
+    calls = report.files[0].calls
+    assert [(c.target, c.location, c.source, c.resolution) for c in calls] == [
+        ("FC_Compute", "network 1", "FlgNet", "loaded block"),
+        ("FB_Remote", "network 1", "FlgNet", "requires project context"),
+    ]
+    assert "FC_Compute" in report.files[0].dependencies
+    assert not report.findings
+
+
+def test_declaration_only_scl_does_not_produce_call_edges():
+    report = analyze_files([ReviewInputFile(name="iface.scl", content=(
+        'FUNCTION_BLOCK FB_Interface\nVAR_STATIC\n'
+        ' FB_Remote : FB_External;\nEND_VAR\nEND_FUNCTION_BLOCK'
+    ))])
+    assert report.files[0].calls == []
