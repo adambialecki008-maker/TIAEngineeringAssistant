@@ -1,3 +1,4 @@
+const {openSection} = require("./ui_disclosures.cjs");
 "use strict";
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
@@ -86,6 +87,7 @@ const item = (pathName, data_type, remanence = undefined) => ({
         });
         page.on("dialog", dialog => dialog.accept());
         await page.locator('[data-tab="db"]').click();
+        await openSection(page, "db-import");
         await page.locator("#tia-db-scan").click();
         await page.waitForFunction(() => document.querySelectorAll(
             "#tia-db-select option").length === 4);

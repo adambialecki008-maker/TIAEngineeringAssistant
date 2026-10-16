@@ -1,3 +1,4 @@
+const {openSection} = require("./ui_disclosures.cjs");
 // Integration smoke: actual Chromium GUI, fake read-only TIA inventory,
 // real local FastAPI UDT model validation, and NO TIA write endpoints.
 const assert=require("node:assert/strict");
@@ -107,6 +108,7 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
     saveProjectConfig();
   });
   await page.locator('[data-tab="udt"]').click();
+  await openSection(page, "udt-import");
   await page.locator("#tia-udt-scan").click();
   await page.locator("#tia-udt-load:not([disabled])").waitFor();
   await page.locator("#tia-udt-load").click();

@@ -1,3 +1,4 @@
+const {openSection} = require("./ui_disclosures.cjs");
 "use strict";
 const assert = require("node:assert/strict");
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
@@ -25,6 +26,8 @@ const key = "tiaEngineeringAssistant.projectConfig";
         }, key);
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
         await page.locator('[data-tab="fb"]').click();
+        await openSection(page, "fb-editor");
+        await openSection(page, "fc-editor");
 
         const make = async (kind, name, number, language) => {
             await page.locator("#new-" + kind + "-name").fill(name);

@@ -1,3 +1,4 @@
+const {openSection} = require("./ui_disclosures.cjs");
 "use strict";
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
@@ -67,6 +68,7 @@ const artifacts = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwrig
             process.value = "3544";
         });
         await page.locator('[data-tab="preview"]').click();
+        await openSection(page, "preview-import");
         await page.locator("#source-import-plan-button").click();
         const report = page.locator("#source-import-report");
         await report.waitFor({state:"visible"});

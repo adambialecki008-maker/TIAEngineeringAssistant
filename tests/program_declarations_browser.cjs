@@ -1,3 +1,4 @@
+const {openSection} = require("./ui_disclosures.cjs");
 "use strict";
 const assert = require("node:assert/strict");
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
@@ -44,6 +45,7 @@ const FC = {
         }, {key, FB, FC});
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
         await page.locator('[data-tab="fb"]').click();
+        await openSection(page, "fb-editor");
 
         const fb = page.locator("#fb-container .program-block-card").first();
         assert.match(await fb.locator(".program-block-header").innerText(), /FB_Test.*FB.*LAD/s);
@@ -94,6 +96,7 @@ const FC = {
             /Local declaration drafts are editable/);
         assert.equal(await fb.locator(".program-state-draft").count(), 1);
 
+        await openSection(page, "fc-editor");
         const fc = page.locator("#fc-container .program-block-card").first();
         assert.match(await fc.locator(".program-block-header").innerText(), /FC_Test.*FC.*FBD/s);
         assert.equal(await fc.locator(".program-declaration-section").count(), 5);

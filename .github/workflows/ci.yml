@@ -188,6 +188,9 @@ jobs:
       - name: Run I/O template and TIA UDT import browser regression
         run: node tests/io_udt_browser.cjs
 
+      - name: Verify collapsible engineering sections and unified heading typography
+        run: node tests/engineering_sections_browser.cjs
+
       - name: Verify compact FB FC declarations and LAD display
         run: node tests/program_declarations_browser.cjs
 
