@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from engine.tia.ollama_translation import _ollama_json, resolve_ollama_model
 from engine.tia.type_registry import is_builtin_type, type_entry
 from engine.tia.xml_parser import xml_attribute, xml_local_name
+from engine.scl_nested_calls import scan_scl_call_sites
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_AI_CHUNK_CHARS = 6000
@@ -88,6 +89,8 @@ class ReviewCall(BaseModel):
     source: Literal["SCL", "FlgNet"]
     language: str
     instance: str = ""
+    nesting_depth: int = 0
+    parent_target: str = ""
     arguments: list[ReviewCallArgument] = Field(default_factory=list)
     arguments_complete: bool = False
     resolution: Literal["loaded block", "requires project context"] = "requires project context"
@@ -761,8 +764,16 @@ def _scl_call_arguments(
     return arguments, True
 
 
-def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[ReviewCall]:
-    """Observe statement-start calls after BEGIN; never scan interface/comments."""
+def _scl_observed_calls(
+    file: ReviewInputFile, block: ReviewBlock,
+    loaded_names: set[str] | None = None,
+) -> list[ReviewCall]:
+    """Observe calls in nested expressions, conditions and assignments.
+
+    Only declared Static FB instances, loaded FB/FC names or explicit
+    FB_/FC_ names are considered user block calls. Instruction/library
+    expressions are never promoted to user FB/FC without evidence.
+    """
     if block.block_type not in {"FUNCTION_BLOCK", "FUNCTION", "ORGANIZATION_BLOCK"}:
         return []
     static = {
@@ -770,40 +781,36 @@ def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[Revie
         for member in block.declarations if member.section.casefold() == "static"
         and "." not in member.name
     }
-    body = False
-    calls: list[ReviewCall] = []
     lines = _scl_without_comments(file.content)[0]
     local_types = _caller_local_types(block)
-    for line_number, line in enumerate(lines, 1):
-        token = line.strip().upper().split(None, 1)[0] if line.strip() else ""
-        if token == "BEGIN":
-            body = True
-            continue
-        if token in {"END_FUNCTION_BLOCK", "END_FUNCTION", "END_ORGANIZATION_BLOCK"}:
-            body = False
-        if not body:
-            continue
-        match = _SCL_CALL.match(line)
-        if not match:
-            continue
-        raw = _identifier(match.group(1).lstrip("#"))
+    known = loaded_names or set()
+    observations: list[tuple[int, int | None, ReviewCall]] = []
+    for site in scan_scl_call_sites(lines):
+        raw = site.name
         declared_type = static.get(raw.casefold())
         target = declared_type or raw
         if not target or type_entry(target):
             continue
-        # Other calls may be instructions, standard library methods, or
-        # expressions that the lightweight scanner cannot authenticate.
-        if declared_type is None and not target.casefold().startswith(("fc_", "fb_")):
+        if not declared_type and target.casefold() not in known and not target.casefold().startswith(("fc_", "fb_")):
             continue
-        arguments, complete = _scl_call_arguments(
-            lines, line_number - 1, match.end(), local_types,
+        args, complete = _scl_call_arguments(
+            lines, site.line - 1, site.after_open, local_types,
         )
-        calls.append(ReviewCall(
-            target=target, location=f"line {line_number}", source="SCL",
+        enclosing = [
+            previous for begin, finish, previous in observations
+            if begin < site.begin and (finish is None or site.begin < finish)
+        ]
+        parent = enclosing[-1] if enclosing else None
+        call = ReviewCall(
+            target=target, location=f"line {site.line}", source="SCL",
             language="SCL", instance=raw if declared_type else "",
-            arguments=arguments, arguments_complete=complete,
-        ))
-    return calls
+            arguments=args, arguments_complete=complete,
+            nesting_depth=len(enclosing),
+            parent_target=parent.target if parent else "",
+        )
+        observations.append((site.begin, site.finish, call))
+    return [call for _, _, call in observations]
+
 
 def _observed_calls(report: ReviewReport, sources: list[ReviewInputFile]) -> None:
     """Resolve against only files supplied in this analysis, never invent links."""
@@ -815,7 +822,7 @@ def _observed_calls(report: ReviewReport, sources: list[ReviewInputFile]) -> Non
     for block in report.files:
         source = by_filename.get(block.source_file)
         if block.language == "SCL" and source and _suffix(source.name) == ".scl":
-            block.calls.extend(_scl_observed_calls(source, block))
+            block.calls.extend(_scl_observed_calls(source, block, set(loaded)))
         for network in block.network_details:
             for node in network.nodes:
                 if node.kind != "Call" or not node.name:

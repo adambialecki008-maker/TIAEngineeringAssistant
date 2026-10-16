@@ -660,3 +660,97 @@ def test_nested_temp_and_complex_expression_do_not_claim_read_before_write():
         "#Result := FUNC(#T);\n#T := 1;\nEND_FUNCTION_BLOCK"
     ))])
     assert not any(f.category == "SCL temporary read before assignment" for f in report.findings)
+
+
+
+def test_scl_nested_calls_in_named_arguments_conditions_and_assignments():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION_BLOCK FB_Main\nBEGIN\n"
+            "IF FC_Ready(Value := FC_Inner(Flag := INT#3)) THEN\n"
+            "#Out := FC_Outer(Number := FC_Scale(Input := INT#4));\n"
+            "END_IF;\nEND_FUNCTION_BLOCK"
+        )),
+        ReviewInputFile(name="ready.scl", content=(
+            "FUNCTION FC_Ready : Bool\nVAR_INPUT\n Value : Bool;\nEND_VAR\nEND_FUNCTION"
+        )),
+        ReviewInputFile(name="inner.scl", content=(
+            "FUNCTION FC_Inner : Bool\nVAR_INPUT\n Flag : Bool;\nEND_VAR\nEND_FUNCTION"
+        )),
+        ReviewInputFile(name="outer.scl", content=(
+            "FUNCTION FC_Outer : Int\nVAR_INPUT\n Number : Int;\nEND_VAR\nEND_FUNCTION"
+        )),
+        ReviewInputFile(name="scale.scl", content=(
+            "FUNCTION FC_Scale : Int\nVAR_INPUT\n Input : Int;\nEND_VAR\nEND_FUNCTION"
+        )),
+    ])
+    calls = report.files[0].calls
+    assert [(c.target, c.location, c.nesting_depth, c.parent_target) for c in calls] == [
+        ("FC_Ready", "line 3", 0, ""),
+        ("FC_Inner", "line 3", 1, "FC_Ready"),
+        ("FC_Outer", "line 4", 0, ""),
+        ("FC_Scale", "line 4", 1, "FC_Outer"),
+    ]
+    assert all(c.resolution == "loaded block" and c.arguments_complete for c in calls)
+    assert {"FC_Ready", "FC_Inner", "FC_Outer", "FC_Scale"} <= set(report.files[0].dependencies)
+    mismatch = [finding for finding in report.findings if finding.category == "Call parameter type mismatch"]
+    assert len(mismatch) == 1
+    assert mismatch[0].evidence == "FC_Inner(Flag := ...)"
+    assert mismatch[0].location == "line 3"
+
+
+def test_scl_nested_calls_unprefixed_loaded_blocks_and_multiple_on_line():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION FC_Runner : Int\nBEGIN\n"
+            "#Value := Calc(A := FC_A(B := 1)) + Other(Value := 2);\n"
+            "END_FUNCTION"
+        )),
+        ReviewInputFile(name="calc.scl", content="FUNCTION Calc : Int\nVAR_INPUT\n A : Int;\nEND_VAR\nEND_FUNCTION"),
+        ReviewInputFile(name="a.scl", content="FUNCTION FC_A : Int\nVAR_INPUT\n B : Int;\nEND_VAR\nEND_FUNCTION"),
+        ReviewInputFile(name="other.scl", content="FUNCTION Other : Int\nVAR_INPUT\n Value : Int;\nEND_VAR\nEND_FUNCTION"),
+    ])
+    assert [(c.target, c.nesting_depth, c.parent_target) for c in report.files[0].calls] == [
+        ("Calc", 0, ""), ("FC_A", 1, "Calc"), ("Other", 0, ""),
+    ]
+    assert not report.findings
+
+
+def test_scl_nested_comment_strings_builtin_and_method_like_calls_ignored():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION FC_Runner : Int\nVAR_STATIC\n Inst : FB_Motor;\nEND_VAR\nBEGIN\n"
+            "// FC_Ghost(ShouldIgnore := FC_GhostNested());\n"
+            "#Inst(Start := TRUE, Speed := ABS(-5));\n"
+            "#Value := 'FC_Ghost(Flag := FALSE)';\n"
+            "#Obj.Method(Flag := TRUE);\n"
+            "#Value := FC_Next(Ready := TRUE); FC_Last();\n"
+            "END_FUNCTION"
+        )),
+        ReviewInputFile(name="motor.scl", content="FUNCTION_BLOCK FB_Motor\nEND_FUNCTION_BLOCK"),
+    ])
+    calls = report.files[0].calls
+    assert [x.target for x in calls] == ["FB_Motor", "FC_Next", "FC_Last"]
+    assert all(x.nesting_depth == 0 for x in calls)
+    assert all(x.target != "ABS" for x in calls)
+
+
+def test_scl_multiline_nested_call_and_partial_balancing_do_not_fake_findings():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION FC_Main : Int\nBEGIN\n"
+            "FC_Outer(\n  Value := FC_Inner(\n    Flag := INT#5\n  )\n);\n"
+            "FC_Broken(Flag := FC_Inner(Flag := FALSE);\nEND_FUNCTION"
+        )),
+        ReviewInputFile(name="outer.scl", content="FUNCTION FC_Outer : Int\nVAR_INPUT\n Value : Bool;\nEND_VAR\nEND_FUNCTION"),
+        ReviewInputFile(name="inner.scl", content="FUNCTION FC_Inner : Bool\nVAR_INPUT\n Flag : Bool;\nEND_VAR\nEND_FUNCTION"),
+    ])
+    calls = report.files[0].calls
+    assert [c.target for c in calls] == ["FC_Outer", "FC_Inner", "FC_Broken", "FC_Inner"]
+    assert calls[0].arguments_complete is True and calls[0].nesting_depth == 0
+    assert calls[1].arguments_complete is True and calls[1].nesting_depth == 1
+    assert calls[2].arguments_complete is False and calls[2].nesting_depth == 0
+    assert calls[3].arguments_complete is True and calls[3].nesting_depth == 1
+    mismatch = [f for f in report.findings if f.category == "Call parameter type mismatch"]
+    assert len(mismatch) == 1
+    assert mismatch[0].evidence == "FC_Inner(Flag := ...)"

@@ -598,3 +598,20 @@
 - Regression tests cover comments, text literals, IF/call safeguards,
   initialization order, self-reference and incomplete blocks.
 - Analysis stays offline and read-only; no edits to original PLC data.
+
+## Point 2: SCL nested call-site scanner — 2026-10-16
+
+- Added a bounded lexical scanner that detects named user FB/FC calls within
+  IF expressions, assignments, nested call arguments and several expressions
+  per source line, not just at the beginning of a statement.
+- Observed SCL calls now preserve parent call and nesting depth; the same
+  loaded-interface name/direction/type checks apply to nested call bindings.
+- Conservative identification only: known loaded FC/FB names, explicitly named
+  FC_/FB_ calls or declared Static FB instances. System instructions, strings,
+  comments and dotted method expressions are never treated as user calls.
+- Multiline and malformed calls retain explicit incomplete argument status;
+  uncertain input does not trigger a guessed parameter mismatch.
+- Added regression cases for nested calls, multiple calls, unprefixed known
+  functions, quoted/commented text and incomplete syntax, plus GUI/Markdown
+  nesting assertions.
+- Still read-only. No compile claims or automatic source modifications.
