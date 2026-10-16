@@ -5,6 +5,7 @@ from engine.function_block import FunctionBlockSpecification
 from engine.project import ProjectSpecification
 from engine.instance_db import InstanceDbSpecification, instance_db_preview
 from functions.tia_source_generator import generate_fb_source
+from functions.tia_source_generator import generate_project_source
 
 
 def test_function_block_has_independent_sections_and_serializes():
@@ -38,3 +39,8 @@ def test_fb_source_emits_safe_declaration_sections():
     fb = FunctionBlockSpecification.model_validate({"name":"FB_Motor", "input":{"name":"Input","members":[{"name":"Enable","data_type":"Bool"}]}, "static":{"name":"Static","members":[{"name":"State","data_type":"Int"}]}})
     source = generate_fb_source(fb.name, fb, {})
     assert "VAR_INPUT" in source and "Enable : Bool;" in source and "VAR" in source
+
+
+def test_project_source_includes_safe_function_blocks():
+    project = ProjectSpecification.model_validate({"fbs":[{"name":"FB_Run", "input":{"name":"Input","members":[{"name":"Enable","data_type":"Bool"}]}}]})
+    assert 'FUNCTION_BLOCK "FB_Run"' in generate_project_source(project)

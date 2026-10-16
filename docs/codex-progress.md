@@ -39,3 +39,10 @@
 - Validation: `pytest -q tests/test_function_block.py tests/test_scl_bundle_export.py` — 11 passed.
 - Commit: pending.
 - Remaining: extend offline source ZIP and preflight dependency reporting for FBs.
+
+## FB project source integration
+
+- Safe FB declarations now participate in the offline project source preview.
+- Validation: `pytest -q tests/test_function_block.py tests/test_udt_db_without_plc_family.py` — 11 passed.
+- Commit: pending.
+- Remaining: ZIP manifest and preflight dependency reporting for FBs; real TIA import remains intentionally unsupported.

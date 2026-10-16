@@ -33,6 +33,9 @@ def generate_project_source(
             )
         )
 
+    for fb in project.fbs:
+        sections.append(generate_fb_source(fb.name, fb, udt_names))
+
     return "\n\n".join(sections)
 
 
