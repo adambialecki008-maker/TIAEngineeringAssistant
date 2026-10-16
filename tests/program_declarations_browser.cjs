@@ -70,7 +70,6 @@ const FC = {
         assert.doesNotMatch(await fb.locator(".program-block-header").innerText(), /KOP/);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Legacy.*Unverified/);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Local draft/);
-        assert.match(await fb.innerText(), /Multi-instance: Nested\.Motor → FB_Dependency/);
         assert.equal(await fb.locator(".program-declaration-section").count(), 6);
         assert.equal(await fb.locator(".program-declarations").count(), 1);
         const input = fb.locator(".program-declaration-section").first();
@@ -113,6 +112,8 @@ const FC = {
         await fb.locator(".program-meta-details > summary").click();
         assert.match(await fb.locator(".program-meta-details").innerText(),
             /Local declaration drafts are editable/);
+        assert.match(await fb.locator(".program-meta-details").innerText(),
+            /Multi-instance: Nested\.Motor → FB_Dependency/);
         assert.equal(await fb.locator(".program-state-draft").count(), 1);
 
         await openSection(page, "fc-editor");
