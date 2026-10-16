@@ -1,3 +1,21 @@
+## Native IEC read-only XML projections and full CI (2026-10-16)
+
+- The FB import converter now treats actual XML children beneath native Siemens
+  timer/counter instances as a typed read-only `system_preview`. The parent
+  stays a single native declaration; no synthetic fields, Structs or UDTs are
+  generated. Missing internal XML children remain explicitly unavailable.
+- Native fields appear under the existing member chevron as a read-only table,
+  including exported data type, path, start value and comment when available.
+  Changes to a parent type/name discard its old source-derived projection.
+- Regression includes a fixture with `TON_TIME` and exported
+  `PT/ET/IN/Q` rows, a browser import-conversion test and an assertion that
+  the editable declaration count stays one.
+- Verified on GitHub Actions run 38864775882 for commit `85d4e4de`:
+  **510 Python passed**, JavaScript syntax **PASS**, Playwright **PASS**.
+- Still requiring a Windows TIA Portal V21 smoke test: .NET adapter build,
+  native instance export variations and direct Instance DB owner metadata.
+  No running TIA project was modified.
+
 ## Direct GitHub improvements — FB/FC UX and offline dependencies (2026-10-16)
 
 - Condensed FB/FC declarations into one sectioned engineering view with stable
