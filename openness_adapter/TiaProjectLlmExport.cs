@@ -264,8 +264,14 @@ namespace TiaOpennessAdapter
                 "TagFolder", "TagTableFolder", "TagTables", "TextLists",
                 "Connections", "ConnectionFolder", "Scripts", "ScriptFolder",
                 "GlobalScripts", "Alarms", "AlarmClasses", "Recipes",
-                "GraphicLists", "HmiTextLists", "ScreensGroup"
+                "HmiTextLists", "ScreensGroup"
             };
+            // Classic V21 GraphicLists are presentation assets and have
+            // destabilized an attached Portal while exporting. Do not even
+            // request the collection; PLC review needs no graphic payload.
+            report.Unsupported("HMI_GRAPHIC_LIST_EXCLUDED",
+                owner + "/GraphicLists",
+                "Graphic lists are excluded from LLM export for Openness safety");
             var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
             bool foundRoot = false;
             foreach (string root in roots)
@@ -285,7 +291,7 @@ namespace TiaOpennessAdapter
             "Groups", "Screens", "ScreenTemplates", "PopupScreens",
             "TagTables", "Tags", "TextLists", "Connections", "Scripts",
             "GlobalScripts", "Functions", "Items", "Alarms", "Recipes",
-            "GraphicLists", "Folders", "ScreenFolders", "TagsGroup"
+            "Folders", "ScreenFolders", "TagsGroup"
         };
 
         private static void ExportReflectiveTree(
@@ -295,6 +301,12 @@ namespace TiaOpennessAdapter
             if (value == null) return;
             if (depth > 20) { report.Failure("HMI_DEPTH", description, "Depth limit"); return; }
             if (value is string) return;
+            if (IsExcludedGraphicList(value))
+            {
+                report.Unsupported("HMI_GRAPHIC_LIST_EXCLUDED", description,
+                    "Graphic list excluded from LLM export for Openness safety");
+                return;
+            }
             if (value is IEnumerable enumerable)
             {
                 int index = 0;
@@ -397,6 +409,13 @@ namespace TiaOpennessAdapter
             public void Failure(string kind, string name, string reason)
             {
                 Failed++;
+                missing.WriteLine(string.Join("\t", new[] {
+                    Field(kind), Field(name), Field(reason)
+                }));
+            }
+
+            public void Unsupported(string kind, string name, string reason)
+            {
                 missing.WriteLine(string.Join("\t", new[] {
                     Field(kind), Field(name), Field(reason)
                 }));
@@ -525,12 +544,6 @@ namespace TiaOpennessAdapter
                 catch (Exception e) {
                     Exception rootError = e.GetBaseException();
                     Failure(kind, name, rootError.Message);
-                    // Graphic lists are presentation assets and their V21 Export
-                    // implementation can reject export independently of the
-                    // attached Portal session. They are nonessential for PLC
-                    // logic review, so record exactly this known object as
-                    // unsupported and continue with other project objects.
-                    if (IsUnsupportedGraphicListExport(item, rootError)) return;
                     if (rootError is EngineeringObjectDisposedException ||
                         rootError is NonRecoverableException) throw;
                 }
@@ -546,9 +559,9 @@ namespace TiaOpennessAdapter
             }
         }
 
-        private static bool IsUnsupportedGraphicListExport(object item, Exception error)
+        private static bool IsExcludedGraphicList(object item)
         {
-            return error is NonRecoverableException && item != null &&
+            return item != null &&
                 string.Equals(item.GetType().FullName,
                     "Siemens.Engineering.Hmi.TextGraphicList.GraphicList",
                     StringComparison.Ordinal);

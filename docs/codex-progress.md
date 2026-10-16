@@ -823,3 +823,15 @@
   red. It turns green only after the fast inventory confirms the matching
   device and PLC name in the currently selected TIA project. PLC reads are
   disabled until that confirmation.
+
+## LLM export: exclude unstable HMI GraphicLists - 2026-10-16
+
+- Removed every LLM-export traversal entry point for HMI `GraphicLists` and
+  added a type guard before generic HMI enumeration. These presentation assets
+  are not relevant to PLC code review and must never be opened or exported.
+- The unsupported-items report explicitly records that GraphicLists were
+  intentionally excluded. Disposal and nonrecoverable errors for every other
+  object still abort the export rather than reusing an invalid Openness session.
+- This addresses the reported `GraphicList` disposed-enumerator failure, but
+  needs a real TIA Portal V21 retest to establish whether it prevents the
+  Portal shutdown on the affected project.
