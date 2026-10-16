@@ -14,32 +14,19 @@ client = TestClient(app)
 URL = "/api/v1/code-review/export-tia-project-for-llm?process_id=321"
 
 
-@pytest.fixture(autouse=True)
-def enable_only_for_simulated_export_tests(monkeypatch):
-    monkeypatch.setenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", "1")
-
-
-def test_real_project_export_is_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", raising=False)
+def test_real_project_export_is_enabled_after_session_lifetime_fix(monkeypatch):
+    from fastapi import HTTPException
     status = client.get("/api/v1/code-review/tia-export-status")
     assert status.status_code == 200
-    assert status.json()["enabled"] is False
+    assert status.json()["enabled"] is True
 
     def no_adapter_calls(*args):
-        raise AssertionError("Unsafe Openness adapter must not be invoked")
+        raise HTTPException(503, "Adapter deliberately unavailable in this unit test")
 
     monkeypatch.setattr("engine.llm_project_export._run_adapter", no_adapter_calls)
     response = client.post(URL)
     assert response.status_code == 503
-    assert "disabled" in response.json()["detail"].lower()
-
-
-def test_export_requires_exact_explicit_opt_in(monkeypatch):
-    for value in ("true", "yes", "0", ""):
-        monkeypatch.setenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", value)
-        assert client.get("/api/v1/code-review/tia-export-status").json()["enabled"] is False
-    monkeypatch.setenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", "1")
-    assert client.get("/api/v1/code-review/tia-export-status").json()["enabled"] is True
+    assert "Adapter deliberately unavailable" in response.json()["detail"]
 
 
 
@@ -165,5 +152,10 @@ def test_tia_adapter_bulk_export_command_exists_without_project_write():
     assert "string deviceName = " in service
     assert 'report.Failure("DEVICE_TRAVERSAL", deviceName, rootError.Message)' in service
     assert "rootError is EngineeringObjectDisposedException" in service
+    assert "private static bool IsSessionFatal" in service
+    assert "ReadProfinetDeviceNameForExport(device)" in service
+    assert "object software = null" in service
+    assert "try { software = container.Software; }" in service
+    assert "if (IsSessionFatal(rootError)) throw;" in service
     assert "project.Save(" not in service
     assert "project.Import" not in service

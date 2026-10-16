@@ -52,7 +52,7 @@ namespace TiaOpennessAdapter
                     report.Progress("DEVICE", deviceName);
                     report.Record("DEVICE", deviceName, "",
                         device.TypeIdentifier ?? "", "");
-                    string pnName = ReadProfinetDeviceName(device);
+                    string pnName = ReadProfinetDeviceNameForExport(device);
                     if (!string.IsNullOrWhiteSpace(pnName))
                         report.Record("PROFINET_DEVICE_NAME", deviceName, "",
                             pnName, "");
@@ -90,6 +90,7 @@ namespace TiaOpennessAdapter
                                     + " width=" + channelWidth, "");
                             }
                             SoftwareContainer container = null;
+                            object software = null;
                             try { container = item.GetService<SoftwareContainer>(); }
                             catch (Exception e) {
                                 Exception rootError = e.GetBaseException();
@@ -98,8 +99,18 @@ namespace TiaOpennessAdapter
                                     rootError is NonRecoverableException)
                                     throw;
                             }
-                            if (container == null || container.Software == null) continue;
-                            object software = container.Software;
+                            if (container == null) continue;
+                            // Read the service value exactly once. A TIA object can become
+                            // invalid between service-property calls when the Portal session
+                            // is closing; continuing with a second read used to hide that fact.
+                            try { software = container.Software; }
+                            catch (Exception e) {
+                                Exception rootError = e.GetBaseException();
+                                report.Failure("SOFTWARE_SERVICE", itemPath.Path, rootError.Message);
+                                if (IsSessionFatal(rootError)) throw;
+                                continue;
+                            }
+                            if (software == null) continue;
                             if (software is PlcSoftware plc)
                             {
                                 if (seenPlcs.Add(plc))
@@ -157,6 +168,32 @@ namespace TiaOpennessAdapter
             ExportBlockGroup(report, plc.BlockGroup, folder + "/blocks", owner, "", 0);
             ExportTypeGroup(report, plc.TypeGroup, folder + "/types", owner, "", 0);
             ExportTagGroup(report, plc.TagTableGroup, folder + "/tags", owner, "", 0);
+        }
+
+        // Export-local variant: ordinary unsupported interfaces are omitted,
+        // but disposal means the whole attachment is invalid and must abort.
+        private static string ReadProfinetDeviceNameForExport(Device device)
+        {
+            foreach (DeviceItemPath path in EnumerateDeviceItems(device))
+            {
+                try
+                {
+                    NetworkInterface network = path.Item.GetService<NetworkInterface>();
+                    if (network == null) continue;
+                    foreach (var node in network.Nodes)
+                    {
+                        string value = Convert.ToString(node.GetAttribute("PnDeviceName")) ?? "";
+                        if (!string.IsNullOrWhiteSpace(value)) return value.Trim();
+                    }
+                }
+                catch (Exception error)
+                {
+                    Exception rootError = error.GetBaseException();
+                    if (IsSessionFatal(rootError)) throw;
+                    // Unsupported network services are represented by missing data.
+                }
+            }
+            return "";
         }
 
         private static void ExportBlockGroup(
@@ -272,7 +309,14 @@ namespace TiaOpennessAdapter
                         ExportReflectiveTree(report, item, folder, description, seen, depth + 1);
                     }
                 }
-                catch (Exception e) { report.Failure("HMI_ENUM", description, e.Message); }
+                catch (Exception e) {
+                    Exception rootError = e.GetBaseException();
+                    report.Failure("HMI_ENUM", description, rootError.Message);
+                    // Do not suppress disposal/nonrecoverable failures. They mean the
+                    // attachment is no longer usable; returning to the outer traversal
+                    // would keep touching stale Device/HMI objects.
+                    if (IsSessionFatal(rootError)) throw;
+                }
                 return;
             }
             if (!seen.Add(value)) return;
@@ -494,6 +538,12 @@ namespace TiaOpennessAdapter
                 missing.Dispose();
                 progress.Dispose();
             }
+        }
+
+        private static bool IsSessionFatal(Exception error)
+        {
+            return error is EngineeringObjectDisposedException ||
+                error is NonRecoverableException;
         }
 
         private sealed class ReferenceEqualityComparer : IEqualityComparer<object>

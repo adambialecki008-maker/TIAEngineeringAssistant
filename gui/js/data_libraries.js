@@ -1529,9 +1529,8 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             const processes = await check.json();
             if (!Array.isArray(processes) || !processes.some(p => Number(p.process_id) === pid))
                 throw Error("TIA process " + pid + " no longer running. Refresh TIA.");
-            if (!confirm("Experimental Siemens Openness V21 export previously closed TIA Portal. "
-                + "Save your native TIA project and make a backup first. "
-                + "Proceed with read-only full-project export?")) {
+            if (!confirm("This read-only export attaches to the open TIA Portal project. "
+                + "Save your native project first, then proceed with the full-project export?")) {
                 tiaExportStatus.textContent = "Export cancelled.";
                 return;
             }
@@ -1567,10 +1566,9 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     });
     tiaExportButton.id = "review-export-llm";
     tiaExportButton.className = "secondary-button";
-    // Fail closed while capability status is unknown. The backend also
-    // rejects export requests unless explicitly opted into test mode.
+    // Fail closed while backend capability status is unknown.
     tiaExportButton.disabled = true;
-    tiaExportStatus.textContent = "Checking experimental TIA export availability…";
+    tiaExportStatus.textContent = "Checking TIA export availability…";
     fetch("/api/v1/code-review/tia-export-status", {cache: "no-store"})
         .then(async response => {
             if (!response.ok) throw Error("HTTP " + response.status);

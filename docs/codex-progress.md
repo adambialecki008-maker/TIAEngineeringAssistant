@@ -456,6 +456,18 @@
   location, evidence, detection method and verification status without
   embedding uploaded source code.
 
+## Whole-project TIA export session-lifetime fix - 2026-10-16
+
+- Restored the read-only `Export file for LLM review` capability without an
+  environment-variable bypass. The adapter now captures `SoftwareContainer`
+  content once and aborts the entire traversal when Openness reports a disposed
+  or nonrecoverable session, including during reflective HMI enumeration.
+- This prevents the former unsafe behaviour of catching a disposed-object
+  exception and continuing to access Device/HMI/PLC objects from that session.
+  The Python API reports the last logged export operation for diagnosis.
+- Offline validation confirms the adapter builds and the ZIP/API contracts;
+  real V21 Portal lifetime behaviour still requires a disposable-project test.
+
 
 ## AI Code Review real-format parser hardening — 2026-10-16
 

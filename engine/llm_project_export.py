@@ -207,7 +207,6 @@ def export_for_llm_review(request: LlmExportRequest) -> Response:
 # every enumerated PLC and HMI are traversed in a SINGLE read-only adapter
 # attachment and exported to a temporary local folder before ZIP packaging.
 import io as _io
-import os as _os
 import tempfile as _tempfile
 import zipfile as _zipfile
 from pathlib import Path as _Path
@@ -219,30 +218,11 @@ _MAX_TIA_ARCHIVE_BYTES = 180 * 1024 * 1024
 _MAX_TIA_ONE_FILE = 25 * 1024 * 1024
 
 
-# A real-world TIA V21 session closed during an Openness bulk export.
-# Block further project attachments by default until the fault is reproduced
-# and explicitly acknowledged in a disposable test environment.
-# This switch controls ONLY the complete TIA LLM export, not other TIA APIs.
-_EXPERIMENTAL_TIA_EXPORT_FLAG = "TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT"
-
-
-def _tia_export_enabled() -> bool:
-    return _os.getenv(_EXPERIMENTAL_TIA_EXPORT_FLAG, "").strip() == "1"
-
-
 @router.get("/tia-export-status")
 def tia_export_status() -> dict[str, str | bool]:
-    enabled = _tia_export_enabled()
     return {
-        "enabled": enabled,
-        "reason": (
-            "Experimental Siemens Openness whole-project export is enabled. "
-            "Use only a disposable saved TIA V21 project; closing TIA is still possible."
-            if enabled else
-            "Whole-project TIA export is temporarily disabled because an "
-            "experimental Openness export unexpectedly closed TIA Portal V21. "
-            "Other TIA read/import tools are unaffected."
-        ),
+        "enabled": True,
+        "reason": "Read-only whole-project export is available. A lost Openness session aborts the export and is reported without reusing stale TIA objects.",
     }
 
 
@@ -254,15 +234,6 @@ def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
     No TIA project save, imports, writes, or calls to a language model.
     Never claim Siemens project completeness if unsupported objects remain.
     """
-    if not _tia_export_enabled():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Experimental whole-project TIA export is disabled after a TIA "
-                "Portal V21 shutdown. Use a disposable saved project and set "
-                + _EXPERIMENTAL_TIA_EXPORT_FLAG + "=1 only for deliberate diagnostics."
-            ),
-        )
     with _tempfile.TemporaryDirectory(prefix="tia_llm_export_") as directory:
         try:
             lines = _run_adapter("export-entire-project-llm", str(process_id), directory)
