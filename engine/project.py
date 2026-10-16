@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from engine.plc_db import DataBlockSpecification
 from engine.udt import UdtSpecification
@@ -13,6 +13,24 @@ class ProjectSpecification(BaseModel):
     udts: list[UdtSpecification] = []
     dbs: list[DataBlockSpecification] = []
     fbs: list[FunctionBlockSpecification] = []
+
+    @model_validator(mode="after")
+    def validate_function_block_dependencies(self):
+        by_name = {fb.name.casefold(): fb for fb in self.fbs}
+        if len(by_name) != len(self.fbs):
+            raise ValueError("Function Block names must be unique.")
+        visiting, visited = set(), set()
+        def visit(fb):
+            key = fb.name.casefold()
+            if key in visiting: raise ValueError("Circular Function Block dependency: " + fb.name)
+            if key in visited: return
+            visiting.add(key)
+            for member in fb.static.members:
+                child = by_name.get(member.data_type.casefold())
+                if child: visit(child)
+            visiting.remove(key); visited.add(key)
+        for fb in self.fbs: visit(fb)
+        return self
 
 
 class GeneratedProjectSource(BaseModel):

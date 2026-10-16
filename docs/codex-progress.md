@@ -13,3 +13,11 @@
 - Commit: pending.
 - Remaining: make the FB model carry explicit system-instance metadata, add
   FB dependency validation and implement local Instance DB previews.
+
+## FB multi-instance dependencies
+
+- Project validation now rejects duplicate FB names and circular references
+  created by Static members whose type names are local FBs.
+- Validation: `pytest -q tests/test_function_block.py` — 4 passed.
+- Commit: pending.
+- Remaining: offline Instance DB model and structural preview.

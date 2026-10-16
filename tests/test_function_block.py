@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from engine.function_block import FunctionBlockSpecification
+from engine.project import ProjectSpecification
 
 
 def test_function_block_has_independent_sections_and_serializes():
@@ -18,3 +19,8 @@ def test_function_block_rejects_retain_outside_static():
 def test_function_block_rejects_name_collision_between_sections():
     with pytest.raises(ValidationError, match="both Input and Output"):
         FunctionBlockSpecification.model_validate({"name":"FB_X", "input":{"name":"Input","members":[{"name":"State","data_type":"Bool"}]}, "output":{"name":"Output","members":[{"name":"State","data_type":"Bool"}]}})
+
+
+def test_project_rejects_circular_fb_multi_instance_dependency():
+    with pytest.raises(ValidationError, match="Circular Function Block"):
+        ProjectSpecification.model_validate({"fbs":[{"name":"FB_A","static":{"name":"Static","members":[{"name":"B","data_type":"FB_B"}]}},{"name":"FB_B","static":{"name":"Static","members":[{"name":"A","data_type":"FB_A"}]}}]})
