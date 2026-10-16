@@ -17,6 +17,12 @@ from engine.tia.xml_parser import (
 router = APIRouter()
 
 
+def _display_program_language(value: str) -> str:
+    # Siemens may provide localized ladder metadata; the app uses LAD only.
+    language = value.strip()
+    return "LAD" if language.upper() == "KOP" else language
+
+
 def _parse_optional_int(
     value: str,
 ) -> int | None:
@@ -127,7 +133,7 @@ def get_plc_program_blocks(
                 number=_parse_optional_int(
                     parts[4]
                 ),
-                programming_language=parts[5],
+                programming_language=_display_program_language(parts[5]),
                 is_consistent=_parse_optional_bool(
                     parts[6]
                 ),
@@ -268,7 +274,7 @@ def get_plc_program_block(
                 number=_parse_optional_int(
                     parts[4]
                 ),
-                programming_language=parts[5],
+                programming_language=_display_program_language(parts[5]),
                 is_consistent=_parse_optional_bool(
                     parts[6]
                 ),
