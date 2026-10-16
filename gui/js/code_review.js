@@ -9,6 +9,31 @@ function reportMarkdown(report) {
     const lines = ["# PLC Code Review", "", "Read-only local analysis report.", ""];
     lines.push("## Files", "", "| Source | Block | Type | Language | Verification |", "| --- | --- | --- | --- | --- |");
     for (const block of report.files) lines.push("| " + [block.source_file, block.name, block.block_type, block.language, block.verification_status].map(markdownText).join(" | ") + " |");
+    const networkBlocks = report.files.filter(block => (block.network_details || []).length);
+    if (networkBlocks.length) {
+        lines.push("", "## LAD/FBD network topology (not logic-verified)", "");
+        for (const block of networkBlocks) {
+            lines.push("### " + markdownText(block.name) + " — " + markdownText(block.source_file), "");
+            for (const network of block.network_details) {
+                lines.push("#### Network " + network.number + " — " + markdownText(network.language || block.language), "");
+                lines.push("Recognized nodes: " + (network.nodes || []).length
+                    + "; explicit wires: " + (network.wires || []).length + ".", "");
+                for (const node of network.nodes || []) {
+                    lines.push("- Node " + markdownText(node.uid) + ": " + markdownText(node.kind)
+                        + " " + markdownText(node.name || node.symbol) +
+                        (node.scope ? " (" + markdownText(node.scope) + ")" : ""));
+                }
+                for (const wire of network.wires || []) {
+                    lines.push("- Wire " + markdownText(wire.uid) + ": "
+                        + (wire.endpoints || []).map(endpointText).map(markdownText).join(" → "));
+                }
+                for (const warning of network.warnings || []) {
+                    lines.push("- Requires TIA verification: " + markdownText(warning));
+                }
+                lines.push("");
+            }
+        }
+    }
     lines.push("", "## Findings", "");
     if (!report.findings.length) lines.push("No findings reported.");
     for (const finding of report.findings) {
@@ -35,6 +60,70 @@ function downloadReport(contents, fileName, type) {
     URL.revokeObjectURL(url);
 }
 
+function endpointText(endpoint) {
+    if (endpoint.kind === "Powerrail" || endpoint.kind === "OpenCon") return endpoint.kind;
+    return endpoint.kind + " " + (endpoint.uid || "?") + (endpoint.port ? "." + endpoint.port : "");
+}
+
+function renderNetworkTopology(block, parent) {
+    for (const network of block.network_details || []) {
+        const section = document.createElement("section");
+        section.className = "review-network-topology";
+        const heading = document.createElement("h4");
+        heading.textContent = "Network " + network.number + " · " + (network.language || block.language)
+            + " · topology only";
+        section.appendChild(heading);
+        const summary = document.createElement("p");
+        summary.className = "hint";
+        summary.textContent = (network.nodes || []).length + " recognized node(s), "
+            + (network.wires || []).length + " wire(s). Not a verified LAD/FBD logic interpretation.";
+        section.appendChild(summary);
+        const appendTable = (labels, data) => {
+            if (!data.length) return;
+            const wrapper = document.createElement("div");
+            wrapper.className = "table-wrapper";
+            const table = document.createElement("table");
+            table.className = "management-table";
+            const thead = document.createElement("thead");
+            const tr = document.createElement("tr");
+            for (const label of labels) {
+                const th = document.createElement("th");
+                th.textContent = label;
+                tr.appendChild(th);
+            }
+            thead.appendChild(tr);
+            const tbody = document.createElement("tbody");
+            for (const values of data) {
+                const row = document.createElement("tr");
+                for (const value of values) {
+                    const cell = document.createElement("td");
+                    cell.textContent = String(value ?? "");
+                    row.appendChild(cell);
+                }
+                tbody.appendChild(row);
+            }
+            table.append(thead, tbody);
+            wrapper.appendChild(table);
+            section.appendChild(wrapper);
+        };
+        appendTable(["UId", "Node", "Name", "Symbol", "Scope"],
+            (network.nodes || []).map(node => [
+                node.uid, node.kind, node.name, node.symbol, node.scope,
+            ]));
+        appendTable(["Wire UId", "Explicit endpoints"],
+            (network.wires || []).map(wire => [
+                wire.uid, (wire.endpoints || []).map(endpointText).join(" → "),
+            ]));
+        for (const warning of network.warnings || []) {
+            const note = document.createElement("p");
+            note.className = "hint";
+            note.textContent = "Requires TIA verification: " + warning;
+            section.appendChild(note);
+        }
+        parent.appendChild(section);
+    }
+}
+
 function renderReport(report, results) {
     results.replaceChildren();
     const summary = document.createElement("p");
@@ -50,6 +139,7 @@ function renderReport(report, results) {
         const body = document.createElement("pre");
         body.textContent = JSON.stringify({declarations:block.declarations, dependencies:block.dependencies, networks:block.networks, warnings:block.parsing_warnings, verification:block.verification_status}, null, 2);
         details.append(title, body);
+        renderNetworkTopology(block, details);
         results.appendChild(details);
     }
     for (const finding of report.findings) {

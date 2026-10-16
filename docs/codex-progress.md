@@ -504,3 +504,13 @@
 - Does not modify existing FB/FC imports, translate LAD/FBD to SCL, infer flow
   direction or create files to import to TIA. Regression fixtures model
   documented Siemens FlgNet forms, not yet a validated V21 export suite.
+
+## Visible FlgNet topology and Markdown export — 2026-10-16
+
+- AI Code Review displays per-network read-only tables of the nodes and wire
+  endpoints observed in FlgNet XML. The GUI clearly labels the result as
+  topology only, not verified ladder or FBD execution logic.
+- Download Markdown includes nodes, explicit connections and any structural
+  warnings alongside the pre-existing diagnostics.
+- Updated Chromium interaction test confirms network tables and generated
+  Markdown, with all content added as inert text nodes (no HTML injection).
