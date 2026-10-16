@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const {revealEngineeringItem} = require("./ui_disclosures.cjs");
 
 const base = process.env.APP_URL || "http://127.0.0.1:8765/";
 const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playwright";
@@ -26,7 +27,7 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         await page.locator('[data-tab="udt"]').click();
         await page.locator("#new-udt-name").fill("UDT_Local");
         await page.locator("#add-udt-button").click();
-        await page.locator("#udt-container > details > summary").click();
+        await revealEngineeringItem(page, "#udt-container");
         await page.locator("#udt-container .member-add-toggle").first().click();
         let form = page.locator("#udt-container .member-add-area:not([hidden]) .member-editor-form").first();
         let select = form.locator('select[id$="-type"]').first();
@@ -42,7 +43,7 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         await page.locator('[data-tab="db"]').click();
         await page.locator("#new-db-name").fill("DB_Local");
         await page.locator("#add-db-button").click();
-        await page.locator("#db-container > details > summary").click();
+        await revealEngineeringItem(page, "#db-container");
         await page.locator("#db-container .member-add-toggle").first().click();
         form = page.locator("#db-container .member-add-area:not([hidden]) .member-editor-form").first();
         select = form.locator('select[id$="-type"]').first();
