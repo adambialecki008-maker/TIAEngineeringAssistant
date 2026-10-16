@@ -63,6 +63,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
   await page.waitForFunction(()=>
    document.getElementById("overview-tia-live-status")?.textContent?.includes("connection LOST"));
   await page.locator("#review-export-llm").click();
+  await page.waitForFunction(() => document.getElementById("review-export-llm-status")?.textContent?.includes("no longer running"));
   assert.match(await page.locator("#review-export-llm-status").innerText(),/no longer running/);
   assert.equal(exportCalls,1);
   console.log("TIA LLM export moved; monitor and removed PLC review UI: PASS");
