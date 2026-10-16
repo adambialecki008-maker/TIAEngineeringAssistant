@@ -2889,3 +2889,107 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .program-create-status { min-height: 1.3em; margin: 8px 0 0; }
 .program-create-status.error { color: var(--ui-error, #fca5a5); }
 .program-create-status.success { color: var(--ui-blue-accent, #86c6fa); }
+
+
+/* Unified top-level typography and disclosure hierarchy (Overview, PLC,
+   HMI, UDT, DB, FB/FC, libraries and Source preview).
+   Monospace is retained for code/XML cells, never for a heading. */
+:root {
+    --ui-heading-font: var(--ui-font, Arial, Helvetica, sans-serif);
+    --ui-heading-page: 24px;
+    --ui-heading-section: 16px;
+    --ui-heading-subsection: 14px;
+    --ui-heading-weight: 700;
+}
+.app-content :is(h1, h2, h3, h4, h5, h6),
+.app-content :is(summary, legend),
+.app-header :is(h1, h2, h3, h4) {
+    font-family: var(--ui-heading-font);
+    letter-spacing: 0;
+    font-style: normal;
+}
+.app-content .panel-header h2 {
+    font-family: var(--ui-heading-font);
+    font-size: var(--ui-heading-page);
+    font-weight: var(--ui-heading-weight);
+    line-height: 1.25;
+    margin: 0 0 6px;
+}
+.app-content .card h3,
+.app-content .card > summary,
+.app-content #overview-profile-management > details > summary,
+.app-content #overview-tia-controls > details > summary,
+.app-content .source-import-details > summary {
+    font-family: var(--ui-heading-font);
+    font-size: var(--ui-heading-section);
+    font-weight: var(--ui-heading-weight);
+    line-height: 1.35;
+}
+.app-content .card h4,
+.app-content .card .compact-card-header h4,
+.app-content .card .details-content h4 {
+    font-size: var(--ui-heading-subsection);
+    font-weight: 600;
+    line-height: 1.4;
+}
+.app-content .overview-value {
+    font-family: var(--ui-heading-font);
+    font-size: 20px;
+    font-weight: var(--ui-heading-weight);
+    line-height: 1.3;
+}
+/* Static cards become native keyboard-accessible disclosure panels. */
+.app-content details.ui-disclosure.card {
+    padding: 0;
+    background: var(--ui-surface, #182630);
+    border: 1px solid var(--ui-border-soft, #2b4050);
+    border-radius: var(--ui-radius, 6px);
+    overflow: hidden;
+}
+.app-content details.ui-disclosure > summary.ui-disclosure-heading {
+    padding: 13px 18px;
+    background: var(--ui-surface-raised, #202e39);
+    color: var(--ui-text, #ecf4fa);
+    border-bottom: 1px solid transparent;
+    min-height: 48px;
+    box-sizing: border-box;
+}
+.app-content details.ui-disclosure > summary.ui-disclosure-heading:hover {
+    background: var(--ui-surface-hover, #273b4a);
+}
+.app-content details.ui-disclosure[open] > summary.ui-disclosure-heading {
+    border-bottom-color: var(--ui-border-soft, #2b4050);
+}
+.app-content details.ui-disclosure > summary h3 {
+    font-family: var(--ui-heading-font);
+    font-size: var(--ui-heading-section);
+    line-height: 1.35;
+    font-weight: var(--ui-heading-weight);
+    margin: 0;
+}
+.app-content details.ui-disclosure > .ui-disclosure-body {
+    padding: 16px 18px 18px;
+    min-width: 0;
+}
+.app-content details.ui-disclosure .card-header > div > .hint {
+    margin-bottom: 0;
+}
+.app-content details.ui-disclosure .ui-disclosure-body > .hint,
+.app-content details.ui-disclosure .ui-disclosure-body > .panel-description {
+    margin-bottom: 12px;
+}
+.app-content details.ui-disclosure .ui-disclosure-body > .program-create-form {
+    margin-top: 12px;
+}
+.app-content details.ui-disclosure .ui-disclosure-body > #fb-container,
+.app-content details.ui-disclosure .ui-disclosure-body > #fc-container {
+    margin-top: 16px;
+}
+.app-content details.ui-disclosure .ui-disclosure-body > #fb-container > .card,
+.app-content details.ui-disclosure .ui-disclosure-body > #fc-container > .card {
+    margin-bottom: 12px;
+}
+@media (max-width: 700px) {
+    .app-content details.ui-disclosure > .ui-disclosure-body { padding: 12px; }
+    .app-content details.ui-disclosure > summary.ui-disclosure-heading { padding: 12px; }
+}

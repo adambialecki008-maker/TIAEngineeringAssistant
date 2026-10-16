@@ -30,6 +30,7 @@ import {
 import {renderFunctionBlocks} from "./fb.js";
 import {renderFunctions} from "./fc.js";
 import {initProgramDependencies} from "./program_dependencies.js";
+import {initEngineeringDisclosures} from "./engineering_disclosures.js";
 import {initLocalProgramCreationUi} from "./program_creation.js";
 
 import {
@@ -115,6 +116,7 @@ const sourcePreview =
 
 
 loadProjectConfig();
+initEngineeringDisclosures();
 const sourceImportUi = initSourceImportUi();
 
 
