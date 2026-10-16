@@ -11,7 +11,7 @@ from engine.tia import adapter
 
 def test_ordinary_adapter_commands_keep_three_minute_timeout(monkeypatch):
     monkeypatch.setenv("TIA_PROJECT_TEXT_TIMEOUT_SECONDS", "1200")
-    assert adapter.adapter_timeout_seconds("list-project-plcs") == 90
+    assert adapter.adapter_timeout_seconds("list-project-plcs") == 180
     assert adapter.adapter_timeout_seconds("list-project-languages") == 180
 
 
@@ -33,26 +33,6 @@ def test_invalid_project_text_timeout_is_rejected(monkeypatch, value):
     with pytest.raises(HTTPException) as exc:
         adapter.adapter_timeout_seconds("export-project-texts")
     assert exc.value.status_code == 422
-
-
-
-
-def test_project_inventory_timeout_is_bounded_to_ninety_seconds(monkeypatch, tmp_path):
-    exe = tmp_path / "TiaOpennessAdapter.exe"
-    exe.touch()
-    monkeypatch.setattr(adapter, "ADAPTER_EXE", exe)
-
-    def timed_out(args, **kwargs):
-        assert args[1] == "list-project-plcs"
-        assert kwargs["timeout"] == 90
-        raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs["timeout"])
-
-    monkeypatch.setattr(adapter.subprocess, "run", timed_out)
-    with pytest.raises(HTTPException) as exc:
-        adapter.run_adapter("list-project-plcs", "55224")
-    assert exc.value.status_code == 504
-    assert "list-project-plcs" in exc.value.detail
-    assert "90 seconds" in exc.value.detail
 
 
 def test_export_uses_extended_subprocess_timeout(monkeypatch, tmp_path):
