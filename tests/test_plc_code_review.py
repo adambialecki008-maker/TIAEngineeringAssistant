@@ -782,3 +782,108 @@ def test_incomplete_nested_call_carries_unverified_status_and_no_fake_parameter_
     issues = [f for f in report.findings if f.category == "Unknown call parameter"]
     assert len(issues) == 1 and issues[0].evidence == "FC_Outer(Missing := ...)"
     assert not any(f.evidence.startswith("FC_Broken(") for f in report.findings)
+
+
+
+def test_scl_if_else_merges_assignments_and_reports_only_uninitialized_paths():
+    report = analyze_files([ReviewInputFile(name="if.scl", content=(
+        "FUNCTION_BLOCK FB_If\nVAR_INPUT\n Condition : Bool;\nEND_VAR\n"
+        "VAR_TEMP\n Value : Int;\n Safe : Int;\nEND_VAR\nBEGIN\n"
+        "IF #Condition THEN\n"
+        " #Value := 1;\n #Safe := 5;\n"
+        "ELSE\n"
+        " #Safe := 10;\n"
+        "END_IF;\n"
+        "#Result := #Safe;\n"
+        "#Result := #Value;\n"
+        "END_FUNCTION_BLOCK"
+    ))])
+    reads = [f for f in report.findings if f.category == "SCL temporary read before assignment"]
+    assert [(f.evidence, f.location) for f in reads] == [("Value", "line 18")]
+    block = report.files[0]
+    assert block.variable_analysis_status == "complete"
+    stats = {item.name: item for item in block.variable_usage}
+    assert stats["Safe"].assigned_on_exit is True
+    assert stats["Value"].assigned_on_exit is False
+    assert stats["Condition"].reads == 1
+
+
+def test_scl_elsif_and_nested_if_merges_all_paths():
+    report = analyze_files([ReviewInputFile(name="nested.scl", content=(
+        "FUNCTION FC_Nested : Int\nVAR_INPUT\n A : Bool;\n B : Bool;\nEND_VAR\n"
+        "VAR_TEMP\n X : Int;\n Y : Int;\nEND_VAR\nBEGIN\n"
+        "IF #A THEN\n"
+        " IF #B THEN\n  #X := 1;\n ELSE\n  #X := 2;\n END_IF;\n"
+        "ELSIF #B THEN\n"
+        " #Y := 3;\n"
+        "ELSE\n"
+        " #X := 4;\n"
+        "END_IF;\n"
+        "#Result := #X;\n"
+        "END_FUNCTION"
+    ))])
+    reads = [f for f in report.findings if f.category == "SCL temporary read before assignment"]
+    assert len(reads) == 1 and reads[0].evidence == "X"
+    assert report.files[0].variable_analysis_status == "complete"
+
+
+def test_scl_case_with_and_without_else_intersection():
+    with_else = (
+        "FUNCTION_BLOCK FB_With\nVAR_INPUT\n Sel : Int;\nEND_VAR\n"
+        "VAR_TEMP\n Value : Int;\nEND_VAR\nBEGIN\n"
+        "CASE #Sel OF\n"
+        " 1:\n  #Value := 1;\n"
+        " 2:\n  #Value := 2;\n"
+        " ELSE\n  #Value := 3;\n"
+        "END_CASE;\n"
+        "#Out := #Value;\nEND_FUNCTION_BLOCK"
+    )
+    no_else = with_else.replace(" ELSE\n  #Value := 3;\n", "")
+    report = analyze_files([
+        ReviewInputFile(name="a.scl", content=with_else),
+        ReviewInputFile(name="b.scl", content=no_else),
+    ])
+    problems = [f for f in report.findings if f.category == "SCL temporary read before assignment"]
+    assert [(p.source_file, p.evidence) for p in problems] == [("b.scl", "Value")]
+
+
+def test_scl_unsupported_loops_and_calls_suppress_dataflow_only():
+    for body in (
+        "FOR #I := 0 TO 3 DO\n #X := 2;\nEND_FOR;\n#Out := #X;",
+        "FC_Init(X => #X);\n#Out := #X;",
+        "WHILE #Flag DO\n #X := 2;\nEND_WHILE;\n#Out := #X;",
+        "#X := FC_Make();\n#Out := #X;",
+    ):
+        report = analyze_files([ReviewInputFile(name="loop.scl", content=(
+            "FUNCTION_BLOCK FB_Loop\nVAR_TEMP\n X : Int;\n Ghost : Int;\n"
+            "END_VAR\nBEGIN\n" + body + "\nEND_FUNCTION_BLOCK"
+        ))])
+        assert report.files[0].variable_analysis_status == "partial"
+        assert not any(f.category == "SCL temporary read before assignment" for f in report.findings)
+        assert any(f.category == "Unused SCL temporary" and f.evidence == "Ghost" for f in report.findings)
+
+
+def test_scl_interface_usage_and_output_assignment_summary():
+    report = analyze_files([ReviewInputFile(name="iface.scl", content=(
+        "FUNCTION_BLOCK FB_Interface\n"
+        "VAR_INPUT\n Used : Bool;\n Ignored : Bool;\nEND_VAR\n"
+        "VAR_OUTPUT\n Result : Bool;\n NeverSet : Bool;\nEND_VAR\n"
+        "BEGIN\nIF #Used THEN\n #Result := TRUE;\n"
+        "ELSE\n #Result := FALSE;\nEND_IF;\nEND_FUNCTION_BLOCK"
+    ))])
+    categories = {(f.category, f.evidence) for f in report.findings}
+    assert ("Unused SCL input", "Ignored") in categories
+    assert ("SCL output without direct assignment", "NeverSet") in categories
+    stats = {s.name: s for s in report.files[0].variable_usage}
+    assert stats["Result"].assigned_on_exit is True
+    assert stats["NeverSet"].assigned_on_exit is False
+    assert report.files[0].variable_analysis_status == "complete"
+
+
+def test_scl_incomplete_blocks_do_not_emit_variable_usage_observations():
+    report = analyze_files([ReviewInputFile(name="broken.scl", content=(
+        "FUNCTION_BLOCK FB_Broken\nVAR_INPUT\n A : Bool;\nEND_VAR\n"
+        "VAR_TEMP\n T : Int;\nEND_VAR\nBEGIN\n#Result := #T;"
+    ))])
+    assert report.files[0].variable_analysis_status == "unavailable"
+    assert not any(f.category.startswith(("Unused SCL", "SCL temporary read", "SCL output")) for f in report.findings)

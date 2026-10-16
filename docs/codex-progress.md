@@ -628,3 +628,19 @@
 - Point 2 supported offline scope: complete for recognized user FB/FC calls
   and explicit named SCL bindings; the full Siemens SCL grammar and TIA Portal
   compiler behavior remain outside the lexical scanner.
+
+## Point 3: Conservative SCL variable and interface flow — 2026-10-16
+
+- Added isolated read-only control-flow parser for complete SCL bodies:
+  straight-line assignments, nested IF/ELSIF/ELSE and CASE/ELSE.
+- Guaranteed assignment is merged by intersection at every branch join.
+  Variable reads in conditions/RHS are checked against assignments guaranteed
+  on all incoming paths, with no speculative analysis of loops/calls.
+- Detects unused top-level VAR_TEMP and unused VAR_INPUT by complete-body
+  identifier occurrence, plus an informational output-not-written observation
+  when a supported, complete body has no direct output assignment.
+- Per-block variable usage summaries include static read/write occurrences,
+  guaranteed assigned-on-exit status and a coverage indicator. Unsupported
+  source becomes partial and suppresses all read-before-write findings.
+- This does not prove runtime scheduling, execution counts, or full Siemens SCL
+  semantic correctness. Nothing is written to TIA.
