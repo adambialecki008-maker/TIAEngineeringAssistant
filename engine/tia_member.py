@@ -31,6 +31,11 @@ class TiaMember(BaseModel):
     # None means inherit DB-wide legacy setting (or inherited parent).
     retain: bool | None = None
 
+    # Native IEC timer/counter instances are not ordinary declaration types.
+    # This marker is accepted only by the FB Static-context validator below;
+    # UDT and global DB specifications explicitly reject it.
+    system_instance: bool = False
+
     # ARRAY
     array_element_type: str | None = None
     array_lower_bound: int | None = None
@@ -162,6 +167,10 @@ class TiaMember(BaseModel):
     ) -> None:
         system_type = type_entry(self.data_type)
         if system_type and not system_type.get("declarable"):
+            if self.system_instance and str(system_type.get("kind", "")).endswith("_instance"):
+                if self.start_value is not None:
+                    raise ValueError("System instances cannot have an editable Start value.")
+                return
             raise ValueError(
                 f"{self.data_type} is a Siemens {system_type['kind'].replace('_', ' ')}. "
                 "It is not a verified UDT/global-DB declaration type."

@@ -1,5 +1,28 @@
 # Codex development progress
 
+## Read-only Function Block import and compact engineering controls
+
+- Added a read-only TIA Function Block import on the **Function Blocks** tab.
+  It inventories only consistent SCL FBs, exports the selected declaration,
+  verifies that the active process/PLC/profile did not change, validates it
+  locally, and then stores the copy in the active project profile. TIA is not
+  modified.
+- The conversion preserves Input, Output, InOut, Static, Temp and Constant
+  declarations through the same lossless Struct/Array converter as UDTs. It
+  supports registered IEC system instances only in Static; nested internal
+  fields and unsupported declaration shapes stop the import safely.
+- Added a local validation endpoint for FB imports and kept ordinary program
+  block/structure API responses backward compatible: `system_instance` is
+  emitted only when it is true.
+- Made Overview controls (profiles, TIA connection and active PLC) and all
+  Device/IO engineering sections collapsible while preserving mounted controls
+  and their state.
+- Validation: `pytest -q` — 487 passed; `node --check` for changed browser
+  modules passed. No real TIA write was performed.
+- Commit: pending.
+- Remaining: actual Openness creation/import of FB and Instance DB remains
+  deliberately unsupported until it can be validated with TIA Portal V21.
+
 ## IEC instances in Function Blocks
 
 - Added a context-only path for Siemens system instances in the `Static`

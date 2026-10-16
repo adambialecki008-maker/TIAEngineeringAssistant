@@ -2,6 +2,7 @@
 from pydantic import BaseModel, Field, model_validator
 
 from engine.tia_member import TiaMember
+from engine.tia.type_registry import type_entry
 
 
 class FunctionBlockSection(BaseModel):
@@ -33,8 +34,20 @@ class FunctionBlockSpecification(BaseModel):
             raise ValueError("Only SCL Function Blocks are currently supported.")
         for section in (self.input, self.output, self.inout, self.temp, self.constant):
             for member in section.members:
+                if member.system_instance:
+                    raise ValueError(
+                        f"System instances are allowed only for Static FB members, not {section.name}."
+                    )
                 if member.retain is not None:
                     raise ValueError(f"Retain is allowed only for Static FB members, not {section.name}.")
+        for member in self.static.members:
+            if not member.system_instance:
+                continue
+            entry = type_entry(member.data_type)
+            if not entry or not str(entry.get("kind", "")).endswith("_instance"):
+                raise ValueError("Only registered Siemens system-instance types may use system_instance.")
+            if member.struct_members is not None or member.array_element_type is not None:
+                raise ValueError("System instances cannot expose editable nested declarations.")
         declared = {}
         for section in (self.input, self.output, self.inout, self.static, self.temp, self.constant):
             for member in section.members:

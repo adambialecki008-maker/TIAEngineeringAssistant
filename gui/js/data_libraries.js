@@ -791,8 +791,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     const profilesCard = element("div");
     profilesCard.className = "card";
     profilesCard.id = "project-profiles-card";
-    profilesCard.append(element("h3", "Local project profiles"),
-        element("p", "Each profile has independent UDTs, DBs and device configuration. Libraries remain shared. Switching clears the active TIA target."));
+    profilesCard.append(element("p", "Each profile has independent UDTs, DBs and device configuration. Libraries remain shared. Switching clears the active TIA target."));
     const profileActions = element("div");
     profileActions.className = "action-row";
     const profileSelector = document.createElement("select");
@@ -1506,7 +1505,9 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
 
     // Profiles belong to Overview; keep one live instance of the controls.
     const overviewProfilesHost = document.getElementById("overview-profile-management");
-    if (overviewProfilesHost) overviewProfilesHost.replaceChildren(profilesCard);
+    if (overviewProfilesHost) overviewProfilesHost.replaceChildren(
+        collapsibleCard(profilesCard, "Local project profiles")
+    );
     root.replaceChildren(
         ...(overviewProfilesHost ? [] : [profilesCard]),
         collapsibleCard(libraryCard, "Engineering Library", true),

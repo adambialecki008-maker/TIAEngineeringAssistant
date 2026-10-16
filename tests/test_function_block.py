@@ -4,6 +4,8 @@ from pydantic import ValidationError
 from engine.function_block import FunctionBlockSpecification
 from engine.project import ProjectSpecification
 from engine.instance_db import InstanceDbSpecification, instance_db_preview
+from engine.plc_db import DataBlockSpecification
+from engine.udt import UdtSpecification
 from functions.tia_source_generator import generate_fb_source
 from functions.tia_source_generator import generate_project_source
 
@@ -44,3 +46,27 @@ def test_fb_source_emits_safe_declaration_sections():
 def test_project_source_includes_safe_function_blocks():
     project = ProjectSpecification.model_validate({"fbs":[{"name":"FB_Run", "input":{"name":"Input","members":[{"name":"Enable","data_type":"Bool"}]}}]})
     assert 'FUNCTION_BLOCK "FB_Run"' in generate_project_source(project)
+
+
+def test_static_fb_accepts_registered_system_instance_only():
+    fb = FunctionBlockSpecification.model_validate({
+        "name": "FB_Timer",
+        "static": {"name": "Static", "members": [{
+            "name": "Delay", "data_type": "TON_TIME", "system_instance": True,
+        }]},
+    })
+    assert fb.static.members[0].system_instance is True
+    with pytest.raises(ValidationError, match="Static FB"):
+        FunctionBlockSpecification.model_validate({
+            "name": "FB_Invalid", "input": {"name": "Input", "members": [{
+                "name": "Delay", "data_type": "TON_TIME", "system_instance": True,
+            }]},
+        })
+
+
+def test_system_instance_stays_blocked_for_udt_and_global_db():
+    payload = {"name": "Delay", "data_type": "TON_TIME", "system_instance": True}
+    with pytest.raises(ValidationError, match="Static FB"):
+        UdtSpecification.model_validate({"name": "UDT_Bad", "fields": [payload]})
+    with pytest.raises(ValidationError, match="Static FB"):
+        DataBlockSpecification.model_validate({"name": "DB_Bad", "members": [payload]})

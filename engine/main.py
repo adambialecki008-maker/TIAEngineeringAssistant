@@ -13,6 +13,7 @@ from engine.models import (
 
 from engine.udt import UdtSpecification
 from engine.plc_db import DataBlockSpecification
+from engine.function_block import FunctionBlockSpecification
 from engine.project import (
     GeneratedProjectSource,
     ProjectSpecification,
@@ -168,6 +169,14 @@ def create_udt_specification(
 def create_db_specification(
     specification: DataBlockSpecification,
 ) -> DataBlockSpecification:
+    return specification
+
+
+@app.post("/api/v1/function-block-specifications")
+def create_function_block_specification(
+    specification: FunctionBlockSpecification,
+) -> FunctionBlockSpecification:
+    """Validate a local FB import; this endpoint never writes to TIA."""
     return specification
 
 

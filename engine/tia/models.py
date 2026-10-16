@@ -150,7 +150,9 @@ class PlcStructureMemberInfo(BaseModel):
     offset: str = ""
     comment: str = ""
     metadata: dict[str, str] = Field(default_factory=dict)
-    system_instance: bool = False
+    # Keep the pre-existing API shape for ordinary members while exposing the
+    # read-only marker whenever an exported IEC instance is actually present.
+    system_instance: bool = Field(default=False, exclude_if=lambda value: value is False)
 
 
 class PlcProgramBlockDetail(PlcProgramBlockInfo):

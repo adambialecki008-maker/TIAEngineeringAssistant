@@ -29,6 +29,8 @@ class UdtSpecification(BaseModel):
 
         def reject_retain(fields):
             for field in fields:
+                if field.system_instance:
+                    raise ValueError("Siemens system instances are allowed only in Static FB declarations.")
                 if field.retain is not None:
                     raise ValueError(
                         "Retain belongs to a DB declaration, not to a UDT type.")

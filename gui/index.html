@@ -200,14 +200,12 @@
             <div id="overview-profile-management"></div>
 
             <div id="overview-tia-controls">
-            <div class="card">
+            <details class="card">
+
+                <summary>Connection to TIA Portal</summary>
 
                 <div class="card-header">
                     <div>
-                        <h3>
-                            Connection
-                        </h3>
-
                         <p class="hint">
                             Running TIA Portal V21 processes detected through Openness.
                         </p>
@@ -242,20 +240,18 @@
                     Click Refresh TIA to detect available TIA Portal processes.
                 </p>
 
-            </div>
+            </details>
 
 
             <span id="tia-project-name" hidden aria-hidden="true"></span>
 
-            <div class="card">
+            <details class="card">
+
+                <summary>Choose Active PLC</summary>
 
                 <div class="card-header">
 
                     <div>
-                        <h3>
-                            Choose Active PLC
-                        </h3>
-
                         <p class="hint">
                             PLCs detected in the currently open TIA project.
                         </p>
@@ -329,7 +325,7 @@
                     Active PLC: not selected
                 </p>
 
-            </div>
+            </details>
             </div>
 
         </section>
@@ -337,6 +333,17 @@
         <section class="tab-panel" data-tab-panel="fb">
             <div class="panel-header"><div><h2>Function Blocks</h2><p class="panel-description">Define local SCL FB interfaces and state sections.</p></div></div>
             <div class="card"><div class="form-row"><label for="new-fb-name">FB name:</label><input id="new-fb-name" type="text" placeholder="FB_Motor"><button id="add-fb-button" type="button">New Function Block</button></div><div id="fb-container"></div></div>
+            <div class="card">
+                <h3>Import Function Block from TIA (read-only)</h3>
+                <p class="hint">Read a consistent SCL FB from the Active PLC into the local editor. Existing local FBs are never overwritten and nothing is written to TIA Portal.</p>
+                <div class="form-row">
+                    <button type="button" id="tia-fb-scan">Read FB list from TIA</button>
+                    <label for="tia-fb-select">TIA Function Block:</label>
+                    <select id="tia-fb-select" aria-label="Function Block from active PLC"></select>
+                    <button type="button" id="tia-fb-load" disabled>Import FB into editor</button>
+                </div>
+                <p id="tia-fb-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Function Blocks.</p>
+            </div>
         </section>
 
 
@@ -1637,14 +1644,12 @@
             </div>
 
 
-            <div class="card">
+            <details class="card device-section">
+
+                <summary>Device templates</summary>
 
                 <div class="card-header">
                     <div>
-                        <h3>
-                            Device templates
-                        </h3>
-
                         <p class="hint">
                             Internal signals generate device_config names only.
                             Input/Output signals can additionally be mapped to hardware.
@@ -1677,17 +1682,15 @@
 
                 <div id="device-template-container"></div>
 
-            </div>
+            </details>
 
 
-            <div class="card">
+            <details class="card device-section">
+
+                <summary>Device groups</summary>
 
                 <div class="card-header">
                     <div>
-                        <h3>
-                            Device groups
-                        </h3>
-
                         <p class="hint">
                             Example: prefix M, start 1, quantity 4, digits 2
                             generates M01 through M04.
@@ -1793,17 +1796,15 @@
                     </table>
                 </div>
 
-            </div>
+            </details>
 
 
-            <div class="card">
+            <details class="card device-section">
+
+                <summary>TIA hardware / I/O channels</summary>
 
                 <div class="card-header">
                     <div>
-                        <h3>
-                            TIA hardware / I/O channels
-                        </h3>
-
                         <p class="hint">
                             Reads channel metadata from the currently open TIA project.
                             Hardware must already be configured and addressed in TIA.
@@ -1907,17 +1908,15 @@
                     </div>
                 </details>
 
-            </div>
+            </details>
 
 
-            <div class="card">
+            <details class="card device-section">
+
+                <summary>I/O mapping</summary>
 
                 <div class="card-header">
                     <div>
-                        <h3>
-                            I/O mapping
-                        </h3>
-
                         <p class="hint">
                             Map each device in template signal order, or keep the original by-signal mode.
                             Set first channels according to the electrical schematic; the program never picks free addresses.
@@ -1951,17 +1950,15 @@
                     </table>
                 </div>
 
-            </div>
+            </details>
 
 
-            <div class="card">
+            <details class="card device-section">
+
+                <summary>Generated PLC tags</summary>
 
                 <div class="card-header">
                     <div>
-                        <h3>
-                            Generated PLC tags
-                        </h3>
-
                         <p class="hint">
                             Tags are written only to the Active PLC selected in the TIA Portal tab.
                         </p>
@@ -2016,17 +2013,15 @@
                     </button>
                 </div>
 
-            </div>
+            </details>
 
 
-            <div class="card">
+            <details class="card device-section">
+
+                <summary>Generated device configuration</summary>
 
                 <div class="card-header">
                     <div>
-                        <h3>
-                            Generated device_config
-                        </h3>
-
                         <p class="hint">
                             Supported placeholders: {device}, {prefix},
                             {index}, {n}, {n:02}.
@@ -2073,7 +2068,7 @@
                     class="device-config-preview"
                 ></pre>
 
-            </div>
+            </details>
 
         </section>
 

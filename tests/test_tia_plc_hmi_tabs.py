@@ -52,7 +52,17 @@ def test_profile_selection_and_active_plc_live_on_overview():
         assert phrase in overview
     assert 'id="header-profile-summary"' in HTML
     libraries_js = (ROOT / "gui" / "js" / "data_libraries.js").read_text(encoding="utf-8")
-    assert "overviewProfilesHost.replaceChildren(profilesCard)" in libraries_js
+    assert 'collapsibleCard(profilesCard, "Local project profiles")' in libraries_js
+
+
+def test_device_engineering_sections_are_collapsible():
+    devices = _tab("devices")
+    for title in (
+        "Device templates", "Device groups", "TIA hardware / I/O channels",
+        "I/O mapping", "Generated PLC tags", "Generated device configuration",
+    ):
+        assert f"<summary>{title}</summary>" in devices
+    assert devices.count('<details class="card device-section">') == 6
 
 
 def test_hmi_translation_and_xml_list_workflow_are_not_in_plc_tab():

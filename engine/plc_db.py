@@ -30,6 +30,10 @@ class DataBlockSpecification(BaseModel):
 
         def validate_nested(members):
             for member in members:
+                if member.system_instance:
+                    raise ValueError(
+                        "Siemens system instances are allowed only in Static FB declarations."
+                    )
                 # V21 optimized DB Retain covers a top-level STRUCT/UDT/ARRAY
                 # as a whole; applying it to a child would silently be lost.
                 for nested in member.struct_members or []:
