@@ -13,14 +13,18 @@ function markDraft(fc) {
 }
 
 function dependencySummary(fc) {
+    const memberType = member => String(member.data_type || "").toLocaleLowerCase() === "array"
+        ? member.array_element_type : member.data_type;
     const udtNames = new Set(projectConfig.udts.map(udt => String(udt.name).toLocaleLowerCase()));
     const fbNames = new Set(projectConfig.fbs.map(fb => String(fb.name).toLocaleLowerCase()));
     const udts = [], invalid = [];
-    const visit = members => members.forEach(member => {
-        const type = String(member.data_type || "").toLocaleLowerCase();
-        if (udtNames.has(type)) udts.push(member.name + " → " + member.data_type);
-        if (fbNames.has(type)) invalid.push(member.name + " → " + member.data_type);
-        if (member.struct_members) visit(member.struct_members);
+    const visit = (members, parent = "") => members.forEach(member => {
+        const path = parent ? parent + "." + member.name : member.name;
+        const typeName = memberType(member);
+        const type = String(typeName || "").toLocaleLowerCase();
+        if (udtNames.has(type)) udts.push(path + " → " + typeName);
+        if (fbNames.has(type)) invalid.push(path + " → " + typeName);
+        if (member.struct_members) visit(member.struct_members, path);
     });
     [fc.input, fc.output, fc.inout, fc.temp, fc.constant].forEach(section => visit(section?.members || []));
     if (!udts.length && !invalid.length) return null;

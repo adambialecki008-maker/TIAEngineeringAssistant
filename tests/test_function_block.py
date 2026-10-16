@@ -36,6 +36,23 @@ def test_project_rejects_circular_fb_multi_instance_dependency():
         ]})
 
 
+def test_project_validates_nested_and_array_static_multi_instances():
+    with pytest.raises(ValidationError, match="Circular Function Block"):
+        ProjectSpecification.model_validate({"fbs": [
+            {"name": "FB_A", "source_mode": "tia_read_only", "source_xml": "<FB/>",
+             "static": {"name": "Static", "members": [{
+                 "name": "Nested", "data_type": "Struct", "struct_members": [
+                     {"name": "B", "data_type": "FB_B"},
+                 ],
+             }]}},
+            {"name": "FB_B", "source_mode": "tia_read_only", "source_xml": "<FB/>",
+             "static": {"name": "Static", "members": [{
+                 "name": "Children", "data_type": "Array", "array_element_type": "FB_A",
+                 "array_lower_bound": 0, "array_upper_bound": 1,
+             }]}},
+        ]})
+
+
 def test_instance_db_preview_is_derived_from_its_function_block():
     fb = FunctionBlockSpecification.model_validate({"name":"FB_Motor", "static":{"name":"Static","members":[{"name":"Running","data_type":"Bool"}]}})
     preview = instance_db_preview(InstanceDbSpecification(name="DB_Motor", function_block="FB_Motor"), fb)

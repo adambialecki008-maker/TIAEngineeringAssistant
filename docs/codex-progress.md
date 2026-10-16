@@ -336,3 +336,19 @@
   and browser regression — passed. Playwright Chromium will run in GitHub
   Actions after push.
 
+## Nested FB/FC declaration dependencies — 2026-10-16
+
+- FB and FC declaration validation now walks nested `Struct` members. The FB
+  dependency graph also resolves the element type of `Array` declarations, so
+  a nested or array multi-instance cannot bypass the section, verification or
+  cycle checks.
+- The local FB/FC summaries use the same traversal and show full declaration
+  paths such as `Nested.Motor → FB_Dependency`. No block source, LAD/FBD/SCL
+  network or TIA project is created, regenerated or written.
+- Regression coverage includes a nested/array circular FB relationship, a
+  nested forbidden FC IEC instance, and browser-visible nested multi-instance
+  analysis.
+- Validation: `pytest -q` — 526 passed; `node --check` for FB/FC UI and the
+  browser regression — passed. Playwright Chromium will run in GitHub Actions
+  after push.
+

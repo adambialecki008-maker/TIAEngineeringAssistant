@@ -30,6 +30,14 @@ def test_fc_rejects_static_and_system_instances():
         FunctionSpecification.model_validate(tia_fc_payload(
             temp={"name": "Temp", "members": [{"name": "Timer", "data_type": "TON_TIME", "system_instance": True}]},
         ))
+    with pytest.raises(ValidationError, match="System instances"):
+        FunctionSpecification.model_validate(tia_fc_payload(
+            temp={"name": "Temp", "members": [{
+                "name": "Nested", "data_type": "Struct", "struct_members": [
+                    {"name": "Timer", "data_type": "TON_TIME", "system_instance": True},
+                ],
+            }]},
+        ))
 
 
 def test_instance_db_cannot_target_fc_and_program_block_names_do_not_collide():

@@ -7,6 +7,14 @@ from engine.tia_member import TiaMember
 from engine.tia.type_registry import type_entry
 
 
+def walk_function_block_members(members):
+    """Yield a declaration tree without turning nested members into new fields."""
+    for member in members:
+        yield member
+        if member.struct_members:
+            yield from walk_function_block_members(member.struct_members)
+
+
 class FunctionBlockSection(BaseModel):
     name: str
     members: list[TiaMember] = Field(default_factory=list)
@@ -60,12 +68,12 @@ class FunctionBlockSpecification(BaseModel):
         if self.interface_verified and self.unverified_reasons:
             raise ValueError("Verified FB interfaces cannot contain unverified reasons.")
         for section in (self.input, self.output, self.inout, self.temp, self.constant):
-            for member in section.members:
+            for member in walk_function_block_members(section.members):
                 if member.system_instance:
                     raise ValueError(f"System instances are allowed only for Static FB members, not {section.name}.")
                 if member.retain is not None:
                     raise ValueError(f"Retain is allowed only for Static FB members, not {section.name}.")
-        for member in self.static.members:
+        for member in walk_function_block_members(self.static.members):
             if not member.system_instance:
                 continue
             entry = type_entry(member.data_type)
@@ -75,7 +83,7 @@ class FunctionBlockSpecification(BaseModel):
                 raise ValueError("System instances cannot expose editable nested declarations.")
         declared = {}
         for section in (self.input, self.output, self.inout, self.static, self.temp, self.constant):
-            for member in section.members:
+            for member in walk_function_block_members(section.members):
                 key = member.name.strip().casefold()
                 if key in declared:
                     raise ValueError(f"FB member name {member.name} is declared in both {declared[key]} and {section.name}.")

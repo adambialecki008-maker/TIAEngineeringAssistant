@@ -19,8 +19,18 @@ const FB = {
             {name: "IN", path: "TON_Unblocked.IN", data_type: "Bool", level: 1},
             {name: "Q", path: "TON_Unblocked.Q", data_type: "Bool", level: 1},
         ],
+    }, {
+        name: "Nested", data_type: "Struct", struct_members: [
+            {name: "Motor", data_type: "FB_Dependency", comment: null},
+        ],
     }]), temp: section("Temp"),
     constant: section("Constant"),
+};
+const FB_DEPENDENCY = {
+    name: "FB_Dependency", language: "SCL", source_mode: "tia_read_only",
+    source_xml: "<SW.Blocks.FB />", interface_verified: true,
+    input: section("Input"), output: section("Output"), inout: section("InOut"),
+    static: section("Static"), temp: section("Temp"), constant: section("Constant"),
 };
 const FC = {
     name: "FC_Test", language: "FBD", source_mode: "tia_read_only",
@@ -38,15 +48,15 @@ const FC = {
         page.on("dialog", dialog => dialog.accept());
         await page.route("**/api/v1/tia/**", route =>
             route.fulfill({status: 503, json: {detail: "TIA mocked"}}));
-        await page.addInitScript(({key, FB, FC}) => {
+        await page.addInitScript(({key, FB, FB_DEPENDENCY, FC}) => {
             localStorage.setItem(key, JSON.stringify({
-                plc_family:"S7-1500", udts:[], dbs:[], fbs:[FB], fcs:[FC], instance_dbs:[{
+                plc_family:"S7-1500", udts:[], dbs:[], fbs:[FB, FB_DEPENDENCY], fcs:[FC], instance_dbs:[{
                     name:"DB_RemoteOwner", block_kind:"InstanceDB", source_mode:"tia_read_only",
                     is_consistent:true, function_block:"FB_NotImported", instance_of_type:"FB",
                     instance_of_number:9, relationship_status:"reported_by_openness",
                 }],
             }));
-        }, {key, FB, FC});
+        }, {key, FB, FB_DEPENDENCY, FC});
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
         await page.locator('[data-tab="fb"]').click();
         await openSection(page, "fb-editor");
@@ -56,6 +66,7 @@ const FC = {
         assert.doesNotMatch(await fb.locator(".program-block-header").innerText(), /KOP/);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Legacy.*Unverified/);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Local draft/);
+        assert.match(await fb.innerText(), /Multi-instance: Nested\.Motor → FB_Dependency/);
         assert.equal(await fb.locator(".program-declaration-section").count(), 6);
         assert.equal(await fb.locator(".program-declarations").count(), 1);
         const input = fb.locator(".program-declaration-section").first();
@@ -75,7 +86,7 @@ const FC = {
             rows => rows.map(el => el.getAttribute("data-native-member-path"))), [
                 "TON_Unblocked.PT", "TON_Unblocked.ET", "TON_Unblocked.IN", "TON_Unblocked.Q",
             ]);
-        assert.equal(await staticSection.locator("tr[data-member-path]").count(), 1);
+        assert.equal(await staticSection.locator("tr[data-member-path]").count(), 2);
         const converted = await page.evaluate(async () => {
             const {convertTiaFbDetail} = await import("/gui/js/fb_import_converter.js");
             return convertTiaFbDetail({
@@ -116,6 +127,7 @@ const FC = {
         assert.deepEqual(await dependencyResults.locator("details th").allTextContents(),
             ["Object", "Declaration", "Issue", "Details"]);
         assert.match(await dependencyResults.innerText(), /Input\.RemoteOnly.*UDT_RemoteOnly/s);
+        assert.match(await dependencyResults.innerText(), /Static\.Nested\.Motor.*FB_Dependency/s);
         assert.match(await dependencyResults.innerText(), /FB_NotImported/);
         console.log("FB/FC compact declarations, snapshot statuses and LAD terminology: PASS");
     } finally {

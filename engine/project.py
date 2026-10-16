@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from engine.plc_db import DataBlockSpecification
 from engine.udt import UdtSpecification
-from engine.function_block import FunctionBlockSpecification
+from engine.function_block import FunctionBlockSpecification, walk_function_block_members
 from engine.function import FunctionSpecification
 from engine.instance_db import InstanceDbSpecification, InstanceDbSnapshot
 
@@ -29,24 +29,21 @@ class ProjectSpecification(BaseModel):
         if set(by_name).intersection(fc_names):
             raise ValueError("Function and Function Block names must be unique across program blocks.")
 
-        def walk_members(members):
-            for member in members:
-                yield member
-                if member.struct_members:
-                    yield from walk_members(member.struct_members)
+        def declared_type(member):
+            return member.array_element_type if member.data_type.casefold() == "array" else member.data_type
 
         for fb in self.fbs:
             for section in (fb.input, fb.output, fb.inout, fb.temp, fb.constant):
-                for member in walk_members(section.members):
-                    if member.data_type.casefold() in by_name:
+                for member in walk_function_block_members(section.members):
+                    if declared_type(member).casefold() in by_name:
                         raise ValueError(
                             "Function Block references are allowed only as Static multi-instances: "
                             + fb.name + "." + member.name
                         )
         for fc in self.fcs:
             for section in (fc.input, fc.output, fc.inout, fc.temp, fc.constant):
-                for member in walk_members(section.members):
-                    if member.data_type.casefold() in by_name:
+                for member in walk_function_block_members(section.members):
+                    if declared_type(member).casefold() in by_name:
                         raise ValueError(
                             "Functions cannot declare Function Block multi-instances: "
                             + fc.name + "." + member.name
@@ -57,8 +54,8 @@ class ProjectSpecification(BaseModel):
             if key in visiting: raise ValueError("Circular Function Block dependency: " + fb.name)
             if key in visited: return
             visiting.add(key)
-            for member in fb.static.members:
-                child = by_name.get(member.data_type.casefold())
+            for member in walk_function_block_members(fb.static.members):
+                child = by_name.get(declared_type(member).casefold())
                 if child:
                     if child.source_mode != "tia_read_only" or not child.interface_verified:
                         raise ValueError(

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from engine.function_block import FunctionBlockSection
+from engine.function_block import FunctionBlockSection, walk_function_block_members
 
 
 class FunctionSpecification(BaseModel):
@@ -46,7 +46,7 @@ class FunctionSpecification(BaseModel):
             raise ValueError("Verified FC interfaces cannot contain unverified reasons.")
         declared = {}
         for section in (self.input, self.output, self.inout, self.temp, self.constant):
-            for member in section.members:
+            for member in walk_function_block_members(section.members):
                 if member.system_instance:
                     raise ValueError("System instances are not allowed in Function declarations.")
                 if member.retain is not None:
