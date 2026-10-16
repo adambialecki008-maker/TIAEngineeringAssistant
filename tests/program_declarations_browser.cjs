@@ -27,10 +27,10 @@ const FB = {
     constant: section("Constant"),
 };
 const FB_DEPENDENCY = {
-    name: "FB_Dependency", language: "SCL", source_mode: "tia_read_only",
+    name: "FB_Dependency", number: 7, language: "SCL", source_mode: "tia_read_only",
     source_xml: "<SW.Blocks.FB />", interface_verified: true,
     input: section("Input"), output: section("Output"), inout: section("InOut"),
-    static: section("Static"), temp: section("Temp"), constant: section("Constant"),
+    static: section("Static", [member("Retained")]), temp: section("Temp"), constant: section("Constant"),
 };
 const FC = {
     name: "FC_Test", language: "FBD", source_mode: "tia_read_only",
@@ -54,6 +54,10 @@ const FC = {
                     name:"DB_RemoteOwner", block_kind:"InstanceDB", source_mode:"tia_read_only",
                     is_consistent:true, function_block:"FB_NotImported", instance_of_type:"FB",
                     instance_of_number:9, relationship_status:"reported_by_openness",
+                }, {
+                    name:"DB_VerifiedOwner", number: 21, block_kind:"InstanceDB", source_mode:"tia_read_only",
+                    is_consistent:true, function_block:"FB_Dependency", instance_of_type:"FB",
+                    instance_of_number:7, relationship_status:"reported_by_openness",
                 }],
             }));
         }, {key, FB, FB_DEPENDENCY, FC});
@@ -129,6 +133,17 @@ const FC = {
         assert.match(await dependencyResults.innerText(), /Input\.RemoteOnly.*UDT_RemoteOnly/s);
         assert.match(await dependencyResults.innerText(), /Static\.Nested\.Motor.*FB_Dependency/s);
         assert.match(await dependencyResults.innerText(), /FB_NotImported/);
+
+        await openSection(page, "instance-db-inventory");
+        const instanceDb = page.locator("#instance-db-container > details")
+            .filter({hasText: "DB_VerifiedOwner"});
+        assert.equal(await instanceDb.count(), 1);
+        const instancePreview = instanceDb.locator(".instance-db-preview");
+        assert.equal(await instancePreview.count(), 1);
+        await instancePreview.locator(":scope > summary").click();
+        assert.deepEqual(await instancePreview.locator("th").allTextContents(),
+            ["Declaration", "Data type", "Comment"]);
+        assert.match(await instancePreview.innerText(), /Retained.*Bool/s);
         console.log("FB/FC compact declarations, snapshot statuses and LAD terminology: PASS");
     } finally {
         await browser.close();

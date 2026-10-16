@@ -352,3 +352,19 @@
   browser regression — passed. Playwright Chromium will run in GitHub Actions
   after push.
 
+## Verified-owner Instance DB preview — 2026-10-16
+
+- Updated the Instance DB inventory guidance to describe the existing,
+  evidence-based Openness owner metadata. An owner is never inferred from a
+  DB name.
+- When Openness directly reports an FB name/type/number and the local project
+  contains the matching verified FB snapshot, each Instance DB now exposes a
+  collapsed read-only table of that FB's Static declarations. It preserves
+  nested Struct members and observed IEC child fields and labels the view as a
+  local derivation, not an independent declaration or TIA write.
+- If the owner snapshot is missing, unverified or numbered differently, the
+  UI explicitly withholds the structure preview.
+- Validation: `pytest -q` — 526 passed; `node --check` for the Instance DB UI
+  and browser regression — passed. Playwright Chromium will run in GitHub
+  Actions after push.
+
