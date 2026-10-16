@@ -490,3 +490,17 @@
   networks.
 - Added dedicated offline regression tests. Existing TIA Openness import,
   HMI translations, and user files are unchanged. No writes to PLCs.
+
+## LAD/FBD FlgNet topology-only inspection — 2026-10-16
+
+- AI Code Review now exposes a read-only structured model of Siemens XML FlgNet
+  network nodes (Access, Part, Call) and explicit wires (NameCon, IdentCon,
+  Powerrail, OpenCon), preserving UId, component symbol, part/call name, port
+  and network-specific programming language.
+- Structural warnings identify duplicated node UIds, references to absent
+  *recognized* Parts and missing Parts/Wires. These warnings require TIA
+  verification and do NOT assert faulty execution logic, invalid ladder
+  semantics, or safe source regeneration.
+- Does not modify existing FB/FC imports, translate LAD/FBD to SCL, infer flow
+  direction or create files to import to TIA. Regression fixtures model
+  documented Siemens FlgNet forms, not yet a validated V21 export suite.

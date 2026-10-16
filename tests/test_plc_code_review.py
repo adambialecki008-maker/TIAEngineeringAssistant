@@ -215,3 +215,77 @@ def test_simaticml_missing_interface_reports_partial_without_scanning_program_me
     assert report.files[0].networks == ["network 1"]
     assert "No supported declaration Interface/Sections" in report.files[0].parsing_warnings[0]
     assert not report.findings
+
+
+def test_flgnet_reports_real_parts_wires_symbol_and_call_without_logic_guessing():
+    source = (
+        '<Document><SW.Blocks.FB><AttributeList><Name>FB_Line</Name>'
+        '<Interface><Sections/></Interface></AttributeList><ObjectList>'
+        '<SW.Blocks.CompileUnit><AttributeList><ProgrammingLanguage>LAD</ProgrammingLanguage>'
+        '<NetworkSource><FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v4">'
+        '<Parts>'
+        '<Access Scope="LocalVariable" UId="21"><Symbol><Component Name="Start"/></Symbol></Access>'
+        '<Part Name="Contact" UId="23"/>'
+        '<Call UId="24"><CallInfo Name="FB_Motor" BlockType="FB"/></Call>'
+        '</Parts>'
+        '<Wires><Wire UId="25"><IdentCon UId="21"/><NameCon UId="23" Name="operand"/></Wire>'
+        '<Wire UId="26"><Powerrail/><NameCon UId="23" Name="in"/></Wire>'
+        '<Wire UId="27"><NameCon UId="23" Name="out"/><NameCon UId="24" Name="en"/></Wire>'
+        '</Wires></FlgNet></NetworkSource></AttributeList></SW.Blocks.CompileUnit>'
+        '</ObjectList></SW.Blocks.FB></Document>'
+    )
+    report = analyze_files([ReviewInputFile(name="line.xml", content=source)])
+    block = report.files[0]
+    assert block.networks == ["network 1"]
+    assert len(block.network_details) == 1
+    network = block.network_details[0]
+    assert network.language == "LAD"
+    assert [(part.uid, part.kind, part.name, part.symbol) for part in network.nodes] == [
+        ("21", "Access", "", "Start"), ("23", "Part", "Contact", ""),
+        ("24", "Call", "FB_Motor", ""),
+    ]
+    assert len(network.wires) == 3
+    assert [(endpoint.kind, endpoint.uid, endpoint.port) for endpoint in network.wires[0].endpoints] == [
+        ("IdentCon", "21", ""), ("NameCon", "23", "operand"),
+    ]
+    assert "not logic-verified" in network.verification_status
+    assert not report.findings
+
+
+def test_flgnet_mixed_languages_and_dangling_ref_are_review_warning_not_logic_fault():
+    source = (
+        '<SW.Blocks.FC Name="FC_Test"><Section Name="Input"><Member Name="Enable" Datatype="Bool"/></Section>'
+        '<SW.Blocks.CompileUnit><AttributeList><ProgrammingLanguage>FBD</ProgrammingLanguage>'
+        '<NetworkSource><FlgNet><Parts><Part Name="And" UId="30"/></Parts>'
+        '<Wires><Wire UId="31"><NameCon UId="404" Name="in1"/>'
+        '<NameCon UId="30" Name="out"/></Wire></Wires></FlgNet></NetworkSource>'
+        '</AttributeList></SW.Blocks.CompileUnit>'
+        '<SW.Blocks.CompileUnit><AttributeList><ProgrammingLanguage>LAD</ProgrammingLanguage>'
+        '<NetworkSource><FlgNet><Parts><Part Name="Coil" UId="40"/></Parts>'
+        '<Wires><Wire UId="41"><OpenCon UId="43"/>'
+        '<NameCon UId="40" Name="out"/></Wire></Wires></FlgNet></NetworkSource>'
+        '</AttributeList></SW.Blocks.CompileUnit></SW.Blocks.FC>'
+    )
+    report = analyze_files([ReviewInputFile(name="x.xml", content=source)])
+    block = report.files[0]
+    assert [network.language for network in block.network_details] == ["FBD", "LAD"]
+    assert len(report.findings) == 1
+    finding = report.findings[0]
+    assert (finding.category, finding.location, finding.severity) == (
+        "FlgNet structural review", "network 1", "warning",
+    )
+    assert "404" in finding.explanation
+    assert finding.verification_status == "requires TIA verification"
+
+
+def test_flgnet_without_parts_or_wires_reports_partial_topology_not_exception():
+    source = (
+        '<SW.Blocks.FB Name="FB_Min"><SW.Blocks.CompileUnit>'
+        '<NetworkSource><FlgNet><Parts><Part Name="Contact" UId="1"/></Parts>'
+        '</FlgNet></NetworkSource></SW.Blocks.CompileUnit></SW.Blocks.FB>'
+    )
+    report = analyze_files([ReviewInputFile(name="min.xml", content=source)])
+    assert len(report.files[0].network_details) == 1
+    assert not report.files[0].network_details[0].wires
+    assert any("Wires is absent" in x.explanation for x in report.findings)
+    assert all(x.verification_status == "requires TIA verification" for x in report.findings)
