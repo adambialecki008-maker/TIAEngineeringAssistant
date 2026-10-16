@@ -29,6 +29,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         await page.locator("#review-analyze").click();
         await page.waitForSelector("text=Read-only deterministic analysis complete");
         assert.equal(await page.locator("#review-ai").isDisabled(), false);
+        assert.equal(await page.locator("#review-ai-block").inputValue(), "FB_Test");
         assert.match(await page.locator("#review-results .review-project-summary").innerText(), /Project overview/);
         assert.match(await page.locator("#review-results .review-project-summary").innerText(), /P0: 1/);
         assert.match(await page.locator("#review-results .review-project-summary").innerText(), /P2: 1/);
@@ -92,6 +93,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         await page.locator("#review-tia-analyze").click();
         await page.waitForSelector("text=loaded TIA snapshot(s) analyzed");
         assert.match(await page.locator("#review-status").innerText(), /loaded TIA snapshots complete/);
+        assert.equal(await page.locator("#review-ai").isDisabled(), true,
+            "LAD/FBD XML should not be sent to slow local AI");
         console.log("PLC code review Analyze Files and optional local AI review: PASS");
     } finally {
         await browser.close();

@@ -721,3 +721,15 @@
   findings in a deterministic order.
 - Backend and Chromium regression cover counts, priority integrity, filtering,
   Markdown export and AI enrichment. Actual TIA/Ollama integration is separate.
+
+## One-block budgeted local AI (2026-10-16)
+
+- Local Ollama review is optional and limited to exactly one selected SCL
+  block per click. Raw exported LAD/FBD XML is not sent to the model.
+- Source excerpt limited to 2400 characters with original line labels,
+  metadata reduced to 16 declarations, context capped at 2048 tokens,
+  generated output capped at 256 tokens.
+- First request timeout 35 s; invalid-JSON retry timeout 15 s.
+  Connection/timeout errors preserve deterministic results without retrying.
+- GUI includes an explicit SCL block selector and disables AI for XML-only
+  TIA snapshots. No project writes. Live Ollama model speed unverified.

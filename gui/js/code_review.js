@@ -590,8 +590,9 @@ export function initCodeReviewUi() {
     const list = document.getElementById("review-files-list"), results = document.getElementById("review-results");
     const download = document.getElementById("review-download"), markdown = document.getElementById("review-download-markdown"), ai = document.getElementById("review-ai");
     const model = document.getElementById("review-ollama-model");
+    const blockSelect = document.getElementById("review-ai-block");
     const tiaRun = document.getElementById("review-tia-analyze"), tiaStatus = document.getElementById("review-tia-status");
-    if (!files || !folder || !run || !status || !list || !results || !download || !markdown || !ai || !model || !tiaRun || !tiaStatus) return;
+    if (!files || !folder || !run || !status || !list || !results || !download || !markdown || !ai || !model || !blockSelect || !tiaRun || !tiaStatus) return;
     let selected = [], report = null, payload = [];
     const refresh = () => {
         selected = [...files.files, ...folder.files].filter(file => /\.(scl|xml)$/i.test(file.name));
@@ -602,6 +603,26 @@ export function initCodeReviewUi() {
         }));
         status.textContent = selected.length ? selected.length + " supported file(s) selected." : "Select PLC source files or a folder.";
         ai.disabled = true;
+        blockSelect.replaceChildren();
+        blockSelect.disabled = true;
+        report = null;
+        payload = [];
+        results.replaceChildren();
+        download.disabled = true;
+        markdown.disabled = true;
+    };
+    const populateAiBlocks = () => {
+        blockSelect.replaceChildren(...(report?.files || []).filter(block =>
+            block.language === "SCL" && /\.scl$/i.test(block.source_file)
+            && block.verification_status !== "failed"
+        ).map(block => {
+            const option = document.createElement("option");
+            option.value = block.name;
+            option.textContent = block.name + " — " + block.source_file;
+            return option;
+        }));
+        blockSelect.disabled = !blockSelect.options.length;
+        ai.disabled = blockSelect.disabled;
     };
     const readPayload = () => Promise.all(selected.map(async file => ({
         name:file.webkitRelativePath || file.name, content:await file.text(),
@@ -620,7 +641,7 @@ export function initCodeReviewUi() {
             status.textContent = "Read-only deterministic analysis complete. You can optionally run local Ollama review.";
             download.disabled = false;
             markdown.disabled = false;
-            ai.disabled = false;
+            populateAiBlocks();
         } catch (error) {
             status.textContent = "Analysis failed: " + error.message;
             status.classList.add("error");
@@ -629,12 +650,12 @@ export function initCodeReviewUi() {
         }
     });
     ai.addEventListener("click", async () => {
-        if (!payload.length) return;
+        if (!payload.length || !blockSelect.value) return;
         ai.disabled = true;
         status.classList.remove("error");
-        status.textContent = "Requesting unverified suggestions from local Ollama…";
+        status.textContent = "Reviewing one selected SCL block with local Ollama (short excerpt, bounded request)…";
         try {
-            report = await postJson("/api/v1/code-review/ollama", {files:payload, model:model.value.trim() || null});
+            report = await postJson("/api/v1/code-review/ollama", {files:payload, model:model.value.trim() || null, block_names:[blockSelect.value]});
             renderReport(report, results);
             const aiStatus = report.ai_review_status || "complete";
             status.textContent = aiStatus === "unavailable"
@@ -647,7 +668,7 @@ export function initCodeReviewUi() {
             status.textContent = "Local AI review failed: " + error.message + ". Deterministic results remain available.";
             status.classList.add("error");
         } finally {
-            ai.disabled = false;
+            ai.disabled = blockSelect.disabled;
         }
     });
     tiaRun.addEventListener("click", async () => {
@@ -671,7 +692,7 @@ export function initCodeReviewUi() {
             tiaStatus.textContent = snapshots.length + " loaded TIA snapshot(s) analyzed. TIA Portal was not contacted.";
             download.disabled = false;
             markdown.disabled = false;
-            ai.disabled = false;
+            populateAiBlocks();
         } catch (error) {
             tiaStatus.textContent = "TIA snapshot analysis failed: " + error.message;
             tiaStatus.classList.add("error");

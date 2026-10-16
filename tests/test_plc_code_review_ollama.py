@@ -43,7 +43,7 @@ def test_ollama_suggestions_are_validated_and_bound_to_real_source(monkeypatch):
     assert findings[1].location == ""
     assert captured[0][0] == "/api/chat"
     assert "untrusted PLC source data" in captured[0][1]["messages"][1]["content"]
-    assert captured[0][2] == 90
+    assert captured[0][2] == 35
 
 
 def test_ollama_invalid_json_retries_then_keeps_deterministic_report(monkeypatch):
@@ -165,3 +165,59 @@ def test_ai_review_refreshes_project_priority_and_method_counts(monkeypatch):
     assert result.summary.by_priority["P0"] == 0
     assert result.summary.by_priority["P1"] == 1
     assert result.findings[-1].priority == "P1"
+
+
+
+def test_ai_review_skips_all_xml_without_calling_ollama(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Ollama must never receive raw LAD/FBD XML")
+    monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", forbidden)
+    report = review_with_ollama(AiReviewRequest(files=[
+        ReviewInputFile(name="FB_Lad.xml", content='<SW.Blocks.FB Name="FB_LAD"/>'),
+    ]))
+    assert report.ai_review_status == "unavailable"
+    assert "only reviews an SCL" in report.file_warnings[-1]
+
+
+def test_ai_review_one_request_one_scl_block_and_short_prompt(monkeypatch):
+    monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
+    calls = []
+    def fake(endpoint, payload, timeout):
+        calls.append((payload, timeout))
+        return {"message": {"content": '{"findings": []}'}}
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", fake)
+    large = "FUNCTION_BLOCK FB_Main\nVAR_INPUT\n Inp : Bool;\nEND_VAR\nBEGIN\n" + "\n".join(
+        "#Inp := TRUE;" for _ in range(1600)
+    ) + "\nEND_FUNCTION_BLOCK"
+    report = review_with_ollama(AiReviewRequest(files=[
+        ReviewInputFile(name="Long.scl", content=large),
+        ReviewInputFile(name="Other.scl", content="FUNCTION_BLOCK FB_Other\nEND_FUNCTION_BLOCK"),
+    ], block_names=["FB_Main"]))
+    assert report.ai_review_status == "complete"
+    assert len(calls) == 1
+    assert calls[0][1] == 35
+    assert calls[0][0]["options"]["num_predict"] == 256
+    assert calls[0][0]["options"]["num_ctx"] == 2048
+    prompt = calls[0][0]["messages"][1]["content"]
+    assert "SOURCE:" in prompt
+    assert len(prompt) < 4300
+    assert any("short SCL excerpt" in warning for warning in report.file_warnings)
+    assert report.summary.analyzed_files == 2
+
+
+def test_ai_review_timeout_is_nonfatal_and_is_not_retried(monkeypatch):
+    from fastapi import HTTPException
+    monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
+    calls = []
+    def slow(endpoint, payload, timeout):
+        calls.append(timeout)
+        raise HTTPException(504, "Ollama did not respond before timeout")
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", slow)
+    result = review_with_ollama(AiReviewRequest(files=[
+        ReviewInputFile(name="Long.scl", content="FUNCTION_BLOCK FB_Long\nEND_FUNCTION_BLOCK"),
+    ]))
+    assert calls == [35]
+    assert result.ai_review_status == "unavailable"
+    assert any("local AI request stopped" in warning for warning in result.file_warnings)
+    assert result.summary.total_findings == len(result.findings)
