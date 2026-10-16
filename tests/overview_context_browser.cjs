@@ -66,6 +66,7 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
             return projectConfig.udts.length;
         });
         assert.equal(old,1);
+        await page.locator("#overview-profile-management > details > summary").click();
         await page.locator('#overview-profile-management input[placeholder="New project name"]')
             .fill("Station B");
         await page.locator("#overview-profile-management")
