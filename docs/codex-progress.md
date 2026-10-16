@@ -1,3 +1,15 @@
+## Compact main headings and single-object panels — 2026-10-16
+
+- Made top-level engineering bars uniformly 54px high, 15px text, shared
+  padding, colors, borders and chevrons; extended this to I/O Engineering.
+- Removed redundant nested accordion for single UDT/DB, device template,
+  Instance DB and native PLC tags/program inventory; single DB Static is static.
+- Multi-object views and nested Struct/Array and FB/FC declaration trees keep
+  their independent fold controls. Engineering context remains permanently
+  visible, with no chevron and no persisted close preference.
+- No TIA write operations or adapter changes. Browser regression included.
+- CI status: see GitHub Actions for this branch.
+
 ## Permanent Overview context and uniform collapsed panels — 2026-10-16
 
 - Kept "Engineering context — getting started" permanently visible as an
