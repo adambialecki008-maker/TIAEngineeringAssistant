@@ -1,3 +1,26 @@
+## Collapsible engineering menus and heading typography — 2026-10-16
+
+- Applied a shared top-level disclosure pattern to Overview, PLC tags/program/
+  data structures/Create PLC, UDT and global DB editors and TIA imports, both
+  FB/FC creation and TIA imports, offline dependency analysis, Instance DB
+  inventory, and all three Source preview cards.
+- Existing controls are moved unchanged into native `<details>` panels.
+  No handler/ID is removed; local new FB/FC forms and their lists now share
+  the same collapsible section. Users can toggle with mouse or keyboard,
+  and the open state survives refresh in a separate optional UI preference.
+- Main UDT/DB editors and source selection/output begin expanded; supplementary
+  engineering modules begin collapsed. Nested variable and PLC tree behavior
+  remains independent.
+- Standardized application font, page and section heading sizes/weights across
+  all tabs, explicitly unifying the three first-page Overview sections.
+  Removed the legacy inline 1.1rem/600 typography on local project-profile
+  and Data & Library summaries.
+- Updated browser tests to open real UI panels before interacting instead of
+  bypassing visibility. Added 18-section topology, computed typography,
+  keyboard-toggle and state persistence regression.
+- Full GitHub Actions `38868927559`: **523 pytest PASS**, JavaScript
+  syntax **PASS**, Playwright **PASS**. No TIA code/logic was modified.
+
 ## New FB/FC declaration creation — 2026-10-16
 
 - Added `Add new FB` and `Add new FC` forms alongside existing read-only
