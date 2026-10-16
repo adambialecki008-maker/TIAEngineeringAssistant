@@ -139,6 +139,7 @@ const FC = {
         const instanceDb = page.locator("#instance-db-container > details")
             .filter({hasText: "DB_VerifiedOwner"});
         assert.equal(await instanceDb.count(), 1);
+        await instanceDb.locator(":scope > summary").click();
         const instancePreview = instanceDb.locator(".instance-db-preview");
         assert.equal(await instancePreview.count(), 1);
         await instancePreview.locator(":scope > summary").click();
