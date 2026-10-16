@@ -1,3 +1,13 @@
+## Python regression alignment for one-level Library panels — 2026-10-16
+
+- Replaced the outdated Python assertion that required a nested
+  `importSection` disclosure with checks for the single outer Import Library
+  panel, visible JSON workflow and preserved Selective import operation.
+- Added assertions that Recovery snapshots uses its outer disclosure and a
+  directly visible saved-snapshot list.
+- Playwright continues to check actual file selection and visibility; no
+  application behavior or TIA logic was changed in this commit.
+
 ## Fix redundant Library / Recovery disclosures — 2026-10-16
 
 - Data & Libraries > Import Library now uses only its outer collapsible card.
