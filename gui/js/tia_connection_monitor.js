@@ -1,82 +1,114 @@
-// Read-only process presence check; does not attach to TIA or claim a live project session.
+// Lightweight presence check only. An existing TIA PID is not proof that
+// Siemens Openness can read its project; project reads are explicit operations.
 export function initTiaConnectionMonitor() {
     const select = document.getElementById("tia-process");
-    const project = document.getElementById("overview-project-name");
-    const indicators = [
-        document.getElementById("overview-tia-live-status"),
-        document.getElementById("header-tia-live-status"),
-        document.getElementById("tia-llm-connection-status")
-    ].filter(Boolean);
-    if (!select || !indicators.length) return;
-    let state = null;
+    const headerTia = document.getElementById("header-tia-live-status");
+    const headerPlc = document.getElementById("active-plc-summary");
+    const headerProfile = document.getElementById("header-profile-summary");
+    const exportIndicator = document.getElementById("tia-llm-connection-status");
+    if (!select || !headerTia) return;
+
+    let checkResult = null;
     let pending = false;
-    let generation = 0;
+    let queued = false;
+    let readingProject = false;
     const pid = () => Number(select.value) || 0;
+    const mark = (node, ok) => {
+        if (!node) return;
+        node.classList.toggle("connection-online", ok);
+        node.classList.toggle("connection-offline", !ok);
+        node.classList.toggle("success", ok);
+        node.classList.toggle("error", !ok);
+    };
+
     function render() {
         const current = pid();
-        const name = project?.textContent?.trim() || "";
-        const label = name && name !== "Not connected" ? name : "not read";
-        let message = "Select a TIA process on Overview (Refresh TIA).";
-        let error = false;
-        if (current && (!state || state.pid !== current)) {
-            message = "TIA PID " + current + ": checking process; project status not verified.";
-        } else if (current && state?.error) {
-            message = "TIA PID " + current + ": connection unknown (" + state.error + "). Last project: " + label;
-            error = true;
-        } else if (current && state && !state.running) {
-            message = "TIA connection LOST: PID " + current + " no longer detected. Last project: " + label;
-            error = true;
-        } else if (current && state?.running) {
-            message = "TIA PID " + current + " running (checked " + state.checked
-                + "). Last read project: " + label
-                + ". Process detected; project attachment is not continuously verified.";
+        const active = !!current && checkResult?.pid === current
+            && checkResult.running === true;
+        const text = !current ? "TIA: not connected"
+            : active ? "TIA Portal PID " + current
+            : checkResult?.pid === current && checkResult.running === false
+                ? "TIA PID " + current + ": disconnected"
+                : "TIA PID " + current + ": unavailable";
+        headerTia.textContent = text;
+        mark(headerTia, active);
+        if (exportIndicator) {
+            exportIndicator.textContent = text;
+            mark(exportIndicator, active);
         }
-        for (const node of indicators) {
-            node.textContent = message;
-            node.classList.toggle("error", error);
-            node.classList.toggle("success", !!current && !!state?.running && !error);
-        }
+        const plcSelected = !!headerPlc?.textContent?.trim()
+            && !/not selected/i.test(headerPlc.textContent);
+        mark(headerPlc, active && plcSelected);
+        const profileSelected = !!headerProfile?.textContent?.trim()
+            && !/not selected/i.test(headerProfile.textContent);
+        mark(headerProfile, profileSelected);
     }
+
     async function check() {
         const current = pid();
-        const ticket = ++generation;
-        if (!current) { state = null; render(); return; }
-        if (pending) { render(); return; }
+        if (!current) {
+            checkResult = null;
+            render();
+            return;
+        }
+        if (readingProject) { queued = true; return; }
+        if (pending) { queued = true; return; }
         pending = true;
+        queued = false;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         try {
             const response = await fetch("/api/v1/tia/processes", {
-                cache: "no-store", signal: controller.signal
+                cache: "no-store", signal: controller.signal,
             });
-            if (!response.ok) throw new Error("HTTP " + response.status);
+            if (!response.ok) throw Error("HTTP " + response.status);
             const processes = await response.json();
-            if (!Array.isArray(processes)) throw new Error("Invalid process list");
-            if (ticket === generation && pid() === current) {
-                state = {
+            if (!Array.isArray(processes)) throw Error("Invalid process list");
+            if (pid() === current) {
+                checkResult = {
                     pid: current,
-                    running: processes.some(p => Number(p.process_id) === current),
-                    checked: new Date().toLocaleTimeString()
+                    running: processes.some(item => Number(item.process_id) === current),
                 };
             }
-        } catch (e) {
-            if (ticket === generation && pid() === current)
-                state = {pid: current, error: e.name === "AbortError" ? "timeout" : e.message};
+        } catch {
+            if (pid() === current) checkResult = {pid: current, running: false};
         } finally {
             clearTimeout(timeout);
             pending = false;
             render();
+            if (queued || (pid() && pid() !== current)) {
+                queued = false;
+                void check();
+            }
         }
     }
-    select.addEventListener("change", () => { state = null; render(); void check(); });
-    if (project) new MutationObserver(render).observe(project, {
-        childList: true, subtree: true, characterData: true
+
+    select.addEventListener("change", () => {
+        checkResult = null;
+        render();
+        void check();
     });
+    window.addEventListener("tia-project-refresh-start", () => {
+        readingProject = true;
+    });
+    window.addEventListener("tia-project-refresh-end", () => {
+        readingProject = false;
+        void check();
+    });
+    // Re-style on PLC selection or project profile switches without modifying
+    // either feature or creating an extra source of truth.
+    for (const node of [headerPlc, headerProfile]) {
+        if (node) new MutationObserver(render).observe(node, {
+            childList: true, characterData: true, subtree: true,
+        });
+    }
     window.addEventListener("focus", () => void check());
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") void check();
     });
-    setInterval(() => { if (document.visibilityState === "visible") void check(); }, 15000);
+    setInterval(() => {
+        if (document.visibilityState === "visible") void check();
+    }, 30000);
     render();
     void check();
 }
