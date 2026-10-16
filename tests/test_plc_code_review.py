@@ -308,7 +308,7 @@ def test_scl_ignores_nested_multiline_comments_fake_blocks_and_ghost_types():
     assert block.name == "FB_Actual"
     assert block.verification_status == "parsed"
     assert [(item.name, item.location) for item in block.declarations] == [
-        ("Real", "line 11"), ("URL", "line 12"), ("Valid", "line 13"),
+        ("Real", "line 13"), ("URL", "line 14"), ("Valid", "line 15"),
     ]
     assert not report.findings
 

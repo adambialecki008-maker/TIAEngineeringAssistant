@@ -72,5 +72,6 @@ def test_mixed_short_lines_and_oversized_lines_preserve_valid_line_numbers():
     chunks, truncated = _source_chunks("line one\n" + "Y" * 10000 + "\nline three")
     assert truncated is False
     assert all(len(chunk) <= MAX_AI_CHUNK_CHARS for chunk in chunks)
-    assert chunks[0].startswith("1: line one\n2: ")
+    assert chunks[0] == "1: line one"
+    assert any(chunk.startswith("2: ") for chunk in chunks)
     assert any("3: line three" in chunk for chunk in chunks)
