@@ -265,3 +265,24 @@
 - Validation: `pytest -q tests/test_function_block.py tests/test_udt_db_without_plc_family.py` — 11 passed.
 - Commit: pending.
 - Remaining: ZIP manifest and preflight dependency reporting for FBs; real TIA import remains intentionally unsupported.
+## Single-level engineering disclosures and HMI workflow folding — 2026-10-16
+
+- Replaced the obsolete nested Import Library and Recovery snapshots accordions
+  with their already-existing top-level panels. File import controls and saved
+  snapshot lists now appear after one intentional disclosure action.
+- Removed the second fold from PLC tags and PLC program inventory while keeping
+  all existing identifiers and refresh handlers. Single UDT/DB rendering was
+  already direct; Struct, Array and multi-object trees remain foldable.
+- Made the three HMI translation workflow steps native shared-style disclosures.
+  They start collapsed, work with mouse and keyboard, and retain their nested
+  HMI-specific lists and translation editor unchanged. A browser interaction
+  check confirmed Step 1 opens and closes while its controls remain available.
+- Removed the redundant green PLC/HMI discovery banner; Overview/header and
+  the actual inventories continue to provide the selected-context status.
+- Code commit: `e0ae757` (`fix(ui): simplify engineering disclosures`).
+- Validation: focused UI tests **43 passed**; full `pytest -q` **524 passed**;
+  all frontend/test JavaScript passed `node --check`; the CI Node runtime
+  suites passed, including **41 HMI state-transition scenarios**. Local
+  Playwright package is not installed; the pushed GitHub Actions browser job
+  remains the authoritative Chromium verification.
+
