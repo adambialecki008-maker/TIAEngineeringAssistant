@@ -17,6 +17,9 @@ from engine.function_block import FunctionBlockSpecification
 from engine.function import FunctionSpecification
 from engine.instance_db import InstanceDbSnapshot
 from engine.program_dependencies import report_program_dependencies
+from engine.plc_patch_proposal import (
+    SclPatchPreviewRequest, SclPatchPreviewResponse, preview_scl_change,
+)
 from engine.plc_code_review import (
     AiReviewRequest,
     ReviewInputFile,
@@ -60,6 +63,11 @@ app.mount(
     StaticFiles(directory="gui"),
     name="gui",
 )
+
+
+@app.post("/api/v1/code-review/preview-scl-change", response_model=SclPatchPreviewResponse)
+def preview_scl_patch(request: SclPatchPreviewRequest) -> SclPatchPreviewResponse:
+    return preview_scl_change(request)
 
 
 @app.post("/api/v1/code-review/analyze-files", response_model=ReviewReport)
