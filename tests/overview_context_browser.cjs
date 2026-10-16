@@ -44,10 +44,14 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         assert.deepEqual(await page.locator(".header-context > div").evaluateAll(
             els => els.map(el => el.id)
         ), ["header-tia-live-status","active-plc-summary","header-profile-summary"]);
-        assert.equal(await page.locator("#header-tia-live-status").innerText(),
-            "TIA: not connected");
-        assert.equal(await page.locator("#header-tia-live-status")
-            .evaluate(el => el.classList.contains("connection-offline")),true);
+        // The one detected TIA PID may already be auto-selected while the
+        // page loads. Verify either valid initial state, not a race-dependent label.
+        const initialTiaLabel = await page.locator("#header-tia-live-status").innerText();
+        assert.match(initialTiaLabel, /^(TIA: not connected|TIA Portal PID 123)$/);
+        const initialTiaOnline = await page.locator("#header-tia-live-status")
+            .evaluate(el => el.classList.contains("connection-online"));
+        if (initialTiaLabel === "TIA Portal PID 123") assert.equal(initialTiaOnline,true);
+        else assert.equal(initialTiaOnline,false);
         assert.equal(await page.locator("#active-plc-summary")
             .evaluate(el => el.classList.contains("connection-offline")),true);
         assert.equal(await page.locator("#header-profile-summary")
