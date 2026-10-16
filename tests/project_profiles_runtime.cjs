@@ -11,7 +11,7 @@ const localStorage = {
     removeItem: key => storage.delete(key),
 };
 const seed = {plc_family: "S7-1500", udts: [{name: "LEGACY_Motor", fields: []}],
-    dbs: [], device_config: {templates: [], groups: [], mappings: [], mapping_mode: "device"},
+    dbs: [], fbs: [{name: "FB_Legacy", static:{members:[]}}], device_config: {templates: [], groups: [], mappings: [], mapping_mode: "device"},
     tia_target: {device_name: "OldPLC", plc_name: "PLC_1"}};
 localStorage.setItem("tiaEngineeringAssistant.projectConfig", JSON.stringify(seed));
 const env = {localStorage, crypto: require("node:crypto").webcrypto, console};
@@ -25,6 +25,7 @@ globalThis.api = {
 const a = env.api;
 a.loadProjectConfig();
 assert.equal(a.projectConfig.udts[0].name, "LEGACY_Motor");
+assert.equal(a.projectConfig.fbs[0].name, "FB_Legacy");
 assert.equal(a.projectConfig.tia_target.plc_name, "PLC_1"); // Start-up compatibility
 assert.equal(a.getActiveProjectProfileId(), "default");
 assert.equal(JSON.parse(localStorage.getItem(
@@ -34,14 +35,17 @@ assert.throws(() => a.createProjectProfile("machine 2"), /already exists/);
 a.switchProjectProfile(second.id);
 assert.equal(a.projectConfig.tia_target, null); // Switch disconnects TIA
 assert.equal(a.projectConfig.udts.length, 0);
+assert.equal(a.projectConfig.fbs.length, 0);
 a.projectConfig.plc_family = "S7-1200";
 a.projectConfig.udts.push({name: "Other", fields: []});
+a.projectConfig.fbs.push({name: "FB_Other", static:{members:[]}});
 a.saveProjectConfig();
 assert.equal(JSON.parse(localStorage.getItem("tiaEngineeringAssistant.projectConfig")).udts[0].name, "LEGACY_Motor");
 const copy = a.duplicateProjectProfile(second.id, "Machine 2 copy");
 assert.equal(JSON.parse(localStorage.getItem("tiaEngineeringAssistant.projectConfig.profile." + copy.id)).tia_target, null);
 a.switchProjectProfile(copy.id);
 assert.equal(a.projectConfig.udts[0].name, "Other");
+assert.equal(a.projectConfig.fbs[0].name, "FB_Other");
 a.projectConfig.udts.push({name: "Only In Copy", fields: []});
 a.saveProjectConfig();
 a.switchProjectProfile(second.id);
