@@ -1,5 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
+const {createHash} = require("node:crypto");
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 
 (async () => {
@@ -7,7 +8,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     try {
         const page = await browser.newPage();
         await page.route("**/api/v1/code-review/analyze-files", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[{source_file:"FB.scl",name:"FB_Test",block_type:"FUNCTION_BLOCK",language:"SCL",declarations:[],networks:["network 1"],network_details:[{number:1,language:"LAD",nodes:[{uid:"23",kind:"Part",name:"Contact",symbol:"",scope:"",template_values:{SrcType:"Bool"},connections:[{port:"out",wire_uid:"27",peers:["OpenCon"]}]}],schema_version:"v4",coverage:"supported structure",wires:[{uid:"27",endpoints:[{kind:"NameCon",uid:"23",port:"out"},{kind:"OpenCon",uid:"",port:""}]}],warnings:[],verification_status:"topology only — not logic-verified"}],calls:[{target:"FC_Calc",location:"line 10",language:"SCL",source:"SCL",instance:"",nesting_depth:1,parent_target:"FC_Parent",arguments:[{name:"Start",operator:":="}],arguments_complete:true,resolution:"loaded block"}],variable_analysis_status:"complete",variable_usage:[{name:"TempReady",section:"Temp",reads:1,writes:1,assigned_on_exit:true,analysis_status:"complete"}],dependencies:[],parsing_warnings:[],verification_status:"parsed"}],findings:[
-            {source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",
+            {source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 3",
              severity:"error",priority:"P0",category:"Duplicate declaration",
              explanation:"Duplicate named member.",detection_method:"rule",
              verification_status:"verified",suggested_fix:"Rename one member."},
@@ -32,6 +33,31 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
                 findings:[], file_warnings:[], read_only:true,
             })});
         });
+        await page.route("**/api/v1/code-review/preview-scl-change", route => {
+            const body = route.request().postDataJSON();
+            const source = "FUNCTION_BLOCK FB_Test\\nBEGIN\\n#Value := 1;\\nEND_FUNCTION_BLOCK\\n".replaceAll("\\n", "\n");
+            const digest = createHash("sha256").update(source, "utf8").digest("hex");
+            assert.equal(body.file.content, source);
+            assert.equal(body.expected_sha256, digest);
+            assert.equal(body.start_line, 3);
+            assert.equal(body.end_line, 3);
+            assert.equal(body.expected_original, "#Value := 1;\n");
+            assert.equal(body.replacement_text, "#Value := 2;");
+            const modified = source.replace("#Value := 1;", "#Value := 2;");
+            return route.fulfill({contentType:"application/json", body:JSON.stringify({
+                source_file:"FB.scl",
+                original_sha256:digest,
+                modified_sha256:createHash("sha256").update(modified).digest("hex"),
+                output_filename:"FB.reviewed.scl",
+                start_line:3,end_line:3,
+                unified_diff:"--- a/FB.scl\n+++ b/FB.scl\n@@ -1,4 +1,4 @@\n-#Value := 1;\n+#Value := 2;\n",
+                proposed_content:modified,
+                preview_only:true,
+                requires_explicit_approval:true,
+                validation_status:"uncompiled; requires TIA validation",
+                validation_warnings:["Compile in TIA before use."],
+            })});
+        });
         await page.route("**/api/v1/code-review/ollama", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[],findings:[{source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",severity:"warning",category:"Style",explanation:"Review suggestion.",suggested_fix:"",evidence:"",detection_method:"AI",verification_status:"AI suggestion — unverified",confidence:0.4}],file_warnings:[],read_only:true})}));
         await page.addInitScript(() => localStorage.setItem("tiaEngineeringAssistant.projectConfig", JSON.stringify({
             plc_family:"", udts:[], dbs:[], fcs:[], instance_dbs:[], device_config:{templates:[],groups:[],mappings:[],mapping_mode:"device"}, tia_target:null,
@@ -41,7 +67,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         await page.locator('[data-tab="review"]').click();
         assert.equal(await page.locator("#review-files").isVisible(), true);
         assert.equal(await page.locator("#review-ai").isDisabled(), true);
-        await page.locator("#review-files").setInputFiles({name:"FB.scl", mimeType:"text/plain", buffer:Buffer.from("FUNCTION_BLOCK FB_Test")});
+        await page.locator("#review-files").setInputFiles({name:"FB.scl", mimeType:"text/plain", buffer:Buffer.from("FUNCTION_BLOCK FB_Test\nBEGIN\n#Value := 1;\nEND_FUNCTION_BLOCK\n")});
         await page.locator("#review-analyze").click();
         await page.waitForSelector("text=Read-only deterministic analysis complete");
         assert.equal(await page.locator("#review-ai").isDisabled(), false);
@@ -100,6 +126,37 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         const jsonText = require("node:fs").readFileSync(await (await completeExport).path(), "utf-8");
         assert.equal(JSON.parse(jsonText).findings.length, 2, "Export is never filtered");
         await page.locator(".review-filter-controls button").click();
+        const proposalPanel = page.locator("#review-proposal-panel");
+        assert.equal(await proposalPanel.isVisible(), true);
+        assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
+        await page.locator(".review-finding-row").first().locator(".review-prepare-change").click();
+        assert.equal(await proposalPanel.evaluate(el => el.open), true);
+        assert.equal(await page.locator("#review-proposal-start").inputValue(), "3");
+        assert.match(await page.locator("#review-proposal-original").innerText(), /#Value := 1;/);
+        await page.locator("#review-proposal-replacement").fill("#Value := 2;");
+        assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
+        await page.locator("#review-proposal-preview").click();
+        await page.waitForSelector("text=Preview ready");
+        assert.match(await page.locator("#review-proposal-diff").innerText(), /-#Value := 1;/);
+        assert.match(await page.locator("#review-proposal-diff").innerText(), /\\+#Value := 2;/);
+        assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
+        await page.locator("#review-proposal-approve").check();
+        assert.equal(await page.locator("#review-proposal-download").isDisabled(), false);
+        // Editing after approval invalidates the exact preview.
+        await page.locator("#review-proposal-replacement").fill("#Value := 3;");
+        assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
+        await page.locator("#review-proposal-replacement").fill("#Value := 2;");
+        await page.locator("#review-proposal-preview").click();
+        await page.waitForSelector("text=Preview ready");
+        await page.locator("#review-proposal-approve").check();
+        const patchDownload = page.waitForEvent("download");
+        await page.locator("#review-proposal-download").click();
+        const patchFile = await patchDownload;
+        assert.equal(patchFile.suggestedFilename(), "FB.reviewed.scl");
+        const reviewedText = require("node:fs").readFileSync(await patchFile.path(), "utf-8");
+        assert.match(reviewedText, /#Value := 2;/);
+        assert.doesNotMatch(reviewedText, /#Value := 1;/);
+        assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
         await page.locator("#review-ai").click();
         await page.waitForSelector("text=AI review complete");
         assert.equal((await page.locator("#review-results").innerText()).includes("Review suggestion."), true);
@@ -111,6 +168,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         assert.match(await page.locator("#review-status").innerText(), /loaded TIA snapshots complete/);
         assert.equal(await page.locator("#review-ai").isDisabled(), true,
             "LAD/FBD XML should not be sent to slow local AI");
+        assert.equal(await proposalPanel.evaluate(el => el.hidden), true,
+            "TIA XML snapshots must not offer an SCL patch download");
         console.log("PLC code review Analyze Files and optional local AI review: PASS");
     } finally {
         await browser.close();
