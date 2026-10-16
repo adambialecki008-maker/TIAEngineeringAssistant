@@ -34,14 +34,12 @@
         </div>
 
         <div class="header-context" aria-label="Current engineering context">
-            <div id="header-profile-summary" class="active-plc-summary">Profile: Default project</div>
-        <div
-            id="active-plc-summary"
-            class="active-plc-summary"
-        >
-            Active PLC: not selected
-        </div>
-        <div id="header-tia-live-status" class="active-plc-summary" role="status" aria-live="polite">TIA: not connected</div>
+            <div id="header-tia-live-status" class="active-plc-summary connection-offline"
+                 role="status" aria-live="polite">TIA: not connected</div>
+            <div id="active-plc-summary" class="active-plc-summary connection-offline"
+                 role="status" aria-live="polite">Active PLC: not selected</div>
+            <div id="header-profile-summary" class="active-plc-summary connection-online"
+                 role="status" aria-live="polite">Profile: Default project</div>
         </div>
 
     </header>
@@ -188,7 +186,6 @@
                 </div>
             </div>
 
-            <p id="overview-tia-live-status" class="status-box" role="status" aria-live="polite">TIA connection not checked.</p>
             <div class="card overview-help">
                 <h3>Engineering context — getting started</h3>
                 <p class="hint">
