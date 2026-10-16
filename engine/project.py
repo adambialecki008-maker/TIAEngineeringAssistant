@@ -28,6 +28,29 @@ class ProjectSpecification(BaseModel):
             raise ValueError("Function names must be unique.")
         if set(by_name).intersection(fc_names):
             raise ValueError("Function and Function Block names must be unique across program blocks.")
+
+        def walk_members(members):
+            for member in members:
+                yield member
+                if member.struct_members:
+                    yield from walk_members(member.struct_members)
+
+        for fb in self.fbs:
+            for section in (fb.input, fb.output, fb.inout, fb.temp, fb.constant):
+                for member in walk_members(section.members):
+                    if member.data_type.casefold() in by_name:
+                        raise ValueError(
+                            "Function Block references are allowed only as Static multi-instances: "
+                            + fb.name + "." + member.name
+                        )
+        for fc in self.fcs:
+            for section in (fc.input, fc.output, fc.inout, fc.temp, fc.constant):
+                for member in walk_members(section.members):
+                    if member.data_type.casefold() in by_name:
+                        raise ValueError(
+                            "Functions cannot declare Function Block multi-instances: "
+                            + fc.name + "." + member.name
+                        )
         visiting, visited = set(), set()
         def visit(fb):
             key = fb.name.casefold()

@@ -21,6 +21,27 @@ function markDraft(fc) {
     saveProjectConfig();
 }
 
+function dependencySummary(fc) {
+    const udtNames = new Set(projectConfig.udts.map(udt => String(udt.name).toLocaleLowerCase()));
+    const fbNames = new Set(projectConfig.fbs.map(fb => String(fb.name).toLocaleLowerCase()));
+    const udts = [], invalid = [];
+    const visit = members => members.forEach(member => {
+        const type = String(member.data_type || "").toLocaleLowerCase();
+        if (udtNames.has(type)) udts.push(member.name + " → " + member.data_type);
+        if (fbNames.has(type)) invalid.push(member.name + " → " + member.data_type);
+        if (member.struct_members) visit(member.struct_members);
+    });
+    [fc.input, fc.output, fc.inout, fc.temp, fc.constant].forEach(section => visit(section?.members || []));
+    if (!udts.length && !invalid.length) return null;
+    const note = document.createElement("p");
+    note.className = "hint";
+    const messages = [];
+    if (udts.length) messages.push("UDT dependencies: " + udts.join(", "));
+    if (invalid.length) messages.push("Problem: FC cannot use FB multi-instances: " + invalid.join(", "));
+    note.textContent = messages.join(". ") + ".";
+    return note;
+}
+
 export function renderFunctions(host, refresh) {
     host.replaceChildren();
     if (!projectConfig.fcs.length) {
@@ -42,6 +63,8 @@ export function renderFunctions(host, refresh) {
             ? "TIA FC snapshot — Unverified interface. Declaration changes stay local and dependency reuse is blocked."
             : "TIA FC snapshot — edit declarations locally. Program logic remains preserved XML and TIA Portal is never written.";
         card.append(title, note);
+        const dependencies = dependencySummary(fc);
+        if (dependencies) card.appendChild(dependencies);
         if (fc.declaration_draft) {
             const draft = document.createElement("p");
             draft.className = "hint";

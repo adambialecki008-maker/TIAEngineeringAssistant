@@ -38,6 +38,20 @@ def test_instance_db_cannot_target_fc_and_program_block_names_do_not_collide():
             "fbs": [{"name": "Control", "source_mode": "tia_read_only", "source_xml": "<FB/>"}],
             "fcs": [{"name": "Control", "source_mode": "tia_read_only", "source_xml": "<FC/>"}],
         })
+
+
+def test_fc_cannot_reference_an_fb_and_fb_multi_instance_must_be_static():
+    fb = {"name": "FB_Motor", "source_mode": "tia_read_only", "source_xml": "<FB/>"}
+    with pytest.raises(ValidationError, match="Functions cannot declare"):
+        ProjectSpecification.model_validate({
+            "fbs": [fb],
+            "fcs": [tia_fc_payload(input={"name": "Input", "members": [{"name": "Motor", "data_type": "FB_Motor"}]})],
+        })
+    with pytest.raises(ValidationError, match="only as Static"):
+        ProjectSpecification.model_validate({
+            "fbs": [fb, {"name": "FB_Line", "source_mode": "tia_read_only", "source_xml": "<FB/>",
+                      "input": {"name": "Input", "members": [{"name": "Motor", "data_type": "FB_Motor"}]}}],
+        })
     with pytest.raises(ValidationError, match="unknown Function Block"):
         ProjectSpecification.model_validate({
             "fcs": [tia_fc_payload()],

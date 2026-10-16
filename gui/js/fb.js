@@ -27,12 +27,21 @@ function dependencySummary(fb) {
         .map(member => ({member, target: projectConfig.fbs.find(candidate =>
             candidate.name.toLocaleLowerCase() === String(member.data_type || "").toLocaleLowerCase())}))
         .filter(item => item.target);
-    if (!dependencies.length) return null;
+    const udtNames = new Set(projectConfig.udts.map(udt => String(udt.name).toLocaleLowerCase()));
+    const udts = [];
+    const visit = members => members.forEach(member => {
+        if (udtNames.has(String(member.data_type || "").toLocaleLowerCase())) udts.push(member.name + " → " + member.data_type);
+        if (member.struct_members) visit(member.struct_members);
+    });
+    [fb.input, fb.output, fb.inout, fb.static, fb.temp, fb.constant].forEach(section => visit(section?.members || []));
+    if (!dependencies.length && !udts.length) return null;
     const note = document.createElement("p");
     note.className = "hint";
-    note.textContent = "Multi-instance dependencies: " + dependencies.map(({member, target}) =>
-        member.name + " → " + target.name + (target.interface_verified === false ? " (Unverified)" : ""))
-        .join(", ") + ".";
+    const descriptions = [];
+    if (dependencies.length) descriptions.push("Multi-instance: " + dependencies.map(({member, target}) =>
+        member.name + " → " + target.name + (target.interface_verified === false ? " (Unverified)" : "")).join(", "));
+    if (udts.length) descriptions.push("UDT: " + udts.join(", "));
+    note.textContent = descriptions.join(". ") + ".";
     return note;
 }
 
