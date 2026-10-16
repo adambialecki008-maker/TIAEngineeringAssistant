@@ -75,6 +75,7 @@ def adapter_error_status(
 # Large TIA project-text XLSX exports/imports can exceed the ordinary
 # adapter timeout. Do not raise the limit for inventory or other commands.
 DEFAULT_ADAPTER_TIMEOUT_SECONDS = 180
+PROJECT_DISCOVERY_TIMEOUT_SECONDS = 90  # do not leave Overview hanging on a stalled Openness attachment
 DEFAULT_PROJECT_TEXT_TIMEOUT_SECONDS = 900
 PROJECT_TEXT_COMMANDS = frozenset({
     "export-entire-project-llm",
@@ -86,6 +87,8 @@ PROJECT_TEXT_COMMANDS = frozenset({
 
 
 def adapter_timeout_seconds(command: str) -> int:
+    if command == "list-project-plcs":
+        return PROJECT_DISCOVERY_TIMEOUT_SECONDS
     if command not in PROJECT_TEXT_COMMANDS:
         return DEFAULT_ADAPTER_TIMEOUT_SECONDS
 
@@ -162,7 +165,8 @@ def run_adapter(
                     "You can configure TIA_PROJECT_TEXT_TIMEOUT_SECONDS "
                     + "(180-3600) if this export/import normally takes longer."
                     if command in PROJECT_TEXT_COMMANDS else
-                    "The ordinary adapter timeout is 180 seconds."
+                    "The adapter timeout for this command is "
+                    + str(timeout_seconds) + " seconds."
                 )
             ),
         ) from exc
