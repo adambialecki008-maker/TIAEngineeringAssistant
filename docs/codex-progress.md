@@ -19,7 +19,7 @@
   and their state.
 - Validation: `pytest -q` — 487 passed; `node --check` for changed browser
   modules passed. No real TIA write was performed.
-- Commit: pending.
+- Commit: `d1db2ba` (`feat(fb): import SCL function blocks from TIA`).
 - Remaining: actual Openness creation/import of FB and Instance DB remains
   deliberately unsupported until it can be validated with TIA Portal V21.
 
