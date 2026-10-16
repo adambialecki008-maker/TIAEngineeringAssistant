@@ -449,3 +449,10 @@
   missing project context remains an unresolved warning rather than an
   invented error. Focused regression: 7 tests passed.
 
+## PLC Code Review Markdown report - 2026-10-16
+
+- Analyze Files now exports the current deterministic or AI-augmented report
+  as readable Markdown as well as JSON. The report preserves source/block,
+  location, evidence, detection method and verification status without
+  embedding uploaded source code.
+

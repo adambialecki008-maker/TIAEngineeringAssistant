@@ -1,6 +1,40 @@
 import {postJson} from "./api.js";
 import {projectConfig} from "./state.js";
 
+function markdownText(value) {
+    return String(value || "").replaceAll("|", "\\|").replaceAll("\n", " ");
+}
+
+function reportMarkdown(report) {
+    const lines = ["# PLC Code Review", "", "Read-only local analysis report.", ""];
+    lines.push("## Files", "", "| Source | Block | Type | Language | Verification |", "| --- | --- | --- | --- | --- |");
+    for (const block of report.files) lines.push("| " + [block.source_file, block.name, block.block_type, block.language, block.verification_status].map(markdownText).join(" | ") + " |");
+    lines.push("", "## Findings", "");
+    if (!report.findings.length) lines.push("No findings reported.");
+    for (const finding of report.findings) {
+        lines.push("### " + markdownText(finding.category) + " — " + markdownText(finding.severity));
+        lines.push("- Source: " + markdownText(finding.source_file));
+        lines.push("- Block: " + markdownText(finding.block));
+        lines.push("- Location: " + markdownText(finding.location || "Not provided"));
+        lines.push("- Detection: " + markdownText(finding.detection_method) + " (" + markdownText(finding.verification_status) + ")");
+        lines.push("- Explanation: " + markdownText(finding.explanation));
+        if (finding.suggested_fix) lines.push("- Suggested fix: " + markdownText(finding.suggested_fix));
+        if (finding.evidence) lines.push("- Evidence: " + markdownText(finding.evidence));
+        lines.push("");
+    }
+    if (report.file_warnings.length) lines.push("## Warnings", "", ...report.file_warnings.map(item => "- " + markdownText(item)), "");
+    return lines.join("\n") + "\n";
+}
+
+function downloadReport(contents, fileName, type) {
+    const url = URL.createObjectURL(new Blob([contents], {type}));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
 function renderReport(report, results) {
     results.replaceChildren();
     const summary = document.createElement("p");
@@ -39,10 +73,10 @@ export function initCodeReviewUi() {
     const files = document.getElementById("review-files"), folder = document.getElementById("review-folder");
     const run = document.getElementById("review-analyze"), status = document.getElementById("review-status");
     const list = document.getElementById("review-files-list"), results = document.getElementById("review-results");
-    const download = document.getElementById("review-download"), ai = document.getElementById("review-ai");
+    const download = document.getElementById("review-download"), markdown = document.getElementById("review-download-markdown"), ai = document.getElementById("review-ai");
     const model = document.getElementById("review-ollama-model");
     const tiaRun = document.getElementById("review-tia-analyze"), tiaStatus = document.getElementById("review-tia-status");
-    if (!files || !folder || !run || !status || !list || !results || !download || !ai || !model || !tiaRun || !tiaStatus) return;
+    if (!files || !folder || !run || !status || !list || !results || !download || !markdown || !ai || !model || !tiaRun || !tiaStatus) return;
     let selected = [], report = null, payload = [];
     const refresh = () => {
         selected = [...files.files, ...folder.files].filter(file => /\.(scl|xml)$/i.test(file.name));
@@ -70,6 +104,7 @@ export function initCodeReviewUi() {
             renderReport(report, results);
             status.textContent = "Read-only deterministic analysis complete. You can optionally run local Ollama review.";
             download.disabled = false;
+            markdown.disabled = false;
             ai.disabled = false;
         } catch (error) {
             status.textContent = "Analysis failed: " + error.message;
@@ -114,6 +149,7 @@ export function initCodeReviewUi() {
             status.textContent = "Read-only deterministic analysis of loaded TIA snapshots complete.";
             tiaStatus.textContent = snapshots.length + " loaded TIA snapshot(s) analyzed. TIA Portal was not contacted.";
             download.disabled = false;
+            markdown.disabled = false;
             ai.disabled = false;
         } catch (error) {
             tiaStatus.textContent = "TIA snapshot analysis failed: " + error.message;
@@ -124,11 +160,9 @@ export function initCodeReviewUi() {
     });
     download.addEventListener("click", () => {
         if (!report) return;
-        const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], {type:"application/json"}));
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "plc-code-review.json";
-        link.click();
-        URL.revokeObjectURL(url);
+        downloadReport(JSON.stringify(report, null, 2), "plc-code-review.json", "application/json");
+    });
+    markdown.addEventListener("click", () => {
+        if (report) downloadReport(reportMarkdown(report), "plc-code-review.md", "text/markdown;charset=utf-8");
     });
 }

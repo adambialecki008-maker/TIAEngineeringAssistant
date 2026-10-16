@@ -2418,7 +2418,7 @@
             <div class="card">
                 <h3>Analyze Files</h3>
                 <p class="hint">Select `.scl` and XML/SimaticML exports. Files stay in this browser session and are sent only to the local application.</p>
-                <div class="action-row"><input id="review-files" type="file" accept=".scl,.xml" multiple><input id="review-folder" type="file" accept=".scl,.xml" webkitdirectory multiple><button id="review-analyze" type="button">Analyze</button><label>Local Ollama model <input id="review-ollama-model" value="qwen2.5:3b" maxlength="128"></label><button id="review-ai" type="button" class="secondary-button" disabled>Run local AI review</button><button id="review-download" type="button" class="secondary-button" disabled>Download JSON</button></div>
+                <div class="action-row"><input id="review-files" type="file" accept=".scl,.xml" multiple><input id="review-folder" type="file" accept=".scl,.xml" webkitdirectory multiple><button id="review-analyze" type="button">Analyze</button><label>Local Ollama model <input id="review-ollama-model" value="qwen2.5:3b" maxlength="128"></label><button id="review-ai" type="button" class="secondary-button" disabled>Run local AI review</button><button id="review-download" type="button" class="secondary-button" disabled>Download JSON</button><button id="review-download-markdown" type="button" class="secondary-button" disabled>Download Markdown</button></div>
                 <p id="review-status" class="status-box" aria-live="polite">Select PLC source files or a folder.</p>
                 <ul id="review-files-list" class="hint"></ul>
                 <div id="review-results"></div>
