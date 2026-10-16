@@ -4,6 +4,7 @@ export function initTiaConnectionMonitor() {
     const project = document.getElementById("overview-project-name");
     const indicators = [
         document.getElementById("overview-tia-live-status"),
+        document.getElementById("header-tia-live-status"),
         document.getElementById("tia-llm-connection-status")
     ].filter(Boolean);
     if (!select || !indicators.length) return;
