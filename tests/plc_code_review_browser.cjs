@@ -47,8 +47,9 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
   await page.locator("#overview-project-name").evaluate(el=>{el.textContent="Plant_Main";});
   await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
   await page.waitForFunction(()=>
-   document.getElementById("tia-llm-connection-status")?.textContent?.includes("PID 321 running"));
-  assert.match(await page.locator("#tia-llm-connection-status").innerText(),/Plant_Main/);
+   document.getElementById("tia-llm-connection-status")?.textContent?.includes("TIA Portal PID 321"));
+  assert.equal(await page.locator("#tia-llm-connection-status").innerText(),"TIA Portal PID 321");
+  assert.equal(await page.locator("#header-tia-live-status").evaluate(el=>el.classList.contains("connection-online")),true);
   page.on("dialog",dialog=>dialog.accept());
   const downloadStarted = page.waitForEvent("download");
   await page.locator("#review-export-llm").click();
@@ -61,7 +62,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
   running=false;
   await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
   await page.waitForFunction(()=>
-   document.getElementById("overview-tia-live-status")?.textContent?.includes("connection LOST"));
+   document.getElementById("header-tia-live-status")?.textContent?.includes("disconnected"));
   await page.locator("#review-export-llm").click();
   await page.waitForFunction(() => document.getElementById("review-export-llm-status")?.textContent?.includes("no longer running"));
   assert.match(await page.locator("#review-export-llm-status").innerText(),/no longer running/);
