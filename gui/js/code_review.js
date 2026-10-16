@@ -17,11 +17,23 @@ function reportMarkdown(report) {
             for (const network of block.network_details) {
                 lines.push("#### Network " + network.number + " — " + markdownText(network.language || block.language), "");
                 lines.push("Recognized nodes: " + (network.nodes || []).length
-                    + "; explicit wires: " + (network.wires || []).length + ".", "");
+                    + "; explicit wires: " + (network.wires || []).length
+                    + "; FlgNet " + markdownText(network.schema_version || "version unknown")
+                    + "; coverage: " + markdownText(network.coverage || "unknown") + ".", "");
                 for (const node of network.nodes || []) {
                     lines.push("- Node " + markdownText(node.uid) + ": " + markdownText(node.kind)
-                        + " " + markdownText(node.name || node.symbol) +
+                        + " " + markdownText(node.name || node.symbol || node.constant_value) +
                         (node.scope ? " (" + markdownText(node.scope) + ")" : ""));
+                    if (node.constant_type || node.constant_value) lines.push("  - Constant: "
+                        + markdownText(node.constant_type) + " " + markdownText(node.constant_value));
+                    if (Object.keys(node.template_values || {}).length) lines.push("  - Templates: "
+                        + Object.entries(node.template_values).map(([k, v]) => markdownText(k) + "=" + markdownText(v)).join(", "));
+                    if (node.instance) lines.push("  - Instance: " + markdownText(node.instance));
+                    for (const param of node.call_parameters || []) lines.push("  - Parameter: "
+                        + markdownText(param.name) + " (" + markdownText(param.section) + "; " + markdownText(param.data_type) + ")");
+                    for (const port of node.connections || []) lines.push("  - Pin " + markdownText(port.port)
+                        + " on wire " + markdownText(port.wire_uid) + ": "
+                        + (port.peers || []).map(markdownText).join(" ; "));
                 }
                 for (const wire of network.wires || []) {
                     lines.push("- Wire " + markdownText(wire.uid) + ": "
@@ -120,7 +132,9 @@ function renderNetworkTopology(block, parent) {
         const summary = document.createElement("p");
         summary.className = "hint";
         summary.textContent = (network.nodes || []).length + " recognized node(s), "
-            + (network.wires || []).length + " wire(s). Not a verified LAD/FBD logic interpretation.";
+            + (network.wires || []).length + " wire(s). FlgNet "
+            + (network.schema_version || "version unknown") + "; coverage: "
+            + (network.coverage || "unknown") + ". Not a verified LAD/FBD logic interpretation.";
         section.appendChild(summary);
         const appendTable = (labels, data) => {
             if (!data.length) return;
@@ -150,10 +164,21 @@ function renderNetworkTopology(block, parent) {
             wrapper.appendChild(table);
             section.appendChild(wrapper);
         };
-        appendTable(["UId", "Node", "Name", "Symbol", "Scope"],
+        appendTable(["UId", "Node", "Instruction / Call", "Symbol", "Scope", "Constant", "Template values", "Instance"],
             (network.nodes || []).map(node => [
                 node.uid, node.kind, node.name, node.symbol, node.scope,
+                [node.constant_type, node.constant_value].filter(Boolean).join(" "),
+                Object.entries(node.template_values || {}).map(([k, v]) => k + "=" + v).join(", "),
+                node.instance || "",
             ]));
+        appendTable(["UId", "Pin", "Wire UId", "Other endpoints (unordered)"],
+            (network.nodes || []).flatMap(node => (node.connections || []).map(port => [
+                node.uid, port.port, port.wire_uid, (port.peers || []).join(" ; "),
+            ])));
+        appendTable(["Call UId", "Parameter", "Section", "Type"],
+            (network.nodes || []).flatMap(node => (node.call_parameters || []).map(param => [
+                node.uid, param.name, param.section, param.data_type,
+            ])));
         appendTable(["Wire UId", "Listed endpoints (unordered)"],
             (network.wires || []).map(wire => [
                 wire.uid, (wire.endpoints || []).map(endpointText).join(" ; "),

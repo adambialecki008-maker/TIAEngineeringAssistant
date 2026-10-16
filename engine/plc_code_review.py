@@ -47,6 +47,18 @@ class ReviewDeclaration(BaseModel):
     location: str = ""
 
 
+class ReviewCallParameter(BaseModel):
+    name: str
+    section: str = ""
+    data_type: str = ""
+
+
+class ReviewPortConnection(BaseModel):
+    port: str
+    wire_uid: str
+    peers: list[str] = Field(default_factory=list)
+
+
 class ReviewNetworkNode(BaseModel):
     uid: str
     kind: Literal["Access", "Part", "Call"]
@@ -54,6 +66,12 @@ class ReviewNetworkNode(BaseModel):
     scope: str = ""
     symbol: str = ""
     call_block_type: str = ""
+    instance: str = ""
+    constant_type: str = ""
+    constant_value: str = ""
+    template_values: dict[str, str] = Field(default_factory=dict)
+    call_parameters: list[ReviewCallParameter] = Field(default_factory=list)
+    connections: list[ReviewPortConnection] = Field(default_factory=list)
 
 
 class ReviewNetworkEndpoint(BaseModel):
@@ -70,6 +88,8 @@ class ReviewNetworkWire(BaseModel):
 class ReviewLogicNetwork(BaseModel):
     number: int
     language: str = ""
+    schema_version: str = ""
+    coverage: str = "supported structure"
     nodes: list[ReviewNetworkNode] = Field(default_factory=list)
     wires: list[ReviewNetworkWire] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
@@ -326,15 +346,29 @@ def _direct_text(node: ET.Element, name: str) -> str:
 
 
 def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogicNetwork | None:
-    """Preserve only explicit Siemens FlgNet parts/wires. No LAD/FBD execution inference."""
-    flgnet = next(
-        (node for node in unit.iter() if xml_local_name(node.tag).casefold() == "flgnet"),
-        None,
-    )
-    if flgnet is None:
-        return None
+    """Read native Siemens FlgNet nodes, port connections and metadata.
 
+    Graph connectivity is *undirected*; no Boolean truth table, dataflow
+    direction, compiler validity or TIA write operation is inferred.
+    """
+    nets = [
+        node for node in unit.iter() if xml_local_name(node.tag).casefold() == "flgnet"
+    ]
+    if not nets:
+        return None
+    flgnet = nets[0]
     network = ReviewLogicNetwork(number=number, language=language)
+    tag = flgnet.tag
+    if tag.startswith("{") and "}" in tag:
+        namespace = tag.split("}", 1)[0][1:]
+        if namespace.rsplit("/", 1)[-1].lower().startswith("v"):
+            network.schema_version = namespace.rsplit("/", 1)[-1]
+
+    if len(nets) != 1:
+        network.warnings.append(
+            "Several FlgNet elements found in one compile unit; only the first is inspected."
+        )
+        network.coverage = "partial"
     parts = next(
         (child for child in flgnet if xml_local_name(child.tag).casefold() == "parts"),
         None,
@@ -345,7 +379,18 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
     )
     if parts is None or wires is None:
         network.warnings.append("FlgNet Parts or Wires is absent; topology is incomplete.")
+        network.coverage = "partial"
         return network
+
+    unrecognized = sorted({
+        xml_local_name(child.tag)
+        for child in parts if xml_local_name(child.tag) not in {"Access", "Part", "Call"}
+    })
+    if unrecognized:
+        network.coverage = "partial"
+        network.warnings.append(
+            "Unrecognized FlgNet Parts element(s); analysis is partial: " + ", ".join(unrecognized)
+        )
 
     for node in parts:
         kind = xml_local_name(node.tag)
@@ -355,6 +400,10 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
         name = xml_attribute(node, "Name")
         scope = xml_attribute(node, "Scope") if kind == "Access" else ""
         symbol = ""
+        constant_type = constant_value = instance = call_block_type = ""
+        template_values: dict[str, str] = {}
+        call_parameters: list[ReviewCallParameter] = []
+
         if kind == "Access":
             symbol_node = next(
                 (child for child in node if xml_local_name(child.tag).casefold() == "symbol"),
@@ -366,8 +415,29 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
                     for component in symbol_node.iter()
                     if xml_local_name(component.tag).casefold() == "component"
                 ]
-                symbol = ".".join(name for name in components if name)
-        call_block_type = ""
+                symbol = ".".join(item for item in components if item)
+            constant_node = next(
+                (child for child in node if xml_local_name(child.tag).casefold() == "constant"),
+                None,
+            )
+            if constant_node is not None:
+                constant_value = (
+                    _direct_text(constant_node, "ConstantValue")
+                    or xml_attribute(constant_node, "Name")
+                )
+                constant_type = (
+                    _direct_text(constant_node, "ConstantType")
+                    or xml_attribute(constant_node, "Type")
+                )
+
+        if kind == "Part":
+            for child in node:
+                if xml_local_name(child.tag).casefold() != "templatevalue":
+                    continue
+                key = xml_attribute(child, "Name")
+                if key:
+                    template_values[key] = (child.text or "").strip()
+
         if kind == "Call":
             call_info = next(
                 (child for child in node if xml_local_name(child.tag).casefold() == "callinfo"),
@@ -376,18 +446,51 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
             if call_info is not None:
                 name = xml_attribute(call_info, "Name") or name
                 call_block_type = xml_attribute(call_info, "BlockType")
+                for child in call_info:
+                    child_kind = xml_local_name(child.tag).casefold()
+                    if child_kind == "parameter":
+                        call_parameters.append(ReviewCallParameter(
+                            name=xml_attribute(child, "Name"),
+                            section=xml_attribute(child, "Section"),
+                            data_type=xml_attribute(child, "Type", "Datatype"),
+                        ))
+                    elif child_kind == "instance":
+                        components = [
+                            xml_attribute(item, "Name")
+                            for item in child.iter()
+                            if xml_local_name(item.tag).casefold() == "component"
+                        ]
+                        instance = ".".join(x for x in components if x)
         network.nodes.append(ReviewNetworkNode(
             uid=uid, kind=kind, name=name, scope=scope, symbol=symbol,
-            call_block_type=call_block_type,
+            call_block_type=call_block_type, instance=instance,
+            constant_type=constant_type, constant_value=constant_value,
+            template_values=template_values, call_parameters=call_parameters,
         ))
+
+    unrecognized_wires = sorted({
+        xml_local_name(child.tag)
+        for child in wires if xml_local_name(child.tag).casefold() != "wire"
+    })
+    if unrecognized_wires:
+        network.coverage = "partial"
+        network.warnings.append(
+            "Unrecognized FlgNet Wires element(s); analysis is partial: "
+            + ", ".join(unrecognized_wires)
+        )
 
     for wire in wires:
         if xml_local_name(wire.tag).casefold() != "wire":
             continue
-        endpoints = []
+        endpoints: list[ReviewNetworkEndpoint] = []
         for endpoint in wire:
             kind = xml_local_name(endpoint.tag)
             if kind not in {"NameCon", "IdentCon", "OpenCon", "Powerrail"}:
+                network.coverage = "partial"
+                network.warnings.append(
+                    f"Wire {xml_attribute(wire, 'UId')} has unsupported endpoint "
+                    f"{kind}; wire analysis is partial."
+                )
                 continue
             endpoints.append(ReviewNetworkEndpoint(
                 kind=kind, uid=xml_attribute(endpoint, "UId"),
@@ -397,19 +500,50 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
             uid=xml_attribute(wire, "UId"), endpoints=endpoints,
         ))
 
-    # These are structural *review flags*, not confirmed PLC logic/compile errors.
+    def endpoint_label(endpoint: ReviewNetworkEndpoint, by_uid: dict[str, ReviewNetworkNode]) -> str:
+        if endpoint.kind in {"Powerrail", "OpenCon"}:
+            return endpoint.kind
+        referenced = by_uid.get(endpoint.uid)
+        if referenced is None:
+            return f"{endpoint.kind} UId {endpoint.uid or '?'}"
+        named = referenced.symbol or referenced.constant_value or referenced.name
+        value = f"{endpoint.kind} UId {endpoint.uid}"
+        if named:
+            value += f" [{named}]"
+        if endpoint.port:
+            value += f".{endpoint.port}"
+        return value
+
+    # Every port stores the exported set of peers; endpoint order never implies
+    # signal direction, even if an endpoint is called "in" or "out".
+    by_uid = {node.uid: node for node in network.nodes if node.uid}
+    for wire in network.wires:
+        for endpoint in wire.endpoints:
+            if endpoint.kind != "NameCon":
+                continue
+            owner = by_uid.get(endpoint.uid)
+            if owner is None:
+                continue
+            owner.connections.append(ReviewPortConnection(
+                port=endpoint.port, wire_uid=wire.uid,
+                peers=[
+                    endpoint_label(peer, by_uid)
+                    for peer in wire.endpoints if peer is not endpoint
+                ],
+            ))
+
     seen_ids: set[str] = set()
     duplicates: set[str] = set()
     for node in network.nodes:
-        if not node.uid:
-            continue
-        if node.uid in seen_ids:
-            duplicates.add(node.uid)
-        seen_ids.add(node.uid)
+        if node.uid:
+            if node.uid in seen_ids:
+                duplicates.add(node.uid)
+            seen_ids.add(node.uid)
     if duplicates:
         network.warnings.append(
             "Duplicate part/access/call UId(s) in exported FlgNet: " + ", ".join(sorted(duplicates))
         )
+
     references = {
         endpoint.uid for wire in network.wires for endpoint in wire.endpoints
         if endpoint.kind in {"NameCon", "IdentCon"} and endpoint.uid
@@ -421,6 +555,22 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
         )
     if any(not node.uid for node in network.nodes):
         network.warnings.append("At least one recognized Part/Access/Call has no UId.")
+
+    wire_ids: set[str] = set()
+    duplicate_wires: set[str] = set()
+    for wire in network.wires:
+        if wire.uid:
+            if wire.uid in wire_ids:
+                duplicate_wires.add(wire.uid)
+            wire_ids.add(wire.uid)
+        if len(wire.endpoints) < 2:
+            network.warnings.append(
+                f"Wire {wire.uid or '?'} exposes fewer than two endpoints; verify in TIA."
+            )
+    if duplicate_wires:
+        network.warnings.append(
+            "Duplicate wire UId(s) in FlgNet: " + ", ".join(sorted(duplicate_wires))
+        )
     return network
 
 

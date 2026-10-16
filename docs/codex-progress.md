@@ -662,3 +662,17 @@
   AttributeList/Interface; uses explicit is None fallback, preserving empty
   Interface semantics. Added regression ensuring CompileUnit members are not
   misread as declarations of an empty block.
+
+## Point 4 native FlgNet network details — 2026-10-16
+
+- Added read-only extraction of Access constant kinds/values, Part template
+  metadata, CallInfo parameters/instance and per-pin wire peer lists.
+- Carries the FlgNet namespace version and coverage state, flags unexpected
+  parts/endpoints as partial, warns about malformed/duplicate wires.
+- GUI and Markdown show instruction names, explicit operands, call parameters,
+  instance and wire membership, without claiming execution or signal direction.
+- External reference: published SimaticML FlgNet/v4 example (Contact/Eq/Move,
+  local/literal constants, explicit pins) at
+  https://github.com/eliasrhoden/tia-statemachine/blob/main/simatic_ML_format.md.
+- **Not yet validated** against a genuine exported XML from the user's
+  TIA Portal V21. This is required before claiming Point 4 fully verified.

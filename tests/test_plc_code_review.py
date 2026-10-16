@@ -913,3 +913,83 @@ def test_empty_simaticml_interface_does_not_use_networks_as_declarations():
     assert block.name == "FB_Empty"
     assert block.declarations == []
     assert not any(f.category == "Unresolved dependency" for f in report.findings)
+
+
+
+def test_flgnet_v4_instruction_templates_constants_and_port_neighbors():
+    source = (
+        '<SW.Blocks.FB Name="FB_State"><SW.Blocks.CompileUnit>'
+        '<AttributeList><ProgrammingLanguage>LAD</ProgrammingLanguage>'
+        '<NetworkSource><FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v4">'
+        '<Parts>'
+        '<Access Scope="LocalVariable" UId="21"><Symbol><Component Name="statStep"/></Symbol></Access>'
+        '<Access Scope="LocalConstant" UId="22"><Constant Name="WAIT_FOR_ROBOT"/></Access>'
+        '<Access Scope="LiteralConstant" UId="23"><Constant>'
+        '<ConstantType>Bool</ConstantType><ConstantValue>FALSE</ConstantValue></Constant></Access>'
+        '<Part Name="Eq" UId="26"><TemplateValue Name="SrcType" Type="Type">Int</TemplateValue></Part>'
+        '<Part Name="Contact" UId="27"/>'
+        '<Part Name="Move" UId="28" DisabledENO="true">'
+        '<TemplateValue Name="Card" Type="Cardinality">1</TemplateValue></Part>'
+        '</Parts><Wires>'
+        '<Wire UId="29"><Powerrail/><NameCon UId="26" Name="pre"/></Wire>'
+        '<Wire UId="30"><IdentCon UId="21"/><NameCon UId="26" Name="in1"/></Wire>'
+        '<Wire UId="31"><IdentCon UId="22"/><NameCon UId="26" Name="in2"/></Wire>'
+        '<Wire UId="32"><NameCon UId="26" Name="out"/><NameCon UId="27" Name="in"/></Wire>'
+        '<Wire UId="33"><IdentCon UId="23"/><NameCon UId="27" Name="operand"/></Wire>'
+        '<Wire UId="34"><NameCon UId="27" Name="out"/><NameCon UId="28" Name="en"/></Wire>'
+        '</Wires></FlgNet></NetworkSource></AttributeList>'
+        '</SW.Blocks.CompileUnit></SW.Blocks.FB>'
+    )
+    report = analyze_files([ReviewInputFile(name="lad.xml", content=source)])
+    network = report.files[0].network_details[0]
+    assert network.schema_version == "v4"
+    assert network.coverage == "supported structure"
+    assert [(node.name, node.uid) for node in network.nodes if node.kind == "Part"] == [
+        ("Eq", "26"), ("Contact", "27"), ("Move", "28"),
+    ]
+    assert network.nodes[1].constant_value == "WAIT_FOR_ROBOT"
+    assert (network.nodes[2].constant_type, network.nodes[2].constant_value) == ("Bool", "FALSE")
+    assert network.nodes[3].template_values == {"SrcType": "Int"}
+    assert network.nodes[5].template_values == {"Card": "1"}
+    contact_in = [x for x in network.nodes[4].connections if x.port == "in"][0]
+    assert contact_in.wire_uid == "32"
+    assert "UId 26" in contact_in.peers[0]
+    assert network.nodes[4].connections[0].port == "in"
+    assert not report.findings
+
+
+def test_flgnet_callinfo_parameter_and_instance_projection():
+    source = (
+        '<SW.Blocks.FB Name="FB_Parent"><SW.Blocks.CompileUnit>'
+        '<NetworkSource><FlgNet><Parts><Call UId="22">'
+        '<CallInfo Name="FB_Child" BlockType="FB">'
+        '<Instance Scope="GlobalVariable" UId="23"><Component Name="Child_DB"/></Instance>'
+        '<Parameter Name="Enable" Section="Input" Type="Bool"/>'
+        '<Parameter Name="Result" Section="Output" Type="Int"/>'
+        '</CallInfo></Call></Parts><Wires/></FlgNet></NetworkSource>'
+        '</SW.Blocks.CompileUnit></SW.Blocks.FB>'
+    )
+    report = analyze_files([ReviewInputFile(name="parent.xml", content=source)])
+    n = report.files[0].network_details[0].nodes[0]
+    assert (n.name, n.call_block_type, n.instance) == ("FB_Child", "FB", "Child_DB")
+    assert [(p.name, p.section, p.data_type) for p in n.call_parameters] == [
+        ("Enable", "Input", "Bool"), ("Result", "Output", "Int"),
+    ]
+
+
+def test_flgnet_unsupported_parts_duplicate_wires_and_single_endpoint_are_review_only():
+    source = (
+        '<SW.Blocks.FC Name="FC_Sample"><SW.Blocks.CompileUnit>'
+        '<NetworkSource><FlgNet><Parts><Magic UId="8"/><Part Name="And" UId="7"/></Parts>'
+        '<Wires><Wire UId="9"><NameCon UId="7" Name="out"/></Wire>'
+        '<Wire UId="9"><Powerrail/><NameCon UId="7" Name="in"/></Wire></Wires>'
+        '</FlgNet></NetworkSource></SW.Blocks.CompileUnit></SW.Blocks.FC>'
+    )
+    report = analyze_files([ReviewInputFile(name="sample.xml", content=source)])
+    net = report.files[0].network_details[0]
+    assert net.coverage == "partial"
+    assert len(net.nodes) == 1 and len(net.wires) == 2
+    assert any("Magic" in warning for warning in net.warnings)
+    assert any("Duplicate wire UId" in warning for warning in net.warnings)
+    assert any("fewer than two" in warning for warning in net.warnings)
+    assert all(f.verification_status == "requires TIA verification" for f in report.findings)
