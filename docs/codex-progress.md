@@ -655,3 +655,10 @@
 - Updated old control-flow regression expectation: a TEMP read after IF without
   ELSE is now correctly flagged because the uninitialized path is explicit.
 - Added Chromium coverage of variable tables and Markdown representation.
+
+## SimaticML empty Interface parsing — 2026-10-16
+
+- Fixed ElementTree element truth-value ambiguity when detecting
+  AttributeList/Interface; uses explicit is None fallback, preserving empty
+  Interface semantics. Added regression ensuring CompileUnit members are not
+  misread as declarations of an empty block.

@@ -628,7 +628,7 @@ def test_conditional_read_before_write_is_detected_but_calls_stay_unknown():
         "#Output := #Value;\nEND_FUNCTION_BLOCK"
     ))])
     assert [(f.evidence, f.location) for f in report.findings
-            if f.category == "SCL temporary read before assignment"] == [("Value", "line 8")]
+            if f.category == "SCL temporary read before assignment"] == [("Value", "line 9")]
     assert not any(f.category == "Unused SCL temporary" for f in report.findings)
 
     other = analyze_files([ReviewInputFile(name="call.scl", content=(
@@ -899,3 +899,17 @@ def test_scl_call_in_condition_suppresses_dataflow_claims():
     ))])
     assert report.files[0].variable_analysis_status == "partial"
     assert not any(f.category == "SCL temporary read before assignment" for f in report.findings)
+
+
+
+def test_empty_simaticml_interface_does_not_use_networks_as_declarations():
+    report = analyze_files([ReviewInputFile(name="empty.xml", content=(
+        '<Document><SW.Blocks.FB><AttributeList><Name>FB_Empty</Name>'
+        '<Interface/></AttributeList><ObjectList><SW.Blocks.CompileUnit>'
+        '<Network><Member Name="Ghost" Datatype="UDT_Impossible"/></Network>'
+        '</SW.Blocks.CompileUnit></ObjectList></SW.Blocks.FB></Document>'
+    ))])
+    block = report.files[0]
+    assert block.name == "FB_Empty"
+    assert block.declarations == []
+    assert not any(f.category == "Unresolved dependency" for f in report.findings)

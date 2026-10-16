@@ -519,7 +519,9 @@ def _xml(file: ReviewInputFile) -> ReviewBlock:
             None,
         )
 
-    interface = immediate(attributes, "Interface") or immediate(target, "Interface")
+    interface = immediate(attributes, "Interface")
+    if interface is None:
+        interface = immediate(target, "Interface")
     interface_sections = immediate(interface, "Sections")
     if interface_sections is not None:
         walk(interface_sections)
