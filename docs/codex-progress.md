@@ -422,4 +422,11 @@
   exist; failures preserve those deterministic results.
 - Regression coverage uses a mocked Ollama response, invalid JSON, safe XML
   rejection, and a Chromium workflow that exercises both GUI actions.
+- Validation for this stage: `pytest -q` — 532 passed; JavaScript syntax
+  checks passed; GitHub Actions run 38895785141 passed Python, JavaScript and
+  Playwright Chromium. Implementation commit: `8a5df6e`.
+- Remaining scope: Analyze from TIA is not duplicated here; broader SimaticML
+  network/instruction parsing remains explicitly partial until representative
+  TIA exports are available. AI suggestions are local-only and must be
+  reviewed by an engineer before any PLC change.
 
