@@ -589,3 +589,74 @@ def test_call_type_review_skips_duplicate_local_declaration_evidence():
     assert any(f.category == "Duplicate declaration" for f in report.findings)
     assert not any(f.category == "Call parameter type mismatch" for f in report.findings)
     assert report.files[0].calls[0].arguments[0].actual_type == ""
+
+
+
+def test_unused_var_temp_and_linear_read_before_write_are_source_observations():
+    report = analyze_files([ReviewInputFile(name="mix.scl", content=(
+        "FUNCTION_BLOCK FB_Mix\nVAR_TEMP\n"
+        " Value : Int;\n Unused : Bool;\n Ack : Bool;\nEND_VAR\nBEGIN\n"
+        "#Ack := #Value > 0;\n"
+        "#Value := 3;\n"
+        "#Ack := #Value > 1;\n"
+        "END_FUNCTION_BLOCK"
+    ))])
+    unused = [f for f in report.findings if f.category == "Unused SCL temporary"]
+    reads = [f for f in report.findings if f.category == "SCL temporary read before assignment"]
+    assert [(f.evidence, f.location) for f in unused] == [("Unused", "line 4")]
+    assert [(f.evidence, f.location) for f in reads] == [("Value", "line 8")]
+    assert all(f.verification_status == "source-level observation" for f in unused + reads)
+
+
+def test_temp_usage_ignores_comments_and_scl_single_quoted_text():
+    report = analyze_files([ReviewInputFile(name="unused.scl", content=(
+        "FUNCTION FC_Example : Bool\nVAR_TEMP\n Token : Bool;\nEND_VAR\nBEGIN\n"
+        "// #Token := TRUE;\n"
+        "#Result := 'the #Token is ignored';\n"
+        "(* #Token := FALSE; *)\n"
+        "END_FUNCTION"
+    ))])
+    assert [(f.category, f.evidence) for f in report.findings] == [
+        ("Unused SCL temporary", "Token"),
+    ]
+
+
+def test_no_before_write_conclusion_when_control_flow_or_calls_exist():
+    report = analyze_files([ReviewInputFile(name="conditional.scl", content=(
+        "FUNCTION_BLOCK FB_Conditional\nVAR_TEMP\n Value : Bool;\nEND_VAR\nBEGIN\n"
+        "IF #Condition THEN\n #Value := TRUE;\nEND_IF;\n"
+        "#Output := #Value;\nEND_FUNCTION_BLOCK"
+    ))])
+    assert not any(f.category == "SCL temporary read before assignment" for f in report.findings)
+    assert not any(f.category == "Unused SCL temporary" for f in report.findings)
+
+    other = analyze_files([ReviewInputFile(name="call.scl", content=(
+        "FUNCTION_BLOCK FB_Call\nVAR_TEMP\n Ready : Bool;\nEND_VAR\nBEGIN\n"
+        "FC_Update(Ready => #Ready);\n#Output := #Ready;\nEND_FUNCTION_BLOCK"
+    ))])
+    assert not any(f.category == "SCL temporary read before assignment" for f in other.findings)
+
+
+def test_temp_read_after_assignment_and_self_reference():
+    report = analyze_files([ReviewInputFile(name="reads.scl", content=(
+        "FUNCTION FC_Read : Int\nVAR_TEMP\n A : Int;\n B : Int;\nEND_VAR\nBEGIN\n"
+        "#A := 1;\n#Result := #A;\n#B := #B + 1;\nEND_FUNCTION"
+    ))])
+    reads = [f for f in report.findings if f.category == "SCL temporary read before assignment"]
+    assert [(f.evidence, f.location) for f in reads] == [("B", "line 9")]
+    assert not any(f.category == "Unused SCL temporary" for f in report.findings)
+
+
+def test_temp_analysis_skips_partial_source_missing_begin_or_end():
+    report = analyze_files([ReviewInputFile(name="declarations.scl", content=(
+        "FUNCTION_BLOCK FB_Only\nVAR_TEMP\n NeverUsed : Bool;\nEND_VAR"
+    ))])
+    assert not any(f.category.startswith(("Unused SCL", "SCL temporary read")) for f in report.findings)
+
+
+def test_nested_temp_and_complex_expression_do_not_claim_read_before_write():
+    report = analyze_files([ReviewInputFile(name="complex.scl", content=(
+        "FUNCTION_BLOCK FB_Complex\nVAR_TEMP\n T : Int;\nEND_VAR\nBEGIN\n"
+        "#Result := FUNC(#T);\n#T := 1;\nEND_FUNCTION_BLOCK"
+    ))])
+    assert not any(f.category == "SCL temporary read before assignment" for f in report.findings)

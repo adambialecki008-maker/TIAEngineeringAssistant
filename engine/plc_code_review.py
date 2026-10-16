@@ -605,6 +605,7 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
     _add_multi_instance_cycle_findings(report)
     _observed_calls(report, files)
     _check_call_interfaces(report)
+    _scl_temporary_diagnostics(report, files)
     _network_diagnostics(report)
     return report
 
@@ -917,6 +918,160 @@ def _check_call_interfaces(report: ReviewReport) -> None:
                         ),
                         verification_status=verification,
                     ))
+
+
+_SCL_SCALAR_OPERAND = re.compile(r'#(?:"[^"\r\n]+"|[A-Za-z_][A-Za-z0-9_]*)')
+_SCL_SIMPLE_ASSIGNMENT = re.compile(
+    r"^\s*(#?(?:" + _IDENTIFIER + r"))\s*:=\s*(.*?)\s*;\s*$", re.I,
+)
+
+
+def _scl_mask_string_literals(line: str) -> str:
+    """Hide single-quoted SCL text but retain double-quoted symbolic names."""
+    output: list[str] = []
+    index = 0
+    while index < len(line):
+        if line[index] != "'":
+            output.append(line[index])
+            index += 1
+            continue
+        output.append(" ")
+        index += 1
+        while index < len(line):
+            if line[index] == "'":
+                output.append(" ")
+                index += 1
+                if index < len(line) and line[index] == "'":
+                    output.append(" ")
+                    index += 1
+                    continue
+                break
+            output.append(" ")
+            index += 1
+    return "".join(output)
+
+
+def _scl_temporary_diagnostics(report: ReviewReport, sources: list[ReviewInputFile]) -> None:
+    """Static SCL TEMP checks; no inference across branches, calls or networks.
+
+    Unused declarations require a complete single source body. Read-before-write
+    requires the entire body to consist solely of one-line scalar assignments.
+    """
+    by_path = {source.name: source for source in sources}
+    for block in report.files:
+        if (
+            block.language != "SCL"
+            or block.block_type not in {"FUNCTION_BLOCK", "FUNCTION", "ORGANIZATION_BLOCK"}
+            or block.verification_status != "parsed"
+        ):
+            continue
+        candidates: dict[str, ReviewDeclaration] = {}
+        duplicates: set[str] = set()
+        for declaration in block.declarations:
+            if declaration.section.casefold() != "temp" or "." in declaration.name:
+                continue
+            name = declaration.name.casefold()
+            if name in candidates:
+                duplicates.add(name)
+            candidates[name] = declaration
+        for name in duplicates:
+            candidates.pop(name, None)
+        if not candidates:
+            continue
+        source = by_path.get(block.source_file)
+        if source is None or _suffix(source.name) != ".scl":
+            continue
+
+        original_lines = _scl_without_comments(source.content)[0]
+        body: list[tuple[int, str]] = []
+        inside = False
+        complete = False
+        for number, line in enumerate(original_lines, 1):
+            keyword = line.strip().upper()
+            if keyword == "BEGIN":
+                if inside or complete:
+                    body = []
+                    complete = False
+                    break
+                inside = True
+                continue
+            if inside and keyword in {
+                "END_FUNCTION_BLOCK", "END_FUNCTION", "END_ORGANIZATION_BLOCK",
+            }:
+                inside = False
+                complete = True
+                continue
+            if inside:
+                body.append((number, _scl_mask_string_literals(line)))
+        if not complete or inside:
+            continue
+
+        body_text = "\n".join(line for _, line in body)
+        # Any unqualified use might be a legitimate SCL reference; only report
+        # declarations with no identifier occurrence anywhere in the body.
+        used: set[str] = set()
+        for name in candidates:
+            escaped = re.escape(name)
+            unquoted = re.compile(r"(?<![A-Za-z0-9_])" + escaped + r"(?![A-Za-z0-9_])", re.I)
+            if unquoted.search(body_text):
+                used.add(name)
+        for name, declaration in candidates.items():
+            if name not in used:
+                report.findings.append(ReviewFinding(
+                    source_file=block.source_file, block=block.name, language="SCL",
+                    location=declaration.location, severity="info",
+                    category="Unused SCL temporary",
+                    explanation=f"{declaration.name} has no reference in the parsed executable SCL body.",
+                    evidence=declaration.name,
+                    suggested_fix="Review whether this VAR_TEMP declaration is still needed.",
+                    verification_status="source-level observation",
+                ))
+
+        # Strict control-flow limit: no IF, CASE, call, multiline statement,
+        # or indirect write can silently establish initialization.
+        assignments: list[tuple[int, str, str]] = []
+        straight_line = True
+        for number, line in body:
+            if not line.strip():
+                continue
+            match = _SCL_SIMPLE_ASSIGNMENT.fullmatch(line)
+            if not match or "(" in match.group(2) or ")" in match.group(2):
+                straight_line = False
+                break
+            assignments.append((number, _identifier(match.group(1).lstrip("#")), match.group(2)))
+        if not straight_line:
+            continue
+
+        scalar_candidates = {
+            key: decl for key, decl in candidates.items()
+            if _primitive_category(_type_reference(decl.data_type))
+            and ":=" not in decl.data_type
+        }
+        if not scalar_candidates:
+            continue
+        written: set[str] = set()
+        reported: set[str] = set()
+        for number, destination, rhs in assignments:
+            rhs_operands = {
+                _identifier(match.group()[1:]).casefold()
+                for match in _SCL_SCALAR_OPERAND.finditer(rhs)
+            }
+            for name in sorted((rhs_operands & scalar_candidates.keys()) - written - reported):
+                declaration = scalar_candidates[name]
+                report.findings.append(ReviewFinding(
+                    source_file=block.source_file, block=block.name, language="SCL",
+                    location=f"line {number}", severity="warning",
+                    category="SCL temporary read before assignment",
+                    explanation=(
+                        f"{declaration.name} is read before a preceding assignment "
+                        "in a straight-line SCL body."
+                    ),
+                    evidence=declaration.name,
+                    suggested_fix="Initialize the temporary before its first read; confirm in TIA.",
+                    verification_status="source-level observation",
+                ))
+                reported.add(name)
+            written.add(destination.casefold())
 
 
 def _add_multi_instance_cycle_findings(report: ReviewReport) -> None:

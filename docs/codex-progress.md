@@ -582,3 +582,19 @@
 - Added tests for definite mismatches, safe matches, unresolved expressions,
   duplicate local declarations and incomplete TIA exports.
 - Original uploaded files and TIA project are never changed.
+
+## Conservative SCL VAR_TEMP usage diagnostics — 2026-10-16
+
+- Added read-only source-level observations for top-level VAR_TEMP declarations
+  absent from a complete parsed SCL block's executable body. Comments and
+  single-quoted string literals are excluded; unqualified name occurrences
+  prevent false unused diagnostics.
+- Added read-before-first-assignment checks only for straight-line bodies made
+  entirely of simple, single-line assignments and scalar temporary variables.
+  IF/CASE, calls, multiline statements and unknown control flow disable this
+  check; there is no LAD/FBD dataflow inference.
+- Source-file and line locations are preserved. Findings are marked
+  "source-level observation", not proof of runtime behavior.
+- Regression tests cover comments, text literals, IF/call safeguards,
+  initialization order, self-reference and incomplete blocks.
+- Analysis stays offline and read-only; no edits to original PLC data.
