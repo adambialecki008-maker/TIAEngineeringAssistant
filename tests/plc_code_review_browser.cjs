@@ -17,6 +17,14 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
    contentType:"application/json",
    body:JSON.stringify(running ? [{process_id:321}] : [])
   }));
+  await page.route("**/api/v1/tia/project-inventory**", route => route.fulfill({
+   contentType:"application/json",
+   body:JSON.stringify({project_name:"Plant_Main",plcs:[]})
+  }));
+  await page.route("**/api/v1/tia/project-context**", route => route.fulfill({
+   status:503,contentType:"application/json",
+   body:JSON.stringify({detail:"Detailed fixture intentionally unavailable"})
+  }));
   await page.route("**/api/v1/code-review/export-tia-project-for-llm?process_id=321", route => {
    exportCalls++;
    assert.equal(route.request().method(),"POST");
@@ -54,6 +62,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
   await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
   await page.waitForFunction(()=>
    document.getElementById("tia-llm-connection-status")?.textContent?.includes("TIA Portal PID 321"));
+  await page.waitForFunction(() =>
+   document.getElementById("header-tia-live-status")?.classList.contains("connection-online"));
   assert.equal(await page.locator("#tia-llm-connection-status").innerText(),"TIA Portal PID 321");
   assert.equal(await page.locator("#header-tia-live-status").evaluate(el=>el.classList.contains("connection-online")),true);
   page.on("dialog",dialog=>dialog.accept());
