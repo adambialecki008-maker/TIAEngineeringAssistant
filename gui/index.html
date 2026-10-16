@@ -357,6 +357,13 @@
                 <p id="tia-fc-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Functions.</p>
             </div>
             <div class="card">
+                <h3>Offline declaration dependencies</h3>
+                <p class="hint">Read-only dependency report for local UDT, DB, FB/FC and Instance DB snapshots. Not a verified TIA compilation or import plan.</p>
+                <button type="button" id="program-dependencies-run">Analyze dependencies</button>
+                <p id="program-dependencies-status" class="hint" role="status" aria-live="polite"></p>
+                <div id="program-dependencies-results"></div>
+            </div>
+            <div class="card">
                 <h3>Instance DB inventory</h3>
                 <p class="hint">Lists existing Instance DBs only. The current read-only TIA inventory does not expose a verified owning-FB relation, so no association is inferred.</p>
                 <button type="button" id="tia-instance-db-scan">Read Instance DBs from TIA</button>

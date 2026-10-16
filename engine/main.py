@@ -16,6 +16,7 @@ from engine.plc_db import DataBlockSpecification
 from engine.function_block import FunctionBlockSpecification
 from engine.function import FunctionSpecification
 from engine.instance_db import InstanceDbSnapshot
+from engine.program_dependencies import report_program_dependencies
 from engine.project import (
     GeneratedProjectSource,
     ProjectSpecification,
@@ -218,3 +219,12 @@ def generate_project_source_request(
     source = generate_project_source(project)
 
     return GeneratedProjectSource(source=source)
+
+
+@app.post("/api/v1/program-dependencies")
+def analyze_program_dependencies(project: ProjectSpecification) -> dict:
+    """Offline, read-only dependency plan. Never runs Siemens Openness."""
+    try:
+        return report_program_dependencies(project)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

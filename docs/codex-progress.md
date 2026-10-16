@@ -1,3 +1,20 @@
+## Direct GitHub improvements — FB/FC UX and offline dependencies (2026-10-16)
+
+- Condensed FB/FC declarations into one sectioned engineering view with stable
+  expansion, inline status chips and optional technical details. Legacy local
+  declarations remain editable as drafts while marked TIA-unverified.
+- Normalized localized ladder-language metadata to LAD in the app without
+  altering the original source XML or blocking older snapshots.
+- Updated Playwright tests to open the intentionally collapsed Overview and
+  I/O panels. Added a dedicated FB/FC browser regression.
+- Fixed Instance DB snapshots to coexist with the existing UDT/global DB
+  project validation and export paths. Added read-only direct ownership metadata
+  from Siemens Openness (InstanceOfName, InstanceOfType, InstanceOfNumber).
+  Runtime behavior must still be checked on a Windows TIA V21 test project.
+- Added offline dependency reporting from UDT through FB/FC and Instance DB,
+  explicitly identifying unverified associations and blocking all TIA writes.
+- Never used destructive Git operations or modified a running TIA project.
+
 # Codex development progress
 
 ## FB/FC declaration drafts and TIA block analysis
