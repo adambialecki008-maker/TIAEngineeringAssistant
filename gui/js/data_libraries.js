@@ -1567,6 +1567,26 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     });
     tiaExportButton.id = "review-export-llm";
     tiaExportButton.className = "secondary-button";
+    // Fail closed while capability status is unknown. The backend also
+    // rejects export requests unless explicitly opted into test mode.
+    tiaExportButton.disabled = true;
+    tiaExportStatus.textContent = "Checking experimental TIA export availability…";
+    fetch("/api/v1/code-review/tia-export-status", {cache: "no-store"})
+        .then(async response => {
+            if (!response.ok) throw Error("HTTP " + response.status);
+            const state = await response.json();
+            tiaExportButton.disabled = state.enabled !== true;
+            tiaExportStatus.textContent = state.reason ||
+                "Whole-project TIA export availability could not be verified.";
+            tiaExportStatus.classList.toggle("error", !state.enabled);
+        })
+        .catch(error => {
+            tiaExportButton.disabled = true;
+            tiaExportStatus.classList.add("error");
+            tiaExportStatus.textContent =
+                "TIA bulk export unavailable (cannot check safeguards: "
+                + error.message + "). No export started.";
+        });
     const tiaExportActions = element("div");
     tiaExportActions.className = "action-row";
     tiaExportActions.append(tiaExportButton);
