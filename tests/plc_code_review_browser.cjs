@@ -138,7 +138,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         await page.locator("#review-proposal-preview").click();
         await page.waitForSelector("text=Preview ready");
         assert.match(await page.locator("#review-proposal-diff").innerText(), /-#Value := 1;/);
-        assert.match(await page.locator("#review-proposal-diff").innerText(), /\\+#Value := 2;/);
+        assert.match(await page.locator("#review-proposal-diff").innerText(), /\+#Value := 2;/);
         assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
         await page.locator("#review-proposal-approve").check();
         assert.equal(await page.locator("#review-proposal-download").isDisabled(), false);
