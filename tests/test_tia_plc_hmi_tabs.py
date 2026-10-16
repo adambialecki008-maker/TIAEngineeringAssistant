@@ -93,4 +93,7 @@ def test_create_plc_interface_removed_without_hiding_read_only_plc_inventory():
         assert f'id="{element}"' not in HTML
     for element in ("tia-plc-tags-body", "tia-plc-program-blocks-body", "tia-plc-dbs-body"):
         assert f'id="{element}"' in plc
-    assert '"/api/v1/tia/plcs"' not in TIA_JS
+    assert 'async function createPlc(' not in TIA_JS
+    assert 'id="tia-create-plc-button"' not in HTML
+    # /api/v1/tia/plcs remains used by rename/delete existing PLC workflows.
+    assert 'postJson(\n                    "/api/v1/tia/plcs"' not in TIA_JS

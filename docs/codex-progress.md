@@ -770,3 +770,6 @@
 - Removed dead GUI create-PLC handlers and catalog startup logic, leaving existing PLC selection, inventory, program analysis, HMI and full TIA project LLM export unaffected.
 - PLC tags, PLC program and PLC data structures remain available.
 - Added regression assertions that creation controls are absent.
+
+- Retained ET 200 Openness catalog support while removing its former UI selector; regression tests updated to match the narrower screen scope.
+- Existing PLC rename/delete APIs continue to use /api/v1/tia/plcs and are intentionally untouched.
