@@ -94,6 +94,7 @@ const {openSection} = require("./ui_disclosures.cjs");
                 fb: read('[data-ui-section="fb-editor"] > summary'),
                 preview: read('[data-ui-section="preview-import"] > summary'),
                 overviewProfile: read('#overview-profile-management > details > summary'),
+                llmExport: read('#data-libraries-root > details.card:has(#review-export-llm) > summary'),
                 overviewTia: read('#overview-tia-controls > details > summary'),
                 device: read('[data-tab-panel="devices"] > details.device-section > summary'),
             };
