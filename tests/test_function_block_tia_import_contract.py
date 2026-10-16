@@ -130,7 +130,7 @@ def test_native_system_children_are_read_only_projection_not_extra_fb_declaratio
         "TON_Unblocked.IN", "TON_Unblocked.Q",
     ]
     assert rows[0]["system_instance"] is True
-    assert rows[1]["system_instance"] is not True
+    assert rows[1].get("system_instance") is not True
     assert response.json()["source_xml"] == source
 
     # The read-only projection may be stored on a native FB member, but never
