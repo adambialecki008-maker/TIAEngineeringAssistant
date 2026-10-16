@@ -92,7 +92,11 @@ namespace TiaOpennessAdapter
                             SoftwareContainer container = null;
                             try { container = item.GetService<SoftwareContainer>(); }
                             catch (Exception e) {
-                                report.Failure("SOFTWARE_SERVICE", itemPath.Path, e.Message);
+                                Exception rootError = e.GetBaseException();
+                                report.Failure("SOFTWARE_SERVICE", itemPath.Path, rootError.Message);
+                                if (rootError is EngineeringObjectDisposedException ||
+                                    rootError is NonRecoverableException)
+                                    throw;
                             }
                             if (container == null || container.Software == null) continue;
                             object software = container.Software;
