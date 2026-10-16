@@ -196,6 +196,9 @@ jobs:
       - name: Verify compact FB FC declarations and LAD display
         run: node tests/program_declarations_browser.cjs
 
+      - name: Verify PLC file analysis and optional local AI review UI
+        run: node tests/plc_code_review_browser.cjs
+
       - name: Create local FB and FC declaration-only blocks with Playwright
         run: node tests/local_program_creation_browser.cjs
 

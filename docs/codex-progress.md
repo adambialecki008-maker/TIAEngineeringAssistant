@@ -407,3 +407,19 @@
   and Ollama review remain deliberately unavailable in this first vertical
   flow, rather than presenting placeholder output as analysis.
 
+## PLC Code Review local Ollama suggestions - 2026-10-16
+
+- Added the optional `/api/v1/code-review/ollama` workflow. It first performs
+  the deterministic local scan, then sends bounded, numbered source chunks to
+  the user's local Ollama server and validates its JSON output with Pydantic.
+  The default model in the interface is `qwen2.5:3b`.
+- AI results always retain the real source file, block and language from the
+  parser, discard invented locations, and are explicitly labelled `AI
+  suggestion — unverified`. The deterministic Analyze Files route still works
+  with no Ollama process or installed model.
+- XML input now rejects DTD/entity declarations before parsing. The GUI adds a
+  separately-triggered local AI review button only after deterministic results
+  exist; failures preserve those deterministic results.
+- Regression coverage uses a mocked Ollama response, invalid JSON, safe XML
+  rejection, and a Chromium workflow that exercises both GUI actions.
+

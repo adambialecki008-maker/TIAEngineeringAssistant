@@ -17,7 +17,13 @@ from engine.function_block import FunctionBlockSpecification
 from engine.function import FunctionSpecification
 from engine.instance_db import InstanceDbSnapshot
 from engine.program_dependencies import report_program_dependencies
-from engine.plc_code_review import ReviewInputFile, ReviewReport, analyze_files
+from engine.plc_code_review import (
+    AiReviewRequest,
+    ReviewInputFile,
+    ReviewReport,
+    analyze_files,
+    review_with_ollama,
+)
 from engine.project import (
     GeneratedProjectSource,
     ProjectSpecification,
@@ -60,6 +66,12 @@ app.mount(
 def analyze_code_review_files(files: list[ReviewInputFile]) -> ReviewReport:
     """Analyze supplied PLC source text locally; no TIA or external service is called."""
     return analyze_files(files)
+
+
+@app.post("/api/v1/code-review/ollama", response_model=ReviewReport)
+def review_code_with_ollama(request: AiReviewRequest) -> ReviewReport:
+    """Add optional, unverified suggestions from the user's local Ollama server."""
+    return review_with_ollama(request)
 
 
 @app.get("/")
