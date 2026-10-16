@@ -9,7 +9,7 @@ const section = (name, members = []) => ({name, members});
 const FB = {
     name: "FB_Test", language: "KOP", source_mode: "local",
     interface_verified: false, declaration_draft: true,
-    input: section("Input", [member("Start")]),
+    input: section("Input", [member("Start"), member("RemoteOnly", "UDT_RemoteOnly")]),
     output: section("Output"), inout: section("InOut"),
     static: section("Static", [{
         name: "TON_Unblocked", data_type: "TON_TIME", system_instance: true,
@@ -40,7 +40,11 @@ const FC = {
             route.fulfill({status: 503, json: {detail: "TIA mocked"}}));
         await page.addInitScript(({key, FB, FC}) => {
             localStorage.setItem(key, JSON.stringify({
-                plc_family:"S7-1500", udts:[], dbs:[], fbs:[FB], fcs:[FC], instance_dbs:[],
+                plc_family:"S7-1500", udts:[], dbs:[], fbs:[FB], fcs:[FC], instance_dbs:[{
+                    name:"DB_RemoteOwner", block_kind:"InstanceDB", source_mode:"tia_read_only",
+                    is_consistent:true, function_block:"FB_NotImported", instance_of_type:"FB",
+                    instance_of_number:9, relationship_status:"reported_by_openness",
+                }],
             }));
         }, {key, FB, FC});
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
@@ -58,7 +62,7 @@ const FC = {
         const output = fb.locator(".program-declaration-section").nth(1);
         assert.equal(await input.evaluate(el => el.open), true);
         assert.equal(await output.evaluate(el => el.open), false);
-        assert.equal(await input.locator("tr[data-member-path]").count(), 1);
+        assert.equal(await input.locator("tr[data-member-path]").count(), 2);
         await output.locator(":scope > summary").click();
         assert.equal(await output.evaluate(el => el.open), true);
         const staticSection = fb.locator(".program-declaration-section").nth(3);
@@ -104,6 +108,13 @@ const FC = {
         assert.equal(await fc.locator(".program-source-details").count(), 1);
         await fc.locator(".program-source-details > summary").click();
         assert.match(await fc.locator("pre").innerText(), /SW.Blocks.FC/);
+
+        await openSection(page, "program-dependencies");
+        await page.locator("#program-dependencies-run").click();
+        const dependencyResults = page.locator("#program-dependencies-results");
+        await dependencyResults.locator("details > summary").click();
+        assert.match(await dependencyResults.innerText(), /Input\.RemoteOnly.*UDT_RemoteOnly/s);
+        assert.match(await dependencyResults.innerText(), /FB_NotImported/);
         console.log("FB/FC compact declarations, snapshot statuses and LAD terminology: PASS");
     } finally {
         await browser.close();
