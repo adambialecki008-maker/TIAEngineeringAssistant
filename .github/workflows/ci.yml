@@ -42,6 +42,7 @@ jobs:
           node tests/db_import_runtime.cjs
           node tests/library_store_runtime.cjs
           node tests/project_profiles_runtime.cjs
+          node tests/tia_project_timeout_runtime.cjs
 
       - name: Run HMI review/automatic state regressions
         run: node tests/hmi_review_checkbox_runtime.cjs
