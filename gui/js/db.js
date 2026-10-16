@@ -250,25 +250,19 @@ export function renderDbs(
             dbIndex
         ) => {
 
-            const details =
-                document.createElement(
-                    "details"
-                );
+            const onlyItem = projectConfig.dbs.length === 1;
+            const details = document.createElement(onlyItem ? "section" : "details");
+            if (onlyItem) details.className = "single-engineering-item";
 
 
             details.dataset.name =
                 db.name;
 
-            details.open =
-                openNames.has(
-                    db.name
-                );
+            if (!onlyItem) details.open = openNames.has(db.name);
 
 
-            const summary =
-                document.createElement(
-                    "summary"
-                );
+            const summary = document.createElement(onlyItem ? "h4" : "summary");
+            if (onlyItem) summary.className = "single-engineering-item-title";
 
 
             summary.textContent =
@@ -358,10 +352,10 @@ export function renderDbs(
             content.appendChild(retainNote);
 
             // Global DBs contain Static declarations, not FB Input/Output/InOut.
-            const staticSection = document.createElement("details");
-            staticSection.className = "member-declaration-section";
-            staticSection.open = true;
-            const staticSummary = document.createElement("summary");
+            const staticSection = document.createElement("section");
+            staticSection.className = "member-declaration-section single-engineering-item";
+            const staticSummary = document.createElement("h4");
+            staticSummary.className = "single-engineering-item-title";
             staticSummary.textContent = "Static (" + db.members.length + " variables)";
             staticSection.appendChild(staticSummary);
             staticSection.appendChild(createMemberTree({
