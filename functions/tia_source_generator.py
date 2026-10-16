@@ -36,6 +36,27 @@ def generate_project_source(
     return "\n\n".join(sections)
 
 
+def generate_fb_source(name, fb, udt_names: dict[str, str]) -> str:
+    """Generate declaration-only SCL for the locally modelled safe FB subset.
+
+    IEC system instances are intentionally rejected here until their exact TIA
+    declaration context is verified on a real V21 project.
+    """
+    lines = [f'FUNCTION_BLOCK "{name}"', "VERSION : 0.1"]
+    sections = (("VAR_INPUT", fb.input.members), ("VAR_OUTPUT", fb.output.members),
+                ("VAR_IN_OUT", fb.inout.members), ("VAR", fb.static.members),
+                ("VAR_TEMP", fb.temp.members), ("VAR CONSTANT", fb.constant.members))
+    for header, members in sections:
+        if not members: continue
+        if any(getattr(member, "system_instance", False) for member in members):
+            raise ValueError("TIA compilation not verified for IEC instance declarations in Function Blocks.")
+        lines.append(header)
+        for member in members: lines.extend(generate_member_lines(member, "   ", udt_names))
+        lines.append("END_VAR")
+    lines.extend(["BEGIN", "END_FUNCTION_BLOCK"])
+    return "\n".join(lines)
+
+
 def generate_udt_source(
     name: str,
     fields: list[TiaMember],

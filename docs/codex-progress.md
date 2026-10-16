@@ -30,3 +30,12 @@
 - Validation: `pytest -q tests/test_function_block.py` — 5 passed.
 - Commit: pending.
 - Remaining: safe SCL generation for FB declarations and offline export.
+
+## Safe FB SCL generation
+
+- Added declaration-only SCL generation for supported FB sections, reusing the
+  existing member generator for UDTs, arrays, structs, comments and attributes.
+- IEC instance declarations fail closed with a TIA-compilation-unverified error.
+- Validation: `pytest -q tests/test_function_block.py tests/test_scl_bundle_export.py` — 11 passed.
+- Commit: pending.
+- Remaining: extend offline source ZIP and preflight dependency reporting for FBs.

@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from engine.function_block import FunctionBlockSpecification
 from engine.project import ProjectSpecification
 from engine.instance_db import InstanceDbSpecification, instance_db_preview
+from functions.tia_source_generator import generate_fb_source
 
 
 def test_function_block_has_independent_sections_and_serializes():
@@ -31,3 +32,9 @@ def test_instance_db_preview_is_derived_from_its_function_block():
     fb = FunctionBlockSpecification.model_validate({"name":"FB_Motor", "static":{"name":"Static","members":[{"name":"Running","data_type":"Bool"}]}})
     preview = instance_db_preview(InstanceDbSpecification(name="DB_Motor", function_block="FB_Motor"), fb)
     assert preview["sections"][0]["members"][0]["name"] == "Running"
+
+
+def test_fb_source_emits_safe_declaration_sections():
+    fb = FunctionBlockSpecification.model_validate({"name":"FB_Motor", "input":{"name":"Input","members":[{"name":"Enable","data_type":"Bool"}]}, "static":{"name":"Static","members":[{"name":"State","data_type":"Int"}]}})
+    source = generate_fb_source(fb.name, fb, {})
+    assert "VAR_INPUT" in source and "Enable : Bool;" in source and "VAR" in source
