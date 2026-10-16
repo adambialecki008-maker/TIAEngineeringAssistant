@@ -78,7 +78,7 @@ const {openSection} = require("./ui_disclosures.cjs");
                     font: cs.fontFamily,
                     size: cs.fontSize,
                     weight: cs.fontWeight,
-                    height: Math.round(el.getBoundingClientRect().height),
+                    minHeight: cs.minHeight,
                     padding: cs.padding,
                     gap: cs.columnGap,
                     border: box.borderTopColor,
@@ -101,6 +101,15 @@ const {openSection} = require("./ui_disclosures.cjs");
             assert.deepEqual(values, surfaces.udt,
                 name + " collapsed section must match the Application UDTs header");
         }
+        // Geometric heights can only be compared while their tab is visible.
+        await page.locator('[data-tab="udt"]').click();
+        const udtHeight = await page.locator('[data-ui-section="udt-editor"] > summary')
+            .evaluate(el => Math.round(el.getBoundingClientRect().height));
+        await page.locator('[data-tab="project"]').click();
+        const overviewHeight = await page.locator("#overview-profile-management > details > summary")
+            .evaluate(el => Math.round(el.getBoundingClientRect().height));
+        assert.equal(overviewHeight, udtHeight, "Visible panel header heights match");
+        assert.equal(udtHeight, 62);
         await page.locator('[data-tab="fb"]').click();
         const editor = page.locator('[data-ui-section="fb-editor"]');
         assert.equal(await editor.evaluate(el => el.open),false);
