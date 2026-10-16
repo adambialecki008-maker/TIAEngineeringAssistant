@@ -50,10 +50,8 @@ function collapsibleCard(card, title, initiallyOpen = false) {
     if (heading) heading.remove();
     card.classList.remove("card");
     const summary = element("summary", title);
-    summary.style.cursor = "pointer";
-    summary.style.fontWeight = "600";
-    summary.style.fontSize = "1.1rem";
-    summary.style.padding = "0.2rem 0";
+    // Typography, spacing and chevron come from the shared CSS system.
+    // Do not set font size/weight inline: Overview must match every panel.
     panel.append(summary, card);
     return panel;
 }
