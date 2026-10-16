@@ -123,7 +123,8 @@ const FC = {
 
         const importedFb = page.locator("#fb-container .program-block-card").nth(1);
         const importedStatic = importedFb.locator(".program-declaration-section").nth(3);
-        await importedStatic.locator(":scope > summary").click();
+        if (!await importedStatic.evaluate(el => el.open))
+            await importedStatic.locator(":scope > summary").click();
         const importedTimer = importedStatic.locator("tr[data-member-path]").filter({hasText: "TON_ReadOnly"});
         await importedTimer.locator("button.member-tree-toggle").click();
         const readOnlyPreview = importedStatic.locator(".native-instance-preview");
