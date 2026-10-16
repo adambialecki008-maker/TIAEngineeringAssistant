@@ -156,6 +156,61 @@ _SCL_STRUCT_OPEN = re.compile(
 )
 
 
+def _scl_without_comments(source: str) -> tuple[list[str], bool]:
+    """Mask // and nested (* *) comments without changing source line numbers.
+
+    Quoted symbolic names and SCL string literals are preserved; marker-like
+    text inside quotes is not treated as a comment.
+    """
+    lines: list[str] = []
+    depth = 0
+    for line in source.splitlines():
+        cleaned: list[str] = []
+        index = 0
+        quote = ""
+        while index < len(line):
+            pair = line[index:index + 2]
+            if depth:
+                if pair == "(*":
+                    depth += 1
+                    cleaned.extend("  ")
+                    index += 2
+                elif pair == "*)":
+                    depth -= 1
+                    cleaned.extend("  ")
+                    index += 2
+                else:
+                    cleaned.append(" ")
+                    index += 1
+                continue
+            if quote:
+                char = line[index]
+                cleaned.append(char)
+                index += 1
+                if char == quote:
+                    if index < len(line) and line[index] == quote:
+                        cleaned.append(line[index])
+                        index += 1
+                    else:
+                        quote = ""
+                continue
+            if pair == "//":
+                cleaned.extend(" " * (len(line) - index))
+                break
+            if pair == "(*":
+                depth += 1
+                cleaned.extend("  ")
+                index += 2
+                continue
+            char = line[index]
+            if char in ("'", '"'):
+                quote = char
+            cleaned.append(char)
+            index += 1
+        lines.append("".join(cleaned))
+    return lines, depth > 0
+
+
 def _scl(file: ReviewInputFile) -> ReviewBlock:
     block = ReviewBlock(source_file=file.name, name=file.name, block_type="Unknown", language="SCL")
     sections = {
@@ -167,7 +222,8 @@ def _scl(file: ReviewInputFile) -> ReviewBlock:
     in_type_struct = False
     struct_path: list[str] = []
 
-    for line_no, line in enumerate(file.content.splitlines(), 1):
+    code_lines, unclosed_comment = _scl_without_comments(file.content)
+    for line_no, line in enumerate(code_lines, 1):
         hit = _BLOCK.match(line)
         if hit:
             if block.block_type != "Unknown":
@@ -209,6 +265,8 @@ def _scl(file: ReviewInputFile) -> ReviewBlock:
                     data_type=decl.group(2).strip(), section=section, location=f"line {line_no}",
                 ))
 
+    if unclosed_comment:
+        block.parsing_warnings.append("Unclosed SCL block comment; declaration analysis is partial.")
     if in_type_struct or struct_path:
         block.parsing_warnings.append("Unclosed STRUCT; declaration analysis is partial.")
     if block.block_type == "Unknown":
@@ -572,17 +630,36 @@ def _add_multi_instance_cycle_findings(report: ReviewReport) -> None:
 
 
 def _source_chunks(content: str) -> tuple[list[str], bool]:
-    """Split source for a small local model, preserving real source lines."""
-    chunks, current, size = [], [], 0
-    for line_number, line in enumerate(content.splitlines(), 1):
-        numbered = f"{line_number}: {line}"
-        if current and size + len(numbered) + 1 > MAX_AI_CHUNK_CHARS:
+    """Bound every Ollama payload, even when XML occupies a single huge line.
+
+    Segments keep the original line number; truncation is reported to users.
+    No source text is reinterpreted or executed.
+    """
+    chunks: list[str] = []
+    current: list[str] = []
+    size = 0
+
+    def flush() -> None:
+        nonlocal current, size
+        if current:
             chunks.append("\n".join(current))
             current, size = [], 0
-        current.append(numbered)
-        size += len(numbered) + 1
-    if current:
-        chunks.append("\n".join(current))
+
+    for line_number, line in enumerate(content.splitlines(), 1):
+        prefix = f"{line_number}: "
+        capacity = MAX_AI_CHUNK_CHARS - len(prefix)
+        if capacity <= 0:
+            flush()
+            continue
+        offsets = range(0, max(1, len(line)), capacity)
+        for offset in offsets:
+            piece = prefix + line[offset:offset + capacity]
+            extra = len(piece) + (1 if current else 0)
+            if current and size + extra > MAX_AI_CHUNK_CHARS:
+                flush()
+            current.append(piece)
+            size += len(piece) + (1 if len(current) > 1 else 0)
+    flush()
     return chunks[:MAX_AI_CHUNKS_PER_FILE], len(chunks) > MAX_AI_CHUNKS_PER_FILE
 
 

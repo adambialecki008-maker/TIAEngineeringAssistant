@@ -521,3 +521,18 @@
   Siemens export ordering is not a proven execution/signal-flow direction.
 - Duplicate UId detection now uses a linear-time set pass rather than repeated
   scanning of all network nodes.
+
+## PLC Code Review SCL comment safety and bounded Ollama payloads — 2026-10-16
+
+- SCL declarations and block headers are scanned after masking both // and
+  nested (* ... *) comments. Strings and quoted symbolic identifiers retain
+  comment-looking text without accidental stripping; original line numbers
+  remain intact for diagnostics.
+- Unclosed block comments cause explicitly partial analysis rather than a
+  misleading clean/verified result.
+- Ollama source segmentation now splits even minified one-line XML into
+  bounded chunks of at most 6000 characters, including line labels. At most
+  12 chunks per file are analyzed; truncation remains explicitly reported.
+- Added read-only regression tests for fake declarations in comments, quoted
+  symbols, nested comments, and oversized single-line AI input.
+- No Siemens Openness write, HMI translation, or PLC project modifications.

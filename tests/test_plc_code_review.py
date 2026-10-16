@@ -289,3 +289,53 @@ def test_flgnet_without_parts_or_wires_reports_partial_topology_not_exception():
     assert not report.files[0].network_details[0].wires
     assert any("Wires is absent" in x.explanation for x in report.findings)
     assert all(x.verification_status == "requires TIA verification" for x in report.findings)
+
+
+def test_scl_ignores_nested_multiline_comments_fake_blocks_and_ghost_types():
+    source = (
+        'FUNCTION_BLOCK "FB_Actual"\n'
+        '(*\nFUNCTION_BLOCK "FB_Fake"\nVAR_INPUT\n Fake : UDT_Phantom;\n'
+        '(* nested\n VAR_STATIC\n Ghost : UDT_Never;\n*)\n*)\n'
+        'VAR_INPUT\n'
+        ' // Shadow : UDT_Missing;\n'
+        ' "Real" : Bool; (* inline *)\n'
+        ' "URL" : STRING[40] := \'http://localhost/(*placeholder*)//x\';\n'
+        ' (* two (* nested *) levels *) "Valid" : Int;\n'
+        'END_VAR\n'
+    )
+    report = analyze_files([ReviewInputFile(name="real.scl", content=source)])
+    block = report.files[0]
+    assert block.name == "FB_Actual"
+    assert block.verification_status == "parsed"
+    assert [(item.name, item.location) for item in block.declarations] == [
+        ("Real", "line 11"), ("URL", "line 12"), ("Valid", "line 13"),
+    ]
+    assert not report.findings
+
+
+def test_scl_comments_preserve_quoted_names_and_report_unclosed_comment():
+    source = (
+        'FUNCTION_BLOCK "FB_//Symbol"\n'
+        'VAR_INPUT\n'
+        ' "Name(*embedded*)" : Bool;\n'
+        ' Actual : Int; (* unfinished\n'
+        ' Phantom : UDT_Ignore;\n'
+    )
+    report = analyze_files([ReviewInputFile(name="quoted.scl", content=source)])
+    block = report.files[0]
+    assert block.name == "FB_//Symbol"
+    assert [member.name for member in block.declarations] == ["Name(*embedded*)", "Actual"]
+    assert block.verification_status == "partial"
+    assert "Unclosed SCL block comment" in block.parsing_warnings[0]
+    assert not report.findings
+
+
+def test_scl_comment_after_block_header_does_not_hide_second_real_block():
+    report = analyze_files([ReviewInputFile(
+        name="multi.scl",
+        content="FUNCTION_BLOCK FB_First // first\n(* ignored header:\nFUNCTION FC_Fake\n*)\n"
+                "FUNCTION_BLOCK FB_Second\n",
+    )])
+    assert report.files[0].name == "FB_First"
+    assert report.files[0].verification_status == "partial"
+    assert any("Several SCL block headers" in warning for warning in report.files[0].parsing_warnings)
