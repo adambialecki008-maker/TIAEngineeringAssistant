@@ -32,6 +32,7 @@ import {renderFunctions} from "./fc.js";
 import {initProgramDependencies} from "./program_dependencies.js";
 import {initEngineeringDisclosures} from "./engineering_disclosures.js";
 import {initLocalProgramCreationUi} from "./program_creation.js";
+import {initCodeReviewUi} from "./code_review.js";
 
 import {
     listCategories,
@@ -50,6 +51,8 @@ import {
 import {
     initDataLibrariesUi,
 } from "./data_libraries.js";
+
+initCodeReviewUi();
 
 
 const plcFamilySelect =

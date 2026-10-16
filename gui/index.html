@@ -112,6 +112,7 @@
         >
             Source preview
         </button>
+        <button class="tab-button" data-tab="review" type="button">AI Code Review</button>
 
     </nav>
 
@@ -2410,6 +2411,18 @@
                 </div>
             </div>
 
+        </section>
+
+        <section class="tab-panel" data-tab-panel="review">
+            <div class="panel-header"><h2>AI Code Review</h2><p>Read-only local analysis of SCL and exported XML. TIA project binaries are not accepted.</p></div>
+            <div class="card">
+                <h3>Analyze Files</h3>
+                <p class="hint">Select `.scl` and XML/SimaticML exports. Files stay in this browser session and are sent only to the local application.</p>
+                <div class="action-row"><input id="review-files" type="file" accept=".scl,.xml" multiple><input id="review-folder" type="file" accept=".scl,.xml" webkitdirectory multiple><button id="review-analyze" type="button">Analyze</button><button id="review-download" type="button" class="secondary-button" disabled>Download JSON</button></div>
+                <p id="review-status" class="status-box" aria-live="polite">Select PLC source files or a folder.</p>
+                <ul id="review-files-list" class="hint"></ul>
+                <div id="review-results"></div>
+            </div>
         </section>
 
     </main>

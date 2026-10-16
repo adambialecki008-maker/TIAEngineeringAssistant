@@ -398,3 +398,12 @@
   from the loaded file set. Missing project context is labelled accordingly.
 - Validation: focused 3 tests and full `pytest -q` — 529 passed.
 
+## PLC Code Review Analyze Files UI — 2026-10-16
+
+- Added the `AI Code Review` navigation module with an Analyze Files workflow:
+  multiple-file and browser-supported folder selection, local status/listing,
+  deterministic findings, per-block expandable results and JSON download.
+- The UI calls only the local read-only review endpoint. `Analyze from TIA`
+  and Ollama review remain deliberately unavailable in this first vertical
+  flow, rather than presenting placeholder output as analysis.
+
