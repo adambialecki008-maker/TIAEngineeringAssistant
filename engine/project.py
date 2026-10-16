@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, model_validator
 from engine.plc_db import DataBlockSpecification
 from engine.udt import UdtSpecification
 from engine.function_block import FunctionBlockSpecification
+from engine.instance_db import InstanceDbSpecification
 
 
 class ProjectSpecification(BaseModel):
@@ -13,6 +14,7 @@ class ProjectSpecification(BaseModel):
     udts: list[UdtSpecification] = []
     dbs: list[DataBlockSpecification] = []
     fbs: list[FunctionBlockSpecification] = []
+    instance_dbs: list[InstanceDbSpecification] = []
 
     @model_validator(mode="after")
     def validate_function_block_dependencies(self):
@@ -30,6 +32,9 @@ class ProjectSpecification(BaseModel):
                 if child: visit(child)
             visiting.remove(key); visited.add(key)
         for fb in self.fbs: visit(fb)
+        for instance in self.instance_dbs:
+            if instance.function_block.casefold() not in by_name:
+                raise ValueError("Instance DB references unknown Function Block: " + instance.function_block)
         return self
 
 

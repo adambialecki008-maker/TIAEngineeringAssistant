@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from engine.function_block import FunctionBlockSpecification
 from engine.project import ProjectSpecification
+from engine.instance_db import InstanceDbSpecification, instance_db_preview
 
 
 def test_function_block_has_independent_sections_and_serializes():
@@ -24,3 +25,9 @@ def test_function_block_rejects_name_collision_between_sections():
 def test_project_rejects_circular_fb_multi_instance_dependency():
     with pytest.raises(ValidationError, match="Circular Function Block"):
         ProjectSpecification.model_validate({"fbs":[{"name":"FB_A","static":{"name":"Static","members":[{"name":"B","data_type":"FB_B"}]}},{"name":"FB_B","static":{"name":"Static","members":[{"name":"A","data_type":"FB_A"}]}}]})
+
+
+def test_instance_db_preview_is_derived_from_its_function_block():
+    fb = FunctionBlockSpecification.model_validate({"name":"FB_Motor", "static":{"name":"Static","members":[{"name":"Running","data_type":"Bool"}]}})
+    preview = instance_db_preview(InstanceDbSpecification(name="DB_Motor", function_block="FB_Motor"), fb)
+    assert preview["sections"][0]["members"][0]["name"] == "Running"

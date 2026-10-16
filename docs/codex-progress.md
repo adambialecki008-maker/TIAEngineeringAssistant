@@ -21,3 +21,12 @@
 - Validation: `pytest -q tests/test_function_block.py` — 4 passed.
 - Commit: pending.
 - Remaining: offline Instance DB model and structural preview.
+
+## Offline Instance DB
+
+- Added an Instance DB model tied to exactly one local Function Block.
+- Its preview is derived from the FB Static section; the DB has no independent
+  editable interface and carries an explicit unverified-TIA marker.
+- Validation: `pytest -q tests/test_function_block.py` — 5 passed.
+- Commit: pending.
+- Remaining: safe SCL generation for FB declarations and offline export.
