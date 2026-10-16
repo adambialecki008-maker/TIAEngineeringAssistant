@@ -155,11 +155,32 @@ class ReviewFinding(BaseModel):
     detection_method: str = "rule"
     verification_status: str = "verified"
     confidence: float | None = Field(default=None, ge=0, le=1)
+    priority: Literal["P0", "P1", "P2", "P3"] = "P3"
+
+
+class ReviewFileSummary(BaseModel):
+    source_file: str
+    blocks: list[str] = Field(default_factory=list)
+    findings: int = 0
+    by_priority: dict[str, int] = Field(default_factory=dict)
+
+
+class ReviewProjectSummary(BaseModel):
+    analyzed_files: int = 0
+    analyzed_blocks: int = 0
+    total_findings: int = 0
+    incomplete_blocks: int = 0
+    by_priority: dict[str, int] = Field(default_factory=dict)
+    by_severity: dict[str, int] = Field(default_factory=dict)
+    by_method: dict[str, int] = Field(default_factory=dict)
+    by_verification: dict[str, int] = Field(default_factory=dict)
+    files: list[ReviewFileSummary] = Field(default_factory=list)
 
 
 class ReviewReport(BaseModel):
     files: list[ReviewBlock] = Field(default_factory=list)
     findings: list[ReviewFinding] = Field(default_factory=list)
+    summary: ReviewProjectSummary = Field(default_factory=ReviewProjectSummary)
     file_warnings: list[str] = Field(default_factory=list)
     ai_review_status: Literal["not_requested", "complete", "partial", "unavailable"] = "not_requested"
     read_only: bool = True
@@ -725,6 +746,64 @@ def _xml(file: ReviewInputFile) -> ReviewBlock:
     return block
 
 
+_PRIORITIES = ("P0", "P1", "P2", "P3")
+_SEVERITIES = ("critical", "error", "warning", "info")
+
+
+def _finding_priority(finding: ReviewFinding) -> Literal["P0", "P1", "P2", "P3"]:
+    """Triage severity and evidence, never promote unverified AI to P0."""
+    severity = finding.severity.casefold()
+    confirmed = (
+        finding.detection_method.casefold() == "rule"
+        and finding.verification_status.casefold() == "verified"
+    )
+    if severity in {"critical", "error"}:
+        return "P0" if confirmed else "P1"
+    if severity == "warning":
+        return "P1" if confirmed else "P2"
+    return "P3"
+
+
+def _refresh_project_summary(report: ReviewReport) -> None:
+    """Refresh statistics after deterministic review AND after optional AI."""
+    summary = ReviewProjectSummary(
+        analyzed_files=len({block.source_file for block in report.files}),
+        analyzed_blocks=len(report.files),
+        incomplete_blocks=sum(
+            block.verification_status != "parsed" for block in report.files
+        ),
+        by_priority={key: 0 for key in _PRIORITIES},
+        by_severity={key: 0 for key in _SEVERITIES},
+        by_method={"rule": 0, "AI": 0},
+    )
+    per_file: dict[str, ReviewFileSummary] = {}
+    for block in report.files:
+        current = per_file.setdefault(block.source_file, ReviewFileSummary(
+            source_file=block.source_file, by_priority={key: 0 for key in _PRIORITIES},
+        ))
+        current.blocks.append(block.name)
+    for finding in report.findings:
+        finding.priority = _finding_priority(finding)
+        summary.by_priority[finding.priority] += 1
+        severity = finding.severity.casefold()
+        summary.by_severity[severity] = summary.by_severity.get(severity, 0) + 1
+        method = finding.detection_method
+        summary.by_method[method] = summary.by_method.get(method, 0) + 1
+        verification = finding.verification_status
+        summary.by_verification[verification] = summary.by_verification.get(verification, 0) + 1
+        if finding.source_file not in per_file:
+            per_file[finding.source_file] = ReviewFileSummary(
+                source_file=finding.source_file,
+                by_priority={key: 0 for key in _PRIORITIES},
+            )
+        bucket = per_file[finding.source_file]
+        bucket.findings += 1
+        bucket.by_priority[finding.priority] += 1
+    summary.total_findings = len(report.findings)
+    summary.files = list(per_file.values())
+    report.summary = summary
+
+
 def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
     report = ReviewReport()
     for file in files:
@@ -785,6 +864,7 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
     _check_call_interfaces(report)
     _scl_variable_diagnostics(report, files)
     _network_diagnostics(report)
+    _refresh_project_summary(report)
     return report
 
 
@@ -1439,4 +1519,5 @@ def review_with_ollama(request: AiReviewRequest) -> ReviewReport:
             "complete" if accepted == attempted
             else "partial" if accepted else "unavailable"
         )
+    _refresh_project_summary(report)
     return report

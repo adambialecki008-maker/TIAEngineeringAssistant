@@ -146,3 +146,22 @@ def test_mixed_short_lines_and_oversized_lines_preserve_valid_line_numbers():
     assert chunks[0] == "1: line one"
     assert any(chunk.startswith("2: ") for chunk in chunks)
     assert any("3: line three" in chunk for chunk in chunks)
+
+
+
+def test_ai_review_refreshes_project_priority_and_method_counts(monkeypatch):
+    monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", lambda *args, **kwargs: {
+        "message": {"content": json.dumps({"findings": [
+            {"severity": "error", "category": "Suggestion", "explanation": "Unverified risk."},
+        ]})}
+    })
+    result = review_with_ollama(AiReviewRequest(files=[ReviewInputFile(
+        name="A.scl", content="FUNCTION_BLOCK FB_Main\nEND_FUNCTION_BLOCK",
+    )]))
+    assert result.ai_review_status == "complete"
+    assert result.summary.total_findings == len(result.findings)
+    assert result.summary.by_method["AI"] == 1
+    assert result.summary.by_priority["P0"] == 0
+    assert result.summary.by_priority["P1"] == 1
+    assert result.findings[-1].priority == "P1"

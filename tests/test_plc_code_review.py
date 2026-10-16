@@ -1054,3 +1054,71 @@ def test_void_cannot_silently_become_a_regular_input_or_fb_variable_type():
     assert [(f.block, f.evidence) for f in findings] == [
         ("FC_Bad", "Void"), ("FB_Bad", "Void"),
     ]
+
+
+
+def test_project_summary_groups_files_and_ranked_deterministic_findings():
+    report = analyze_files([
+        ReviewInputFile(name="Good.scl", content="FUNCTION_BLOCK FB_Good\nEND_FUNCTION_BLOCK"),
+        ReviewInputFile(name="Bad.scl", content=(
+            "FUNCTION_BLOCK FB_Bad\nVAR_INPUT\n"
+            " Duplicate : Bool;\n Duplicate : Bool;\n Unknown : UDT_Missing;\n"
+            "END_VAR\nEND_FUNCTION_BLOCK"
+        )),
+        ReviewInputFile(name="Broken.xml", content="<broken"),
+    ])
+    assert report.read_only is True
+    assert report.summary.analyzed_files == 3
+    assert report.summary.analyzed_blocks == 3
+    assert report.summary.total_findings == len(report.findings)
+    assert report.summary.incomplete_blocks >= 1
+    priority = {finding.category: finding.priority for finding in report.findings}
+    assert priority["Duplicate declaration"] == "P0"
+    assert priority["Unresolved dependency"] == "P2"
+    assert report.summary.by_priority["P0"] >= 1
+    assert report.summary.by_priority["P2"] >= 1
+    assert [file.source_file for file in report.summary.files] == [
+        "Good.scl", "Bad.scl", "Broken.xml",
+    ]
+    assert report.summary.files[0].findings == 0
+    assert report.summary.files[1].findings >= 2
+    assert report.summary.by_method["rule"] == len(report.findings)
+    assert sum(report.summary.by_priority.values()) == len(report.findings)
+
+
+def test_ai_priority_never_claims_confirmed_issue():
+    from engine.plc_code_review import ReviewReport, ReviewFinding, _refresh_project_summary
+    report = ReviewReport(findings=[
+        ReviewFinding(
+            source_file="A.scl", block="FB_A", severity="critical",
+            category="Potential AI issue", explanation="Unverified",
+            detection_method="AI", verification_status="AI suggestion — unverified",
+        ),
+        ReviewFinding(
+            source_file="A.scl", block="FB_A", severity="warning",
+            category="Partial graph", explanation="Requires TIA",
+            verification_status="requires TIA verification",
+        ),
+        ReviewFinding(
+            source_file="A.scl", block="FB_A", severity="info",
+            category="Observation", explanation="Noncritical",
+        ),
+    ])
+    _refresh_project_summary(report)
+    assert [f.priority for f in report.findings] == ["P1", "P2", "P3"]
+    assert report.summary.total_findings == 3
+    assert report.summary.files[0].by_priority["P1"] == 1
+    assert report.summary.by_verification["AI suggestion — unverified"] == 1
+
+
+def test_project_summary_is_exposed_in_read_only_endpoint():
+    response = TestClient(app).post("/api/v1/code-review/analyze-files", json=[{
+        "name": "Bad.scl",
+        "content": "FUNCTION_BLOCK FB_Bad\nVAR_INPUT\nUnknown : UDT_Missing;\nEND_VAR",
+    }])
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["analyzed_files"] == 1
+    assert body["summary"]["analyzed_blocks"] == 1
+    assert body["summary"]["total_findings"] == len(body["findings"])
+    assert all(f["priority"] in {"P0", "P1", "P2", "P3"} for f in body["findings"])
