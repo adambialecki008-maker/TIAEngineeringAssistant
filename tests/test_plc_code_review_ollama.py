@@ -46,14 +46,85 @@ def test_ollama_suggestions_are_validated_and_bound_to_real_source(monkeypatch):
     assert captured[0][2] == 90
 
 
-def test_ollama_endpoint_reports_invalid_json_clearly(monkeypatch):
+def test_ollama_invalid_json_retries_then_keeps_deterministic_report(monkeypatch):
     monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
-    monkeypatch.setattr("engine.plc_code_review._ollama_json", lambda *args, **kwargs: {"message": {"content": "not json"}})
+    calls = []
+
+    def invalid(endpoint, payload, timeout):
+        calls.append(payload)
+        return {"message": {"content": "not json"}}
+
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", invalid)
     response = TestClient(app).post("/api/v1/code-review/ollama", json={
-        "files": [{"name": "FC.scl", "content": "FUNCTION FC_Test"}],
+        "files": [{"name": "FC.scl", "content": "FUNCTION FC_Test\nVAR_INPUT\n Ghost : UDT_Missing;\nEND_VAR"}],
     })
-    assert response.status_code == 502
-    assert response.json()["detail"] == "Ollama returned invalid code-review JSON."
+    assert response.status_code == 200
+    report = response.json()
+    assert report["read_only"] is True
+    assert report["ai_review_status"] == "unavailable"
+    assert any(f["category"] == "Unresolved dependency" for f in report["findings"])
+    assert any("Ollama returned invalid JSON" in warning for warning in report["file_warnings"])
+    assert len(calls) == 2
+    assert isinstance(calls[0]["format"], dict)
+    assert calls[1]["format"] == "json"
+
+
+def test_ollama_markdown_wrapped_json_is_accepted_without_retry(monkeypatch):
+    monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
+    calls = []
+
+    def wrapped(endpoint, payload, timeout):
+        calls.append(payload)
+        fence = chr(96) * 3
+        output = 'JSON response:\n' + fence + 'json\n{"findings":[{"severity":"warning","category":"Potential issue","explanation":"Review this code.","location":"line 1"}]}\n' + fence
+        return {"message": {"content": output}}
+
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", wrapped)
+    report = review_with_ollama(AiReviewRequest(files=[
+        ReviewInputFile(name="FB.scl", content="FUNCTION_BLOCK FB_Foo\nEND_FUNCTION_BLOCK"),
+    ]))
+    assert report.ai_review_status == "complete"
+    assert len(calls) == 1
+    assert len([x for x in report.findings if x.detection_method == "AI"]) == 1
+
+
+def test_ollama_skips_invalid_candidates_without_losing_valid_findings(monkeypatch):
+    monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", lambda *args, **kwargs: {
+        "message": {"content": json.dumps({"findings": [
+            {"severity": "warning", "category": "Valid", "explanation": "Review this carefully."},
+            {"severity": "invalid", "category": "No", "explanation": "Reject."},
+            {"category": "No", "explanation": "Missing severity"},
+        ]})}
+    })
+    report = review_with_ollama(AiReviewRequest(files=[
+        ReviewInputFile(name="FC.scl", content="FUNCTION FC_Example\nEND_FUNCTION"),
+    ]))
+    ai = [finding for finding in report.findings if finding.detection_method == "AI"]
+    assert report.ai_review_status == "complete"
+    assert [(f.category, f.severity) for f in ai] == [("Valid", "warning")]
+    assert any("ignored 2 malformed" in warning for warning in report.file_warnings)
+
+
+def test_ollama_retry_recovers_structured_json(monkeypatch):
+    monkeypatch.setattr("engine.plc_code_review.resolve_ollama_model", lambda requested: "qwen2.5:3b")
+    calls = []
+
+    def fake(endpoint, payload, timeout):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"message": {"content": '{"findings": [invalid'}}
+        return {"message": {"content": '{"findings": []}'}}
+
+    monkeypatch.setattr("engine.plc_code_review._ollama_json", fake)
+    report = review_with_ollama(AiReviewRequest(files=[
+        ReviewInputFile(name="FC.scl", content="FUNCTION FC_Example\nEND_FUNCTION"),
+    ]))
+    assert report.ai_review_status == "complete"
+    assert len(calls) == 2
+    assert calls[1]["format"] == "json"
+    assert report.file_warnings == []
+
 
 
 def test_oversized_one_line_xml_is_bounded_for_local_ollama():

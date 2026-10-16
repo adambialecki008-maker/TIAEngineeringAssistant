@@ -161,6 +161,7 @@ class ReviewReport(BaseModel):
     files: list[ReviewBlock] = Field(default_factory=list)
     findings: list[ReviewFinding] = Field(default_factory=list)
     file_warnings: list[str] = Field(default_factory=list)
+    ai_review_status: Literal["not_requested", "complete", "partial", "unavailable"] = "not_requested"
     read_only: bool = True
 
 
@@ -1293,6 +1294,53 @@ def _ai_prompt(block: ReviewBlock, numbered_source: str) -> str:
     )
 
 
+def _parse_ollama_code_review(content: str) -> tuple[list[_AiCandidate], int] | None:
+    """Extract a bounded JSON envelope; skip individual invalid suggestions.
+
+    Handles fenced JSON and leading prose from small Ollama models. Never
+    repair broken JSON values, fabricate findings, or execute response text.
+    """
+    if not content or len(content) > 200_000:
+        return None
+    cleaned = content.strip().lstrip("\ufeff")
+    decoder = json.JSONDecoder()
+    decoded = None
+    for index, char in enumerate(cleaned):
+        if char not in "{[":
+            continue
+        try:
+            value, _ = decoder.raw_decode(cleaned, index)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(value, (dict, list)):
+            decoded = value
+            break
+    if decoded is None:
+        return None
+    if isinstance(decoded, dict):
+        found = decoded.get("findings")
+        if found is None and {"severity", "category", "explanation"} <= decoded.keys():
+            found = [decoded]
+    else:
+        found = decoded
+    if not isinstance(found, list):
+        return None
+    candidates: list[_AiCandidate] = []
+    discarded = max(0, len(found) - 50)
+    for item in found[:50]:
+        if not isinstance(item, dict):
+            discarded += 1
+            continue
+        try:
+            validated = (_AiCandidate.model_validate(item) if hasattr(_AiCandidate, "model_validate")
+                         else _AiCandidate.parse_obj(item))
+        except Exception:
+            discarded += 1
+            continue
+        candidates.append(validated)
+    return candidates, discarded
+
+
 def review_with_ollama(request: AiReviewRequest) -> ReviewReport:
     """Add clearly unverified local Ollama suggestions to deterministic results."""
     report = analyze_files(request.files)
@@ -1320,6 +1368,8 @@ def review_with_ollama(request: AiReviewRequest) -> ReviewReport:
         "required": ["findings"],
         "additionalProperties": False,
     }
+    attempted = 0
+    accepted = 0
     for block in report.files:
         if requested and block.name.casefold() not in requested:
             continue
@@ -1329,26 +1379,53 @@ def review_with_ollama(request: AiReviewRequest) -> ReviewReport:
             report.file_warnings.append(
                 f"{block.source_file}: AI review was limited to the first {MAX_AI_CHUNKS_PER_FILE} source chunks."
             )
-        for chunk in chunks:
+        for chunk_index, chunk in enumerate(chunks, 1):
+            attempted += 1
+            prompt = _ai_prompt(block, chunk)
+            messages = [
+                {"role": "system", "content": "Provide cautious local PLC code-review suggestions as JSON. Suggestions are not verified facts."},
+                {"role": "user", "content": prompt},
+            ]
             response = _ollama_json("/api/chat", {
-                "model": model_name,
-                "stream": False,
-                "format": schema,
-                "options": {"temperature": 0},
-                "messages": [
-                    {"role": "system", "content": "Provide cautious local PLC code-review suggestions as JSON. Suggestions are not verified facts."},
-                    {"role": "user", "content": _ai_prompt(block, chunk)},
-                ],
+                "model": model_name, "stream": False, "format": schema,
+                "options": {"temperature": 0}, "messages": messages,
             }, timeout=90)
             message = response.get("message")
             content = message.get("content") if isinstance(message, dict) else None
-            if not isinstance(content, str) or not content.strip():
-                raise HTTPException(502, "Ollama returned no code-review JSON.")
-            try:
-                parsed = _AiResponse.model_validate_json(content) if hasattr(_AiResponse, "model_validate_json") else _AiResponse.parse_raw(content)
-            except Exception as exc:
-                raise HTTPException(502, "Ollama returned invalid code-review JSON.") from exc
-            for candidate in parsed.findings:
+            parsed = _parse_ollama_code_review(content) if isinstance(content, str) else None
+            if parsed is None:
+                # A small local model may ignore the initial structured schema.
+                # Retry once with simpler native JSON mode.
+                response = _ollama_json("/api/chat", {
+                    "model": model_name, "stream": False, "format": "json",
+                    "options": {"temperature": 0},
+                    "messages": [
+                        {"role": "system", "content": (
+                            'Return ONLY a JSON object with the structure {"findings": []}. '
+                            "Each finding needs severity (info/warning/error/critical), "
+                            "category, explanation and optional location, evidence, "
+                            "suggested_fix, confidence. Never invent unsupported problems."
+                        )},
+                        {"role": "user", "content": prompt},
+                    ],
+                }, timeout=90)
+                message = response.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                parsed = _parse_ollama_code_review(content) if isinstance(content, str) else None
+            if parsed is None:
+                report.file_warnings.append(
+                    f"{block.source_file}: Ollama returned invalid JSON for AI chunk "
+                    f"{chunk_index}; deterministic findings were preserved."
+                )
+                continue
+            suggestions, discarded = parsed
+            if discarded:
+                report.file_warnings.append(
+                    f"{block.source_file}: ignored {discarded} malformed AI finding(s) "
+                    f"in chunk {chunk_index}."
+                )
+            accepted += 1
+            for candidate in suggestions:
                 report.findings.append(ReviewFinding(
                     source_file=block.source_file, block=block.name, language=block.language,
                     location=_safe_location(candidate.location, block, len(source.splitlines())),
@@ -1357,4 +1434,9 @@ def review_with_ollama(request: AiReviewRequest) -> ReviewReport:
                     evidence=candidate.evidence, detection_method="AI",
                     verification_status="AI suggestion — unverified", confidence=candidate.confidence,
                 ))
+    if attempted:
+        report.ai_review_status = (
+            "complete" if accepted == attempted
+            else "partial" if accepted else "unavailable"
+        )
     return report
