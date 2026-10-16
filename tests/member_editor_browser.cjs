@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const {revealEngineeringItem} = require("./ui_disclosures.cjs");
 
 // Failure evidence is local to the CI runner, never a project/TIA write.
 const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR
@@ -115,7 +116,7 @@ const seed = {
             throw new Error("Intentional Playwright diagnostics smoke failure");
         }
         await page.locator('[data-tab="udt"]').click();
-        await page.locator("#udt-container > details > summary").click();
+        await revealEngineeringItem(page, "#udt-container");
         if (process.env.SCREENSHOT_PATH) {
             await page.screenshot({ path: process.env.SCREENSHOT_PATH, fullPage: true });
         }
@@ -254,7 +255,7 @@ const seed = {
 
         // DB Array can be edited with +, and invalid bounds are rejected.
         await page.locator('[data-tab="db"]').click();
-        await page.locator("#db-container > details > summary").click();
+        await revealEngineeringItem(page, "#db-container");
         const motors = row("db-member-0:0");
         let form = await expand(motors);
         assert.equal(await form.locator('select[id$="-array-type"]').inputValue(),
@@ -285,7 +286,7 @@ const seed = {
 
         await page.reload();
         await page.locator('[data-tab="udt"]').click();
-        await page.locator("#udt-container > details > summary").click();
+        await revealEngineeringItem(page, "#udt-container");
         const persistedForm = await expand(row("udt-field-0:1"));
         const persistedMember = persistedForm.locator(
             'tr[data-member-path="udt-field-0-edit-1-struct:0"]'
@@ -314,10 +315,7 @@ const seed = {
         ]) assert.ok(source.includes(text), text);
 
         await page.locator('[data-tab="udt"]').click();
-        if (!(await page.locator("#udt-container > details")
-            .evaluate((details) => details.open))) {
-            await page.locator("#udt-container > details > summary").click();
-        }
+        await revealEngineeringItem(page, "#udt-container");
         const udtValidation = page.waitForResponse(
             (response) => response.url().endsWith("/api/v1/udt-specifications")
         );
@@ -331,20 +329,14 @@ const seed = {
         assert.equal(config.udts[0].name, "UDT_Motor_Renamed");
         assert.equal(config.dbs[0].members[0].array_element_type,
             "UDT_Motor_Renamed");
-        if (!(await page.locator("#udt-container > details")
-            .evaluate((details) => details.open))) {
-            await page.locator("#udt-container > details > summary").click();
-        }
+        await revealEngineeringItem(page, "#udt-container");
         await page.getByRole("button", { name: "Delete UDT" }).click();
         config = await page.evaluate((key) =>
             JSON.parse(localStorage.getItem(key)), key);
         assert.equal(config.udts.length, 1);
 
         await page.locator('[data-tab="db"]').click();
-        if (!(await page.locator("#db-container > details")
-            .evaluate((details) => details.open))) {
-            await page.locator("#db-container > details > summary").click();
-        }
+        await revealEngineeringItem(page, "#db-container");
         const dbValidation = page.waitForResponse(
             (response) => response.url().endsWith("/api/v1/db-specifications")
         );
