@@ -372,7 +372,13 @@ export function initCodeReviewUi() {
         try {
             report = await postJson("/api/v1/code-review/ollama", {files:payload, model:model.value.trim() || null});
             renderReport(report, results);
-            status.textContent = "Read-only AI review complete. AI findings are unverified suggestions.";
+            const aiStatus = report.ai_review_status || "complete";
+            status.textContent = aiStatus === "unavailable"
+                ? "Ollama did not return usable JSON. Deterministic findings remain available; see report warnings."
+                : aiStatus === "partial"
+                ? "AI review partially completed. Some Ollama responses were invalid; see report warnings."
+                : "Read-only AI review complete. AI findings are unverified suggestions.";
+            status.classList.toggle("error", aiStatus !== "complete");
         } catch (error) {
             status.textContent = "Local AI review failed: " + error.message + ". Deterministic results remain available.";
             status.classList.add("error");

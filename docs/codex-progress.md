@@ -700,3 +700,8 @@
   across editor re-renders. Existing per-section expansion state remains.
 - Added regression coverage for FC Void XML, invalid Void operands,
   collapsed/restored FB/FC cards and local-editor changes.
+
+## AI review fallback and shared disclosure styling — 2026-10-16
+
+- FB/FC cards now share the same standard engineering disclosure header/arrow through shared CSS classes. Custom chevron removed.
+- Local Ollama status now reports incomplete JSON output as partial/unavailable without losing deterministic results.

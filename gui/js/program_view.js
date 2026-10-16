@@ -38,7 +38,7 @@ export function programBlockDisclosure(block, kind, state) {
     const key = getActiveProjectProfileId() + ":" + kind + ":"
         + String(block.name).toLocaleLowerCase() + ":" + (block.number ?? "");
     const card = document.createElement("details");
-    card.className = "card program-block-card";
+    card.className = "card program-block-card ui-disclosure";
     card.dataset.blockKey = key;
     // An individual FB/FC is collapsed by default. Keep the user's choice
     // through editor re-renders without storing a property on the TIA snapshot.
@@ -47,7 +47,7 @@ export function programBlockDisclosure(block, kind, state) {
         if (card.isConnected) state.set(key, card.open);
     });
     const summary = document.createElement("summary");
-    summary.className = "program-block-summary program-block-header";
+    summary.className = "program-block-summary program-block-header ui-disclosure-heading";
     const heading = programHeading(block, kind);
     summary.append(...heading.childNodes);
     card.appendChild(summary);

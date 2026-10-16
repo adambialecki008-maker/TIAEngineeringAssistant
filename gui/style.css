@@ -2850,57 +2850,13 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 /* Compact FB/FC declaration analyzer: section rows, not stacked full cards. */
 .program-block-card { padding: 16px 18px; }
 .app-content details.program-block-card { padding: 0; overflow: hidden; }
-.app-content details.program-block-card > summary.program-block-summary {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    min-height: 52px;
-    padding: 12px 18px;
-    margin: 0;
-    cursor: pointer;
-    list-style: none;
-    background: var(--ui-surface-raised, #202e39);
-    color: var(--ui-text, #ecf4fa);
-}
-.app-content details.program-block-card > summary.program-block-summary::-webkit-details-marker { display: none; }
-.app-content details.program-block-card > summary.program-block-summary::before {
-    content: "";
-    flex: 0 0 8px;
-    width: 8px;
-    height: 8px;
-    border-right: 2px solid var(--ui-blue-accent, #86c6fa);
-    border-top: 2px solid var(--ui-blue-accent, #86c6fa);
-    transform: rotate(45deg);
-    transition: transform 120ms ease;
-}
-.app-content details.program-block-card[open] > summary.program-block-summary::before {
-    transform: rotate(135deg);
-}
-.app-content details.program-block-card > summary.program-block-summary:hover {
-    background: var(--ui-surface-hover, #273b4a);
-}
-.app-content details.program-block-card > summary.program-block-summary:focus-visible {
-    outline: 2px solid var(--ui-blue-accent, #86c6fa);
-    outline-offset: -3px;
-}
-.app-content details.program-block-card[open] > summary.program-block-summary {
-    border-bottom: 1px solid var(--ui-border-soft, #365268);
-}
-.app-content details.program-block-card > .program-block-body {
-    padding: 12px 18px 16px;
-}
-.program-block-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+/* FB/FC uses the standard engineering disclosure arrow and geometry. */
 .app-content details.program-block-card > summary.program-block-summary > h3 {
-    margin: 0;
     flex: 1;
     min-width: 0;
-    font-size: 17px;
-    font-weight: 600;
-    line-height: 1.4;
 }
+.app-content details.program-block-card > .program-block-body { padding: 12px 18px 16px; }
 @media (max-width: 700px) {
-    .app-content details.program-block-card > summary.program-block-summary { padding: 12px; }
     .app-content details.program-block-card > .program-block-body { padding: 12px; }
 }
 .program-block-header h3 { margin: 0; font-size: 17px; line-height: 1.4; }

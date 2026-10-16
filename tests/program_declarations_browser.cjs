@@ -76,6 +76,8 @@ const FC = {
         assert.match(await fb.locator(".program-block-tags").innerText(), /Legacy.*Unverified/);
         assert.match(await fb.locator(".program-block-tags").innerText(), /Local draft/);
         assert.equal(await fb.evaluate(el => el.tagName), "DETAILS");
+        assert.equal(await fb.evaluate(el => el.classList.contains("ui-disclosure")), true);
+        assert.equal(await fb.locator(":scope > summary").evaluate(el => el.classList.contains("ui-disclosure-heading")), true);
         assert.equal(await fb.evaluate(el => el.open), false, "FB starts collapsed");
         assert.equal(await fb.locator(".program-declarations").isVisible(), false);
         await fb.locator(":scope > summary.program-block-summary").click();
@@ -144,6 +146,7 @@ const FC = {
         await openSection(page, "fc-editor");
         const fc = page.locator("#fc-container .program-block-card").first();
         assert.equal(await fc.evaluate(el => el.tagName), "DETAILS");
+        assert.equal(await fc.evaluate(el => el.classList.contains("ui-disclosure")), true);
         assert.equal(await fc.evaluate(el => el.open), false, "FC starts collapsed");
         assert.equal(await fc.locator(".program-declarations").isVisible(), false);
         assert.match(await fc.locator(".program-block-header").innerText(), /FC_Test.*FC.*FBD/s);
