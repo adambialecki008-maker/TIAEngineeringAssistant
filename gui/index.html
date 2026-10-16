@@ -2423,6 +2423,32 @@
                 <p id="review-status" class="status-box" aria-live="polite">Select PLC source files or a folder.</p>
                 <ul id="review-files-list" class="hint"></ul>
                 <div id="review-results"></div>
+                <details id="review-proposal-panel" class="ui-disclosure review-proposal-panel" hidden>
+                    <summary class="ui-disclosure-heading">SCL change proposal — preview and export copy</summary>
+                    <div class="review-proposal-content">
+                        <p class="hint">No automatic code changes. Choose existing SCL lines, enter the intended replacement, review the exact diff, and explicitly approve a separately downloaded copy. AI findings are advice, not patch code. No TIA write or compile.</p>
+                        <p id="review-proposal-guidance" class="hint"></p>
+                        <div class="review-proposal-controls">
+                            <label>Source SCL file <select id="review-proposal-file" aria-label="SCL source for change proposal" disabled></select></label>
+                            <label>First line <input id="review-proposal-start" type="number" min="1" value="1"></label>
+                            <label>Last line <input id="review-proposal-end" type="number" min="1" value="1"></label>
+                        </div>
+                        <label for="review-proposal-original">Original selected lines (read-only)</label>
+                        <pre id="review-proposal-original" class="review-proposal-code"></pre>
+                        <label for="review-proposal-replacement">Proposed replacement SCL</label>
+                        <textarea id="review-proposal-replacement" rows="5" spellcheck="false" aria-label="Proposed SCL replacement"></textarea>
+                        <div class="action-row"><button id="review-proposal-preview" type="button" disabled>Preview unified diff</button></div>
+                        <pre id="review-proposal-diff" class="review-proposal-code review-proposal-diff" aria-label="Proposed source diff"></pre>
+                        <label class="review-proposal-approval">
+                            <input id="review-proposal-approve" type="checkbox" disabled>
+                            I have reviewed the exact diff and want a separate uncompiled SCL copy.
+                        </label>
+                        <div class="action-row">
+                            <button id="review-proposal-download" type="button" class="secondary-button" disabled>Download approved .reviewed.scl copy</button>
+                        </div>
+                        <p id="review-proposal-status" class="hint" aria-live="polite"></p>
+                    </div>
+                </details>
             </div>
             <div class="card">
                 <h3>Analyze from TIA</h3>

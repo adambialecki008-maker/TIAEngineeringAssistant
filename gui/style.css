@@ -3287,3 +3287,16 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .review-finding-row[data-priority="P3"] { border-left-color: var(--ui-border-soft, #365268); }
 .review-finding-row p { margin: 5px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .review-file-warnings { margin-top: 12px; }
+
+
+/* Point 6 — self-contained, preview-only SCL patch drafts. */
+.review-proposal-panel { margin-top: 20px; }
+.review-proposal-content { padding: 12px 16px 16px; display: grid; gap: 10px; }
+.review-proposal-controls { display: flex; flex-wrap: wrap; gap: 12px; }
+.review-proposal-controls label { display: grid; gap: 6px; min-width: 110px; }
+.review-proposal-controls label:first-child { flex: 2 1 220px; }
+.review-proposal-controls label:not(:first-child) { flex: 0 1 130px; }
+.review-proposal-code { margin: 0; padding: 12px; max-height: 350px; overflow: auto; border: 1px solid var(--ui-border-soft, #365268); border-radius: 5px; white-space: pre; font-family: monospace; font-size: 12px; }
+.review-proposal-diff:empty { display: none; }
+.review-proposal-approval { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.review-proposal-panel textarea { font-family: monospace; white-space: pre; min-width: 0; width: 100%; }

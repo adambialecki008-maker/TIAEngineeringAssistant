@@ -733,3 +733,18 @@
   Connection/timeout errors preserve deterministic results without retrying.
 - GUI includes an explicit SCL block selector and disables AI for XML-only
   TIA snapshots. No project writes. Live Ollama model speed unverified.
+
+## Point 6: approved SCL copy workflow — 2026-10-16
+
+- Read-only Code Review findings for SCL lines now offer "Prepare SCL change".
+- A proposal panel selects the exact original source and line range. Replacement
+  is explicitly user-edited; a natural-language AI suggestion is never injected
+  into executable PLC source as an unreviewed patch.
+- The backend validates SHA-256 of original bytes and exact replaced lines,
+  rejects unsafe names/non-SCL files/stale selections, preserves source line
+  endings, checks block identity and returns an in-memory unified diff.
+- The approval checkbox only becomes active after a successful preview; any
+  edited input invalidates approval. Download creates a separate reviewed.scl
+  copy only. No file system writes, TIA calls or automatic import.
+- Live compile in TIA Portal and real source validation remain user-controlled
+  acceptance gates. Local Ollama remains one SCL block/short excerpt.
