@@ -72,8 +72,12 @@ def test_combined_count_and_shared_total_across_formats():
 
 
 def test_one_translate_all_action_orchestrates_both_verified_pipelines():
-    # A single automatic Translate all control lives in Step 3.
-    assert HTML.count('class="hmi-step-heading">Step ') == 3
+    # The three workflow steps are native, keyboard-accessible disclosures.
+    # Their contents stay collapsed until a user opens the relevant step.
+    assert HTML.count('class="card device-section hmi-') == 3
+    assert '<summary>Step 1 — Scan the selected HMI</summary>' in HTML
+    assert '<summary>Step 2 — Batch settings (selected text types)</summary>' in HTML
+    assert '<summary>Step 3 — Translate, review &amp; import</summary>' in HTML
     assert 'Step 4 — ' not in HTML
     assert 'Step 5 — ' not in HTML
     assert 'class="hmi-automation-controls"' in HTML

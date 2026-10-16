@@ -1072,18 +1072,14 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     );
     libraryCard.append(exportSection);
 
-    // Import is a separate foldable menu, not mixed with library export.
+    // The enclosing Import Library card is already foldable. Keep its file
+    // controls directly inside it instead of forcing a redundant second open.
     const transfer = element("div");
     transfer.className = "card";
     transfer.id = "library-import-card";
-    transfer.append(element("h3", "Import Library"));
-    const importSection = element("details");
-    importSection.id = "library-import-panel";
-    importSection.className = "library-category-manager";
     const importContent = element("div");
     importContent.className = "details-content";
-    importSection.append(element("summary", "Import Library — load JSON from another computer"), importContent);
-    transfer.append(importSection);
+    transfer.append(importContent);
     const importFile = document.createElement("input");
     importFile.type = "file";
     importFile.accept = ".json,application/json";
@@ -1443,12 +1439,9 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
 
     const recovery = element("div");
     recovery.className = "card";
-    recovery.append(element("h3", "Recovery snapshots"));
-    const snapshotDetails = element("details");
-    snapshotDetails.className = "library-category-manager";
-    const snapshotSummary = element("summary", "Saved snapshots");
+    const snapshotSummary = element("p", "Saved snapshots");
+    snapshotSummary.className = "hint";
     const snapshots = element("div", "Loading snapshots…");
-    snapshotDetails.append(snapshotSummary, snapshots);
     const renderSnapshots = async () => {
         snapshots.replaceChildren();
         const entries = (await listSnapshots()).filter(item => (item.profile_id || "default") === getActiveProjectProfileId()).sort((left, right) => right.created_at.localeCompare(left.created_at));
@@ -1498,7 +1491,8 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         actionButton("Refresh snapshots", () => renderSnapshots().catch(error => {
             snapshots.replaceChildren(element("p", `Cannot load snapshots: ${error.message}`));
         })),
-        snapshotDetails,
+        snapshotSummary,
+        snapshots,
     );
 
     // Profiles belong to Overview; keep one live instance of the controls.

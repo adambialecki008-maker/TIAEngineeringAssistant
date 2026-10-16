@@ -8862,10 +8862,9 @@ export function initTiaUi(
             suggestCreateNames();
 
 
-            setStatus(
-                `${existingPlcs.length} PLC(s), ${existingHmis.length} HMI(s) found in the open TIA project.`,
-                "success"
-            );
+            // The PLC and HMI lists already expose this result. Do not leave
+            // a redundant success banner below the overview controls.
+            setStatus("");
 
         } catch (error) {
             clearTarget();

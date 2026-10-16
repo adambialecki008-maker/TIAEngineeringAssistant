@@ -13,12 +13,18 @@ def test_library_export_is_foldable_and_stays_inside_engineering_library():
     assert 'exportActions, exportStatus, exportPreviewPanel' in JS
 
 
-def test_import_has_its_own_foldable_menu_and_clear_data_flow():
+def test_import_uses_the_single_enclosing_foldable_menu_and_clear_data_flow():
     assert 'transfer.id = "library-import-card"' in JS
-    assert 'importSection.id = "library-import-panel"' in JS
-    assert 'transfer.append(importSection)' in JS
+    assert 'const importSection = element("details")' not in JS
+    assert 'transfer.append(importContent)' in JS
     assert 'importContent.append(' in JS
     assert 'importFile, importApply, importStatus, importPreviewPanel' in JS
     assert 'FROM: the selected Engineering Library' in JS
     assert 'FROM: a JSON file exported on another computer' in JS
     assert 'Import / Export Library' not in JS
+
+
+def test_recovery_snapshots_use_the_single_enclosing_foldable_menu():
+    assert 'const snapshotDetails = element("details")' not in JS
+    assert 'collapsibleCard(recovery, "Recovery snapshots")' in JS
+    assert 'snapshotSummary,\n        snapshots' in JS

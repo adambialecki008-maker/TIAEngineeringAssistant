@@ -45,8 +45,8 @@ def test_only_selected_scope_shows_related_translation_sections():
     for marker in (
         'id="tia-hmi-text-lists-details"',
         'data-hmi-scope="text_lists"',
-        'class="hmi-workflow-step hmi-scope-step"',
-        'class="hmi-workflow-step hmi-manual-step"',
+        'hmi-workflow-step hmi-scope-step',
+        'hmi-workflow-step hmi-manual-step',
         'class="hmi-automatic-scope hidden" data-hmi-scope="project"',
         'id="tia-hmi-preview-results" class="hidden" data-hmi-scope="project"',
         'id="tia-hmi-review-results" class="hidden" data-hmi-scope="project"',

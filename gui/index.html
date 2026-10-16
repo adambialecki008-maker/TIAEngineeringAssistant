@@ -452,11 +452,11 @@
                 </p>
 
 
-                <details class="tia-inventory-details">
+                <div class="details-content tia-inventory-content">
 
-                    <summary id="tia-plc-tags-summary">
+                    <h4 id="tia-plc-tags-summary" class="subsection-title">
                         PLC tags list
-                    </summary>
+                    </h4>
 
                     <div class="details-content">
 
@@ -590,7 +590,7 @@
 
                     </div>
 
-                </details>
+                </div>
 
 
                 <div
@@ -714,11 +714,11 @@
 
                 </div>
 
-                <details class="tia-inventory-details">
+                <div class="details-content tia-inventory-content">
 
-                    <summary id="tia-plc-program-blocks-summary">
+                    <h4 id="tia-plc-program-blocks-summary" class="subsection-title">
                         Program blocks (OB / FC / FB)
-                    </summary>
+                    </h4>
 
                     <div class="details-content">
 
@@ -784,7 +784,7 @@
 
                     </div>
 
-                </details>
+                </div>
 
 
 
@@ -1324,8 +1324,8 @@
                                 Project texts use XLSX; Text lists use XML.
                                 Graphic lists are never translated.</p>
                         </fieldset>
-                        <section class="hmi-scan-help hmi-workflow-step">
-                            <h5 class="hmi-step-heading">Step 1 — Scan the selected HMI</h5>
+                        <details class="card device-section hmi-scan-help hmi-workflow-step">
+                            <summary>Step 1 — Scan the selected HMI</summary>
                             <p>
                                 Select Project texts, Text lists, or both above, and choose Source /
                                 Target languages. Project texts also require a matching
@@ -1433,9 +1433,9 @@
 
                             </div>
                         </details>
-                        </section>
-                        <section class="hmi-workflow-step hmi-scope-step">
-                            <h5 class="hmi-step-heading">Step 2 — Batch settings (selected text types)</h5>
+                        </details>
+                        <details class="card device-section hmi-workflow-step hmi-scope-step">
+                            <summary>Step 2 — Batch settings (selected text types)</summary>
                             <p class="hint">One combined translation queue for all checked scopes.
                                 Project texts (XLSX) come first when selected; then Text lists
                                 (XML) are processed one list at a time. Batch size and Total
@@ -1547,12 +1547,12 @@
 
                             </div>
                         </details>
-                        </section>
+                        </details>
 
                     </div>
 
-                    <section class="hmi-workflow-step hmi-manual-step">
-                        <h5 class="hmi-step-heading">Step 3 — Translate, review &amp; import</h5>
+                    <details class="card device-section hmi-workflow-step hmi-manual-step">
+                        <summary>Step 3 — Translate, review &amp; import</summary>
                         <p class="hint" id="tia-hmi-step3-description">
                             Translate selected text types in queue order. When review is enabled,
                             edit every prepared batch in Step 2 before approving its TIA import.
@@ -1665,7 +1665,7 @@
                             </p>
                         </div>
                     </div>
-                    </section>
+                    </details>
 
                 </div>
 
