@@ -61,6 +61,11 @@ class TiaProjectContext(BaseModel):
     hmis: list[ProjectHmi]
 
 
+class TiaProjectInventory(BaseModel):
+    project_name: str
+    plcs: list[ProjectPlc]
+
+
 class HardwareItem(BaseModel):
     device_name: str
     item_path: str

@@ -223,6 +223,37 @@ def test_tia_project_context_is_parsed(
     }
 
 
+def test_fast_project_inventory_returns_name_and_plcs_together(
+    monkeypatch,
+):
+    calls = []
+
+
+    def fake_run_adapter(*args):
+        calls.append(args)
+        return [
+            "PROJECT|FastInventory",
+            "PLC|Station_1|PLC_1|System:Device.S71500|CPU_1515F",
+        ]
+
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
+    )
+
+    response = client.get(
+        "/api/v1/tia/project-inventory",
+        params={"process_id": 3544},
+    )
+
+    assert response.status_code == 200
+    assert calls == [("list-project-plcs-fast", "3544")]
+    assert response.json()["project_name"] == "FastInventory"
+    assert response.json()["plcs"][0]["plc_name"] == "PLC_1"
+
+
 def test_hmi_clone_route_is_absent():
     response = client.post(
         "/api/v1/tia/hmis/clone",

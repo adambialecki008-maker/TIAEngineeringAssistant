@@ -8,11 +8,58 @@ from engine.tia.models import (
     ProjectPlc,
     TiaProcess,
     TiaProjectContext,
+    TiaProjectInventory,
     TiaProjectInfo,
 )
 
 
 router = APIRouter()
+
+
+@router.get(
+    "/project-inventory",
+    response_model=TiaProjectInventory,
+)
+def get_project_inventory(
+    process_id: int = Query(
+        ge=1
+    ),
+):
+    """Fast read-only project name and PLC targets for the Overview."""
+    lines = run_adapter(
+        "list-project-plcs-fast",
+        str(
+            process_id
+        ),
+    )
+
+    project_name = ""
+    plcs = []
+    for line in lines:
+        if line.startswith("PROJECT|"):
+            parts = line.split("|", 1)
+            if len(parts) == 2 and parts[1].strip():
+                project_name = parts[1].strip()
+        elif line.startswith("PLC|"):
+            parts = line.split("|", 4)
+            if len(parts) == 5:
+                plcs.append(ProjectPlc(
+                    device_name=parts[1],
+                    plc_name=parts[2],
+                    device_type_identifier=parts[3],
+                    plc_type_identifier=parts[4],
+                ))
+
+    if not project_name:
+        raise HTTPException(
+            status_code=404,
+            detail="No open TIA project found for the selected process.",
+        )
+
+    return TiaProjectInventory(
+        project_name=project_name,
+        plcs=plcs,
+    )
 
 
 @router.get(

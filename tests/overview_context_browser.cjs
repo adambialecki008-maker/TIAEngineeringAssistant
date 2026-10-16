@@ -23,11 +23,11 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
             requests.push({method:route.request().method(),action});
             if (action === "/api/v1/tia/processes")
                 return route.fulfill({json:[{process_id:123}]});
-            if (action === "/api/v1/tia/plcs")
-                return route.fulfill({json:[{
+            if (action === "/api/v1/tia/project-inventory")
+                return route.fulfill({json:{project_name:"TIA_Demo_Copy",plcs:[{
                     device_name:"Station_1",plc_name:"PLC_1",
                     plc_type_identifier:"S7-1500",
-                }]});
+                }]}});
             if (action === "/api/v1/tia/project-context") {
                 // Resource/HMI discovery is deliberately slower than the
                 // lightweight PLC inventory. The PLC Use control must appear
@@ -81,6 +81,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         await page.locator("#tia-process").selectOption("123");
         await page.locator('#tia-existing-plcs-body').getByRole("button",{name:"Use"})
             .waitFor({state:"visible",timeout:700});
+        assert.match(await page.locator("#overview-project-name").innerText(),/TIA_Demo_Copy/,
+            "the fast inventory must synchronize the actual TIA project name");
         await page.waitForFunction(() => document.getElementById("header-tia-live-status")
             ?.textContent.includes("TIA Portal PID 123"));
         assert.equal(await page.locator("#header-tia-live-status").innerText(),

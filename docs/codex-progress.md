@@ -835,3 +835,10 @@
 - This addresses the reported `GraphicList` disposed-enumerator failure, but
   needs a real TIA Portal V21 retest to establish whether it prevents the
   Portal shutdown on the affected project.
+
+## Fast TIA project-name synchronization - 2026-10-16
+
+- Added a read-only fast project-inventory endpoint that returns the TIA
+  project name and PLC targets from the same Openness attachment.
+- The Overview now updates its `TIA PROJECT` card as soon as the first live
+  inventory returns; it no longer waits for resource metrics and HMI details.

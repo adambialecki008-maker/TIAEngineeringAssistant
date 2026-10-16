@@ -8881,16 +8881,21 @@ export function initTiaUi(
             // Render the target list after the lightweight inventory. The
             // detailed context intentionally runs afterwards: it reads every
             // block, tag and HMI object and may take substantially longer.
-            const fastPlcs =
+            const fastInventory =
                 await getJson(
-                    "/api/v1/tia/plcs?"
+                    "/api/v1/tia/project-inventory?"
                     +
                     query.toString()
                 );
 
 
+            currentProjectName =
+                fastInventory.project_name
+                ||
+                "";
+
             existingPlcs =
-                fastPlcs
+                fastInventory.plcs
                 ??
                 [];
 

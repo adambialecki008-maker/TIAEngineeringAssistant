@@ -22,10 +22,11 @@ def test_fast_plc_inventory_skips_details_before_rendering_plc_rows():
 
 
 def test_overview_renders_fast_plc_inventory_before_detailed_context():
-    fast = TIA_JS.index('"/api/v1/tia/plcs?"')
+    fast = TIA_JS.index('"/api/v1/tia/project-inventory?"')
     render = TIA_JS.index("renderExistingPlcs();", fast)
     detailed = TIA_JS.index('"/api/v1/tia/project-context?"', fast)
     assert fast < render < detailed
+    assert "currentProjectName =" in TIA_JS[fast:render]
 
 
 def test_saved_active_target_stays_unverified_until_fast_inventory_confirms_it():
