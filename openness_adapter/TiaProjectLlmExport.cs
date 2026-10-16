@@ -525,6 +525,12 @@ namespace TiaOpennessAdapter
                 catch (Exception e) {
                     Exception rootError = e.GetBaseException();
                     Failure(kind, name, rootError.Message);
+                    // Graphic lists are presentation assets and their V21 Export
+                    // implementation can reject export independently of the
+                    // attached Portal session. They are nonessential for PLC
+                    // logic review, so record exactly this known object as
+                    // unsupported and continue with other project objects.
+                    if (IsUnsupportedGraphicListExport(item, rootError)) return;
                     if (rootError is EngineeringObjectDisposedException ||
                         rootError is NonRecoverableException) throw;
                 }
@@ -538,6 +544,14 @@ namespace TiaOpennessAdapter
                 missing.Dispose();
                 progress.Dispose();
             }
+        }
+
+        private static bool IsUnsupportedGraphicListExport(object item, Exception error)
+        {
+            return error is NonRecoverableException && item != null &&
+                string.Equals(item.GetType().FullName,
+                    "Siemens.Engineering.Hmi.TextGraphicList.GraphicList",
+                    StringComparison.Ordinal);
         }
 
         private static bool IsSessionFatal(Exception error)

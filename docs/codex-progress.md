@@ -468,6 +468,16 @@
 - Offline validation confirms the adapter builds and the ZIP/API contracts;
   real V21 Portal lifetime behaviour still requires a disposable-project test.
 
+## Whole-project TIA export GraphicList exclusion - 2026-10-16
+
+- A confirmed V21 `GraphicList.Export` `NonRecoverableException` is now
+  treated as an unsupported presentation asset only for the exact
+  `Hmi.TextGraphicList.GraphicList` type. It is recorded in `TIA_MISSING.tsv`;
+  PLC/HMI traversal continues for other objects.
+- All other `NonRecoverableException` and every disposed-object error retain
+  the fail-closed behaviour. A live V21 retest is required because TIA closed
+  during the reported export and cannot be proven safe by mocks.
+
 
 ## AI Code Review real-format parser hardening — 2026-10-16
 

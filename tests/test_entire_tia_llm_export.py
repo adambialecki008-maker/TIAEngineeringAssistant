@@ -157,5 +157,7 @@ def test_tia_adapter_bulk_export_command_exists_without_project_write():
     assert "object software = null" in service
     assert "try { software = container.Software; }" in service
     assert "if (IsSessionFatal(rootError)) throw;" in service
+    assert "IsUnsupportedGraphicListExport(item, rootError)" in service
+    assert "Siemens.Engineering.Hmi.TextGraphicList.GraphicList" in service
     assert "project.Save(" not in service
     assert "project.Import" not in service
