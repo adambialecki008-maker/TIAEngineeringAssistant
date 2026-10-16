@@ -18,7 +18,8 @@ function availableTypes(allowSystemInstances = false, allowFbInstances = false) 
     const types = getPlcDataTypes(projectConfig.plc_family);
     if (allowSystemInstances) types.push(...getSystemInstanceTypes(projectConfig.plc_family).map(item => item.name));
     if (allowFbInstances) types.push(...projectConfig.fbs
-        .filter(fb => fb.interface_verified !== false).map(fb => fb.name));
+        .filter(fb => fb.source_mode === "tia_read_only" && fb.interface_verified !== false)
+        .map(fb => fb.name));
     return new Set(types.map(normalized));
 }
 

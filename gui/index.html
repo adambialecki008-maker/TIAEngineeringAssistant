@@ -331,18 +331,30 @@
         </section>
 
         <section class="tab-panel" data-tab-panel="fb">
-            <div class="panel-header"><div><h2>Function Blocks</h2><p class="panel-description">Define local SCL FB interfaces and state sections.</p></div></div>
-            <div class="card"><div class="form-row"><label for="new-fb-name">FB name:</label><input id="new-fb-name" type="text" placeholder="FB_Motor"><button id="add-fb-button" type="button">New Function Block</button></div><div id="fb-container"></div></div>
+            <div class="panel-header"><div><h2>Function Blocks and Functions</h2><p class="panel-description">Read existing FB/FC blocks from TIA. Edit declaration drafts locally while preserving their LAD, FBD or SCL logic unchanged.</p></div></div>
+            <div class="card"><div id="fb-container"></div></div>
             <div class="card">
-                <h3>Import Function Block from TIA (read-only)</h3>
-                <p class="hint">Read a consistent SCL FB from the Active PLC into the local editor. Existing local FBs are never overwritten and nothing is written to TIA Portal.</p>
+                <h3>Read Function Block from TIA</h3>
+                <p class="hint">Read a consistent SCL, LAD, KOP or FBD FB. Declaration changes are local drafts only; nothing is written to TIA Portal.</p>
                 <div class="form-row">
                     <button type="button" id="tia-fb-scan">Read FB list from TIA</button>
                     <label for="tia-fb-select">TIA Function Block:</label>
                     <select id="tia-fb-select" aria-label="Function Block from active PLC"></select>
-                    <button type="button" id="tia-fb-load" disabled>Import FB into editor</button>
+                    <button type="button" id="tia-fb-load" disabled>Load FB snapshot</button>
                 </div>
                 <p id="tia-fb-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Function Blocks.</p>
+            </div>
+            <div class="card"><h3>Functions (FC)</h3><div id="fc-container"></div></div>
+            <div class="card">
+                <h3>Read Function from TIA</h3>
+                <p class="hint">FC supports Input, Output, InOut, Temp and Constant declaration drafts. FCs cannot have Static data or Instance DBs.</p>
+                <div class="form-row">
+                    <button type="button" id="tia-fc-scan">Read FC list from TIA</button>
+                    <label for="tia-fc-select">TIA Function:</label>
+                    <select id="tia-fc-select" aria-label="Function from active PLC"></select>
+                    <button type="button" id="tia-fc-load" disabled>Load FC snapshot</button>
+                </div>
+                <p id="tia-fc-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Functions.</p>
             </div>
         </section>
 

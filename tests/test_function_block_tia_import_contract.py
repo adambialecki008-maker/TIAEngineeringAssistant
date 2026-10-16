@@ -15,6 +15,8 @@ def test_function_block_validation_endpoint_accepts_static_system_instance():
         "name": "FB_Timer",
         "number": 41,
         "language": "SCL",
+        "source_mode": "tia_read_only",
+        "source_xml": "<SW.Blocks.FB><CompileUnit/></SW.Blocks.FB>",
         "input": {"name": "Input", "members": []},
         "output": {"name": "Output", "members": []},
         "inout": {"name": "InOut", "members": []},
@@ -26,6 +28,12 @@ def test_function_block_validation_endpoint_accepts_static_system_instance():
     })
     assert response.status_code == 200, response.text
     assert response.json()["static"]["members"][0]["system_instance"] is True
+
+
+def test_function_block_validation_endpoint_rejects_new_local_declarations():
+    response = client.post("/api/v1/function-block-specifications", json={"name": "FB_Local"})
+    assert response.status_code == 422
+    assert "read-only TIA snapshots" in response.text
 
 
 def test_program_block_export_retains_fb_declaration_sections(monkeypatch):
@@ -75,10 +83,14 @@ def test_fb_import_ui_is_wired_to_read_only_program_block_endpoints():
     page = (root / "gui" / "index.html").read_text(encoding="utf-8")
     ui = (root / "gui" / "js" / "fb_import.js").read_text(encoding="utf-8")
     converter = (root / "gui" / "js" / "fb_import_converter.js").read_text(encoding="utf-8")
+    fc_ui = (root / "gui" / "js" / "fc_import.js").read_text(encoding="utf-8")
     assert 'id="tia-fb-scan"' in page and 'id="tia-fb-load"' in page
     assert 'plc-program-blocks' in ui and 'plc-program-block?' in ui
     assert 'include_source:"true"' in ui
     assert 'function-block-specifications' in ui
     assert 'TIA Portal was NOT modified' in ui
     assert 'unsupported FB section' in converter
-    assert '"LAD", "KOP"' in converter and 'source_xml' in converter
+    assert '"LAD", "KOP", "FBD"' in converter and 'source_xml' in converter
+    assert 'source_mode: "tia_read_only"' in converter
+    assert 'New Function Block' not in page
+    assert 'id="tia-fc-scan"' in page and 'function-specifications' in fc_ui

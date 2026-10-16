@@ -28,7 +28,12 @@ def test_function_block_rejects_name_collision_between_sections():
 
 def test_project_rejects_circular_fb_multi_instance_dependency():
     with pytest.raises(ValidationError, match="Circular Function Block"):
-        ProjectSpecification.model_validate({"fbs":[{"name":"FB_A","static":{"name":"Static","members":[{"name":"B","data_type":"FB_B"}]}},{"name":"FB_B","static":{"name":"Static","members":[{"name":"A","data_type":"FB_A"}]}}]})
+        ProjectSpecification.model_validate({"fbs":[
+            {"name":"FB_A", "source_mode":"tia_read_only", "source_xml":"<FB/>",
+             "static":{"name":"Static","members":[{"name":"B","data_type":"FB_B"}]}},
+            {"name":"FB_B", "source_mode":"tia_read_only", "source_xml":"<FB/>",
+             "static":{"name":"Static","members":[{"name":"A","data_type":"FB_A"}]}},
+        ]})
 
 
 def test_instance_db_preview_is_derived_from_its_function_block():
@@ -37,15 +42,15 @@ def test_instance_db_preview_is_derived_from_its_function_block():
     assert preview["sections"][0]["members"][0]["name"] == "Running"
 
 
-def test_fb_source_emits_safe_declaration_sections():
+def test_fb_source_generation_is_disabled_for_the_read_only_analyzer():
     fb = FunctionBlockSpecification.model_validate({"name":"FB_Motor", "input":{"name":"Input","members":[{"name":"Enable","data_type":"Bool"}]}, "static":{"name":"Static","members":[{"name":"State","data_type":"Int"}]}})
-    source = generate_fb_source(fb.name, fb, {})
-    assert "VAR_INPUT" in source and "Enable : Bool;" in source and "VAR" in source
+    with pytest.raises(ValueError, match="source generation is disabled"):
+        generate_fb_source(fb.name, fb, {})
 
 
-def test_project_source_includes_safe_function_blocks():
+def test_project_source_excludes_function_blocks_and_keeps_udt_db_generation_available():
     project = ProjectSpecification.model_validate({"fbs":[{"name":"FB_Run", "input":{"name":"Input","members":[{"name":"Enable","data_type":"Bool"}]}}]})
-    assert 'FUNCTION_BLOCK "FB_Run"' in generate_project_source(project)
+    assert "FUNCTION_BLOCK" not in generate_project_source(project)
 
 
 def test_static_fb_accepts_registered_system_instance_only():
@@ -79,12 +84,12 @@ def test_lad_snapshot_preserves_source_and_cannot_generate_scl():
         "static": {"name": "Static", "members": [{"name": "Delay", "data_type": "TON_TIME", "system_instance": True}]},
     })
     assert fb.source_mode == "tia_read_only"
-    with pytest.raises(ValueError, match="read-only LAD"):
+    with pytest.raises(ValueError, match="source generation is disabled"):
         generate_fb_source(fb.name, fb, {})
 
 
-def test_unverified_lad_interface_cannot_be_used_as_multi_instance():
-    with pytest.raises(ValidationError, match="unverified interface"):
+def test_unverified_tia_interface_cannot_be_used_as_multi_instance():
+    with pytest.raises(ValidationError, match="not a verified TIA snapshot"):
         ProjectSpecification.model_validate({"fbs": [
             {"name": "FB_Lad", "language": "LAD", "source_mode": "tia_read_only",
              "source_xml": "<FB/>", "interface_verified": False,
@@ -93,3 +98,11 @@ def test_unverified_lad_interface_cannot_be_used_as_multi_instance():
                 {"name": "Legacy", "data_type": "FB_Lad"},
             ]}},
         ]})
+
+
+def test_fbd_snapshot_preserves_original_source_for_read_only_analysis():
+    fb = FunctionBlockSpecification.model_validate({
+        "name": "FB_Fbd", "language": "FBD", "number": 31,
+        "source_mode": "tia_read_only", "source_xml": "<SW.Blocks.FB><CompileUnit/></SW.Blocks.FB>",
+    })
+    assert fb.language == "FBD"

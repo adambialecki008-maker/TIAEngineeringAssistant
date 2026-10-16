@@ -19,13 +19,15 @@ import {
 import { initUdtTiaImportUi } from "./udt_import.js";
 import { initDbTiaImportUi } from "./db_import.js";
 import { initFbTiaImportUi } from "./fb_import.js";
+import { initFcTiaImportUi } from "./fc_import.js";
 
 import {
     addDb,
     renderDbs,
     setDbCategoryOptions,
 } from "./db.js";
-import {addFunctionBlock, renderFunctionBlocks} from "./fb.js";
+import {renderFunctionBlocks} from "./fb.js";
+import {renderFunctions} from "./fc.js";
 
 import {
     listCategories,
@@ -93,9 +95,8 @@ const dbContainer =
         "db-container"
     );
 
-const newFbNameInput = document.getElementById("new-fb-name");
-const addFbButton = document.getElementById("add-fb-button");
 const fbContainer = document.getElementById("fb-container");
+const fcContainer = document.getElementById("fc-container");
 
 
 const generatePreviewButton =
@@ -164,6 +165,7 @@ function renderAll() {
         );
     }
     if (fbContainer) renderFunctionBlocks(fbContainer, renderAll);
+    if (fcContainer) renderFunctions(fcContainer, renderAll);
 
 
     if (devicesUi) {
@@ -351,15 +353,6 @@ if (
     );
 }
 
-if (addFbButton && newFbNameInput) {
-    const createFb = () => addFunctionBlock(newFbNameInput, renderAll);
-    addFbButton.addEventListener("click", createFb);
-    newFbNameInput.addEventListener("keydown", event => {
-        if (event.key === "Enter") createFb();
-    });
-}
-
-
 if (
     generatePreviewButton
     &&
@@ -385,6 +378,7 @@ window.addEventListener("library-categories-changed", event => {
 initUdtTiaImportUi(renderAll);
 initDbTiaImportUi(renderAll);
 initFbTiaImportUi(renderAll);
+initFcTiaImportUi(renderAll);
 const dataLibrariesUi = initDataLibrariesUi(() => {
     if (plcFamilySelect) plcFamilySelect.value = projectConfig.plc_family;
     sourceImportUi?.refreshSelection();

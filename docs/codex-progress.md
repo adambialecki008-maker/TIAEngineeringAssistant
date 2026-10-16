@@ -1,5 +1,31 @@
 # Codex development progress
 
+## FB/FC declaration drafts and TIA block analysis
+
+- Reoriented the program-block area around TIA snapshots. SCL, LAD, KOP and
+  FBD Function Blocks are read from TIA with their original XML preserved;
+  program logic is neither translated, generated nor written back.
+- Kept a local declaration editor for a snapshot's interface only. Changes to
+  FB Input, Output, InOut, Static, Temp and Constant are explicitly marked as
+  local drafts, can be discarded back to the imported interface, and never
+  modify TIA. Expanded section state survives a render/checkpoint refresh.
+- Added FC snapshots and the same declaration editor for Input, Output, InOut,
+  Temp and Constant. The FC model rejects Static, IEC system instances and
+  retain settings; Instance DBs remain FB-only. Function and FB names cannot
+  collide in an offline project.
+- FB Static retains IEC-instance and verified multi-instance type support;
+  both are local declaration drafts and depend only on verified TIA snapshots.
+- Disabled FB SCL source generation so UDT/global-DB generation stays
+  available without regenerating or altering any FB/FC program logic.
+- Validation: targeted FB/FC tests — 21 passed; full `pytest -q` — 497
+  passed; all non-Playwright Node scenarios passed (including 41 HMI state
+  machine scenarios). Browser-specific Node tests could not start because the
+  local checkout has no `playwright` package installed.
+- Commit: pending.
+- Remaining: parse actual Instance DB-to-FB links from verified TIA exports,
+  add richer dependency/preflight reporting for FB/FC declaration drafts, and
+  validate browser flows once the local Playwright dependency is available.
+
 ## Read-only LAD/KOP Function Block snapshots
 
 - Extended the TIA FB inventory/import flow to include consistent `LAD` and

@@ -14,6 +14,7 @@ from engine.models import (
 from engine.udt import UdtSpecification
 from engine.plc_db import DataBlockSpecification
 from engine.function_block import FunctionBlockSpecification
+from engine.function import FunctionSpecification
 from engine.project import (
     GeneratedProjectSource,
     ProjectSpecification,
@@ -176,7 +177,25 @@ def create_db_specification(
 def create_function_block_specification(
     specification: FunctionBlockSpecification,
 ) -> FunctionBlockSpecification:
-    """Validate a local FB import; this endpoint never writes to TIA."""
+    """Validate a read-only TIA FB snapshot; this endpoint never writes to TIA."""
+    if specification.source_mode != "tia_read_only":
+        raise HTTPException(
+            status_code=422,
+            detail="Function Blocks can only be loaded as read-only TIA snapshots.",
+        )
+    return specification
+
+
+@app.post("/api/v1/function-specifications")
+def create_function_specification(
+    specification: FunctionSpecification,
+) -> FunctionSpecification:
+    """Validate a read-only TIA FC snapshot; this endpoint never writes to TIA."""
+    if specification.source_mode != "tia_read_only":
+        raise HTTPException(
+            status_code=422,
+            detail="Functions can only be loaded as read-only TIA snapshots.",
+        )
     return specification
 
 
