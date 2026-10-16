@@ -1500,6 +1500,84 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         snapshotDetails,
     );
 
+    // Siemens Openness export of the CURRENT OPEN TIA Portal project.
+    // Never confuse this with the local profile / Engineering Library JSON.
+    const tiaExport = element("div");
+    tiaExport.className = "card";
+    const tiaExportConnection = element("p", "Select and refresh a TIA process on Overview.");
+    tiaExportConnection.id = "tia-llm-connection-status";
+    tiaExportConnection.className = "status-box";
+    tiaExportConnection.setAttribute("role", "status");
+    tiaExportConnection.setAttribute("aria-live", "polite");
+    const tiaExportStatus = element("p", "The exported ZIP is not a native .zap21 backup. Check TIA_MISSING.tsv for unsupported objects.");
+    tiaExportStatus.id = "review-export-llm-status";
+    tiaExportStatus.className = "status-box";
+    tiaExportStatus.setAttribute("aria-live", "polite");
+    const tiaExportButton = actionButton("Export file for LLM review", async () => {
+        const pid = Number(document.getElementById("tia-process")?.value);
+        if (!Number.isInteger(pid) || pid < 1) {
+            tiaExportStatus.textContent = "Select a running TIA Portal process in Overview (Refresh TIA).";
+            tiaExportStatus.classList.add("error");
+            return;
+        }
+        tiaExportButton.disabled = true;
+        tiaExportStatus.classList.remove("error");
+        try {
+            tiaExportStatus.textContent = "Checking TIA process " + pid + "…";
+            const check = await fetch("/api/v1/tia/processes", {cache: "no-store"});
+            if (!check.ok) throw Error("Cannot verify TIA processes: HTTP " + check.status);
+            const processes = await check.json();
+            if (!Array.isArray(processes) || !processes.some(p => Number(p.process_id) === pid))
+                throw Error("TIA process " + pid + " no longer running. Refresh TIA.");
+            if (!confirm("Experimental Siemens Openness V21 export previously closed TIA Portal. "
+                + "Save your native TIA project and make a backup first. "
+                + "Proceed with read-only full-project export?")) {
+                tiaExportStatus.textContent = "Export cancelled.";
+                return;
+            }
+            tiaExportStatus.textContent = "Exporting the entire OPEN TIA project via Openness…";
+            const response = await fetch(
+                "/api/v1/code-review/export-tia-project-for-llm?process_id="
+                + encodeURIComponent(pid), {method: "POST"}
+            );
+            if (!response.ok) {
+                const body = await response.text();
+                let detail = body;
+                try { detail = JSON.parse(body).detail || body; } catch {}
+                throw Error(String(detail).slice(0, 700));
+            }
+            const blob = await response.blob();
+            if (!blob.size) throw Error("Empty TIA project archive");
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "TIA_Portal_Entire_Project_LLM_Review.zip";
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            tiaExportStatus.textContent = "Exported the open TIA project. Inspect MANIFEST.json, "
+                + "TIA_OBJECTS.tsv, TIA_MISSING.tsv and confidential sources before sharing. "
+                + "The archive is NOT a native TIA backup.";
+        } catch (e) {
+            tiaExportStatus.classList.add("error");
+            tiaExportStatus.textContent = "TIA project export failed: " + e.message;
+        } finally {
+            tiaExportButton.disabled = false;
+            window.dispatchEvent(new Event("focus"));
+        }
+    });
+    tiaExportButton.id = "review-export-llm";
+    tiaExportButton.className = "secondary-button";
+    const tiaExportActions = element("div");
+    tiaExportActions.className = "action-row";
+    tiaExportActions.append(tiaExportButton);
+    tiaExport.append(
+        element("h3", "Export for LLM Review"),
+        element("p", "Read available OB/FB/FC, DB/UDT, tag tables, hardware/I/O and HMI objects "
+            + "from all PLCs and devices in the OPEN TIA Portal project through Openness V21. "
+            + "Unavailable elements are listed in TIA_MISSING.tsv; no project writes or LLM calls."),
+        tiaExportConnection, tiaExportActions, tiaExportStatus
+    );
+
     // Profiles belong to Overview; keep one live instance of the controls.
     const overviewProfilesHost = document.getElementById("overview-profile-management");
     if (overviewProfilesHost) overviewProfilesHost.replaceChildren(
@@ -1510,6 +1588,7 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
         collapsibleCard(libraryCard, "Engineering Library", true),
         collapsibleCard(transfer, "Import Library"),
         collapsibleCard(backup, "Project Backup"),
+        collapsibleCard(tiaExport, "Export for LLM Review"),
         collapsibleCard(recovery, "Recovery snapshots"),
     );
     // Open IndexedDB and read its initial content in sequence. This avoids a
