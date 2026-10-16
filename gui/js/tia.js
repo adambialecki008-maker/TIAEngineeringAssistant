@@ -1,6 +1,7 @@
 import {
     deleteJson,
     getJson,
+    getJsonWithTimeout,
     patchJson,
     postJson,
 } from "./api.js";
@@ -522,6 +523,8 @@ export function initTiaUi(
 
 
     let existingPlcs = [];
+    let projectRefreshInFlight = false;
+    let queuedProjectRefresh = false;
 
     let existingHmis = [];
 
@@ -8758,7 +8761,11 @@ export function initTiaUi(
         const processId =
             selectedProcessId();
 
-
+        // Prevent concurrent full project attachments; queue only one refresh.
+        if (projectRefreshInFlight) {
+            queuedProjectRefresh = true;
+            return;
+        }
         if (!processId) {
             clearTarget();
             existingPlcs = [];
@@ -8785,12 +8792,13 @@ export function initTiaUi(
         }
 
 
+        projectRefreshInFlight = true;
+        window.dispatchEvent(new Event("tia-project-refresh-start"));
         refreshPlcsButton.disabled = true;
         syncHmiConnectionControls();
 
-
         renderEmptyPlcs(
-            "Loading PLCs from the open TIA project..."
+            "Loading PLCs from the open TIA project (timeout: 90 s)…"
         );
 
         renderEmptyHmis(
@@ -8809,12 +8817,16 @@ export function initTiaUi(
 
 
             const context =
-                await getJson(
+                await getJsonWithTimeout(
                     "/api/v1/tia/project-context?"
                     +
                     query.toString()
                 );
 
+            if (selectedProcessId() !== processId) {
+                queuedProjectRefresh = true;
+                return;
+            }
 
             currentProjectName =
                 context.project_name
@@ -8865,8 +8877,14 @@ export function initTiaUi(
             // The PLC and HMI lists already expose this result. Do not leave
             // a redundant success banner below the overview controls.
             setStatus("");
+            setTiaConnectionStatus("TIA Portal PID " + processId
+                + " — project loaded.", "success");
 
         } catch (error) {
+            if (selectedProcessId() !== processId) {
+                queuedProjectRefresh = true;
+                return;
+            }
             clearTarget();
             existingPlcs = [];
 
@@ -8877,23 +8895,27 @@ export function initTiaUi(
             updateTargetSummary();
 
             renderEmptyPlcs(
-                "PLC discovery failed."
+                "PLC discovery failed: " + error.message
             );
 
             renderEmptyHmis(
-                "HMI discovery failed."
+                "HMI discovery failed: " + error.message
             );
 
-
-            setStatus(
-                error.message,
-                "error"
+            setTiaConnectionStatus(
+                "TIA project read failed: " + error.message, "error"
             );
+            setStatus(error.message, "error");
 
         } finally {
-            refreshPlcsButton.disabled =
-                false;
+            refreshPlcsButton.disabled = false;
+            projectRefreshInFlight = false;
             syncHmiConnectionControls();
+            window.dispatchEvent(new Event("tia-project-refresh-end"));
+            if (queuedProjectRefresh) {
+                queuedProjectRefresh = false;
+                void refreshProjectPlcs();
+            }
         }
     }
 
