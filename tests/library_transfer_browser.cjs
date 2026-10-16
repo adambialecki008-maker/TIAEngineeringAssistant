@@ -22,6 +22,25 @@ const primitive = (name, data_type) => ({name, data_type});
         const pageA = await contextA.newPage();
         pages.push(pageA);
         await pageA.goto(base);
+        await pageA.locator('[data-tab="libraries"]').click();
+        const importMenu = pageA.locator("#library-import-card").locator("xpath=..");
+        assert.equal(await importMenu.evaluate(el => el.tagName), "DETAILS");
+        assert.equal(await importMenu.evaluate(el => el.open), false);
+        await importMenu.locator(":scope > summary").click();
+        assert.equal(await importMenu.evaluate(el => el.open), true);
+        assert.equal(await pageA.locator("#library-import-panel").evaluate(el => el.tagName), "DIV",
+            "Import Library shows its controls without a second disclosure");
+        assert.equal(await pageA.locator("#library-import-panel > summary").count(),0);
+        assert.equal(await pageA.locator('#library-import-panel > input[type="file"]').isVisible(),true);
+        assert.equal(await pageA.locator("#library-import-panel > details").count(),1);
+        assert.equal(await pageA.locator("#library-import-panel > details").first()
+            .getAttribute("id"),"library-selective-import-panel");
+
+        const recoveryMenu = pageA.locator("#data-libraries-root > details.card").last();
+        assert.equal(await recoveryMenu.locator(":scope > summary").innerText(),"Recovery snapshots");
+        await recoveryMenu.locator(":scope > summary").click();
+        assert.equal(await recoveryMenu.locator(".library-snapshot-list > h4").isVisible(),true);
+        assert.equal(await recoveryMenu.locator(".library-snapshot-list > details").count(),0);
 
         // Source browser: DB -> UDT_Motor -> UDT_Sub. Array and nested Struct
         // must be preserved exactly; revisions must survive JSON transfer.
@@ -68,6 +87,17 @@ const primitive = (name, data_type) => ({name, data_type});
         const pageB = await contextB.newPage();
         pages.push(pageB);
         await pageB.goto(base);
+        await pageB.locator('[data-tab="libraries"]').click();
+        await pageB.locator("#library-import-card").locator("xpath=..")
+            .locator(":scope > summary").click();
+        await pageB.locator('#library-import-panel > input[type="file"]').setInputFiles({
+            name:"portable-library.json",mimeType:"application/json",buffer:Buffer.from(exported),
+        });
+        await pageB.waitForFunction(() => document.querySelector("#library-import-panel > .status-box")
+            ?.textContent.includes("validated object(s)"));
+        assert.equal(await pageB.locator("#library-import-panel")
+            .getByRole("button",{name:"Import as new library"}).isEnabled(),true);
+        assert.match(await pageB.locator("#library-import-panel > .status-box").innerText(),/3 validated object/);
         const result = await pageB.evaluate(async sourceJson => {
             const store = await import("/gui/js/library_store.js");
             const pkg = store.parsePackage(sourceJson);

@@ -1072,18 +1072,16 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     );
     libraryCard.append(exportSection);
 
-    // Import is a separate foldable menu, not mixed with library export.
+    // The outer Import Library menu is the only disclosure for file import.
+    // Keep its stable panel ID and mounted controls/event handlers.
     const transfer = element("div");
     transfer.className = "card";
     transfer.id = "library-import-card";
     transfer.append(element("h3", "Import Library"));
-    const importSection = element("details");
-    importSection.id = "library-import-panel";
-    importSection.className = "library-category-manager";
     const importContent = element("div");
-    importContent.className = "details-content";
-    importSection.append(element("summary", "Import Library — load JSON from another computer"), importContent);
-    transfer.append(importSection);
+    importContent.id = "library-import-panel";
+    importContent.className = "library-import-content";
+    transfer.append(importContent);
     const importFile = document.createElement("input");
     importFile.type = "file";
     importFile.accept = ".json,application/json";
@@ -1444,9 +1442,10 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
     const recovery = element("div");
     recovery.className = "card";
     recovery.append(element("h3", "Recovery snapshots"));
-    const snapshotDetails = element("details");
-    snapshotDetails.className = "library-category-manager";
-    const snapshotSummary = element("summary", "Saved snapshots");
+    // The Recovery snapshots panel already provides the single needed fold.
+    const snapshotDetails = element("section");
+    snapshotDetails.className = "library-snapshot-list";
+    const snapshotSummary = element("h4", "Saved snapshots");
     const snapshots = element("div", "Loading snapshots…");
     snapshotDetails.append(snapshotSummary, snapshots);
     const renderSnapshots = async () => {

@@ -3240,3 +3240,17 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     padding: 0 0 6px;
     color: var(--ui-text-muted, #b4c7d6);
 }
+
+/* Library workflows with one child remain directly visible inside their
+   single main disclosure; genuine alternatives (selective import) still fold. */
+.app-content #library-import-panel {
+    min-width: 0;
+}
+.app-content .library-snapshot-list > h4 {
+    font-family: var(--ui-heading-font);
+    font-size: var(--ui-heading-subsection);
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 4px 0 12px;
+    color: var(--ui-text);
+}

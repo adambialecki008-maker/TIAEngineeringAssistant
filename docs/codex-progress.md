@@ -1,3 +1,14 @@
+## Fix redundant Library / Recovery disclosures — 2026-10-16
+
+- Data & Libraries > Import Library now uses only its outer collapsible card.
+  JSON upload, preview and import controls appear immediately when it opens.
+  The `#library-import-panel` ID and handler lifetimes are preserved.
+- Selective import is a separate operation and stays independently collapsible.
+- Recovery snapshots similarly shows its only saved-snapshot list directly
+  under its top-level disclosure; the count and actions remain available.
+- Added Playwright checks for one-click visibility and real JSON file preview.
+  No TIA logic, files or project were modified.
+
 ## PLC status and FB/FC import layout — 2026-10-16
 
 - Removed the redundant green `Active PLC set to...` banner below the PLC sections.
