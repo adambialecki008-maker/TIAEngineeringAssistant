@@ -57,6 +57,27 @@ function reportMarkdown(report) {
             lines.push("");
         }
     }
+    const usageBlocks = report.files.filter(block => (block.variable_usage || []).length);
+    if (usageBlocks.length) {
+        lines.push("", "## SCL variable and interface usage", "",
+            "Static source occurrences only; not PLC runtime execution counts.", "");
+        for (const block of usageBlocks) {
+            lines.push("### " + markdownText(block.name) + " — " + markdownText(block.source_file), "");
+            lines.push("Flow coverage: " + markdownText(block.variable_analysis_status || "unavailable"), "");
+            lines.push("| Variable | Section | Reads | Writes | Assigned on exit | Coverage |",
+                "| --- | --- | --- | --- | --- | --- |");
+            for (const item of block.variable_usage) {
+                lines.push("| " + [
+                    item.name, item.section,
+                    item.reads == null ? "—" : String(item.reads),
+                    item.writes == null ? "—" : String(item.writes),
+                    item.assigned_on_exit == null ? "—" : item.assigned_on_exit ? "Yes" : "No",
+                    item.analysis_status || "partial",
+                ].map(markdownText).join(" | ") + " |");
+            }
+            lines.push("");
+        }
+    }
     lines.push("", "## Findings", "");
     if (!report.findings.length) lines.push("No findings reported.");
     for (const finding of report.findings) {
@@ -191,6 +212,52 @@ function renderBlockCalls(block, parent) {
     }
 }
 
+function renderVariableUsage(block, parent) {
+    if (!(block.variable_usage || []).length) return;
+    const section = document.createElement("section");
+    section.className = "review-variable-usage";
+    const heading = document.createElement("h4");
+    heading.textContent = "SCL variable and interface usage";
+    section.appendChild(heading);
+    const coverage = document.createElement("p");
+    coverage.className = "hint";
+    coverage.textContent = "Flow coverage: " + (block.variable_analysis_status || "unavailable")
+        + ". Counts are static occurrences, not PLC runtime executions.";
+    section.appendChild(coverage);
+    const wrapper = document.createElement("div");
+    wrapper.className = "table-wrapper";
+    const table = document.createElement("table");
+    table.className = "management-table";
+    const header = document.createElement("tr");
+    for (const title of ["Name", "Section", "Reads", "Writes", "Assigned on exit", "Coverage"]) {
+        const th = document.createElement("th");
+        th.textContent = title;
+        header.appendChild(th);
+    }
+    const thead = document.createElement("thead");
+    thead.appendChild(header);
+    const tbody = document.createElement("tbody");
+    for (const item of block.variable_usage) {
+        const row = document.createElement("tr");
+        for (const value of [
+            item.name, item.section,
+            item.reads == null ? "—" : item.reads,
+            item.writes == null ? "—" : item.writes,
+            item.assigned_on_exit == null ? "—" : item.assigned_on_exit ? "Yes" : "No",
+            item.analysis_status || "partial",
+        ]) {
+            const cell = document.createElement("td");
+            cell.textContent = String(value ?? "—");
+            row.appendChild(cell);
+        }
+        tbody.appendChild(row);
+    }
+    table.append(thead, tbody);
+    wrapper.appendChild(table);
+    section.appendChild(wrapper);
+    parent.appendChild(section);
+}
+
 function renderReport(report, results) {
     results.replaceChildren();
     const summary = document.createElement("p");
@@ -208,6 +275,7 @@ function renderReport(report, results) {
         details.append(title, body);
         renderNetworkTopology(block, details);
         renderBlockCalls(block, details);
+        renderVariableUsage(block, details);
         results.appendChild(details);
     }
     for (const finding of report.findings) {

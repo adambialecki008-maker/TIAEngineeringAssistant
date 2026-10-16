@@ -6,7 +6,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     const browser = await chromium.launch({headless:true, executablePath:process.env.CHROME_PATH});
     try {
         const page = await browser.newPage();
-        await page.route("**/api/v1/code-review/analyze-files", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[{source_file:"FB.scl",name:"FB_Test",block_type:"FUNCTION_BLOCK",language:"SCL",declarations:[],networks:["network 1"],network_details:[{number:1,language:"LAD",nodes:[{uid:"23",kind:"Part",name:"Contact",symbol:"",scope:""}],wires:[{uid:"27",endpoints:[{kind:"NameCon",uid:"23",port:"out"},{kind:"OpenCon",uid:"",port:""}]}],warnings:[],verification_status:"topology only — not logic-verified"}],calls:[{target:"FC_Calc",location:"line 10",language:"SCL",source:"SCL",instance:"",nesting_depth:1,parent_target:"FC_Parent",arguments:[{name:"Start",operator:":="}],arguments_complete:true,resolution:"loaded block"}],dependencies:[],parsing_warnings:[],verification_status:"parsed"}],findings:[],file_warnings:[],read_only:true})}));
+        await page.route("**/api/v1/code-review/analyze-files", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[{source_file:"FB.scl",name:"FB_Test",block_type:"FUNCTION_BLOCK",language:"SCL",declarations:[],networks:["network 1"],network_details:[{number:1,language:"LAD",nodes:[{uid:"23",kind:"Part",name:"Contact",symbol:"",scope:""}],wires:[{uid:"27",endpoints:[{kind:"NameCon",uid:"23",port:"out"},{kind:"OpenCon",uid:"",port:""}]}],warnings:[],verification_status:"topology only — not logic-verified"}],calls:[{target:"FC_Calc",location:"line 10",language:"SCL",source:"SCL",instance:"",nesting_depth:1,parent_target:"FC_Parent",arguments:[{name:"Start",operator:":="}],arguments_complete:true,resolution:"loaded block"}],variable_analysis_status:"complete",variable_usage:[{name:"TempReady",section:"Temp",reads:1,writes:1,assigned_on_exit:true,analysis_status:"complete"}],dependencies:[],parsing_warnings:[],verification_status:"parsed"}],findings:[],file_warnings:[],read_only:true})}));
         await page.route("**/api/v1/code-review/ollama", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[],findings:[{source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",severity:"warning",category:"Style",explanation:"Review suggestion.",suggested_fix:"",evidence:"",detection_method:"AI",verification_status:"AI suggestion — unverified",confidence:0.4}],file_warnings:[],read_only:true})}));
         await page.addInitScript(() => localStorage.setItem("tiaEngineeringAssistant.projectConfig", JSON.stringify({
             plc_family:"", udts:[], dbs:[], fcs:[], instance_dbs:[], device_config:{templates:[],groups:[],mappings:[],mapping_mode:"device"}, tia_target:null,
@@ -29,6 +29,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         assert.match(await page.locator("#review-results .review-block-calls").innerText(), /FC_Parent/);
         assert.match(await page.locator("#review-results .review-block-calls").innerText(), /Parsed named bindings/);
         assert.match(await page.locator("#review-results .review-call-arguments").innerText(), /Start :=/);
+        assert.match(await page.locator("#review-results .review-variable-usage").innerText(), /TempReady/);
+        assert.match(await page.locator("#review-results .review-variable-usage").innerText(), /Flow coverage: complete/);
         assert.match(await topology.innerText(), /NameCon 23.out ; OpenCon/);
         const markdownTopology = page.waitForEvent("download");
         await page.locator("#review-download-markdown").click();
@@ -40,6 +42,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         assert.match(topologyText, /under FC_Parent/);
         assert.match(topologyText, /Parsed named bindings/);
         assert.match(topologyText, /Named bindings: Start :=/);
+        assert.match(topologyText, /SCL variable and interface usage/);
+        assert.match(topologyText, /TempReady/);
         assert.match(topologyText, /Wire 27: NameCon 23\.out ; OpenCon/);
         await page.locator("#review-ai").click();
         await page.waitForSelector("text=AI review complete");

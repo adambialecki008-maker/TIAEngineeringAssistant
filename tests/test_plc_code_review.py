@@ -621,13 +621,14 @@ def test_temp_usage_ignores_comments_and_scl_single_quoted_text():
     ]
 
 
-def test_no_before_write_conclusion_when_control_flow_or_calls_exist():
+def test_conditional_read_before_write_is_detected_but_calls_stay_unknown():
     report = analyze_files([ReviewInputFile(name="conditional.scl", content=(
         "FUNCTION_BLOCK FB_Conditional\nVAR_TEMP\n Value : Bool;\nEND_VAR\nBEGIN\n"
         "IF #Condition THEN\n #Value := TRUE;\nEND_IF;\n"
         "#Output := #Value;\nEND_FUNCTION_BLOCK"
     ))])
-    assert not any(f.category == "SCL temporary read before assignment" for f in report.findings)
+    assert [(f.evidence, f.location) for f in report.findings
+            if f.category == "SCL temporary read before assignment"] == [("Value", "line 8")]
     assert not any(f.category == "Unused SCL temporary" for f in report.findings)
 
     other = analyze_files([ReviewInputFile(name="call.scl", content=(
@@ -799,7 +800,7 @@ def test_scl_if_else_merges_assignments_and_reports_only_uninitialized_paths():
         "END_FUNCTION_BLOCK"
     ))])
     reads = [f for f in report.findings if f.category == "SCL temporary read before assignment"]
-    assert [(f.evidence, f.location) for f in reads] == [("Value", "line 18")]
+    assert [(f.evidence, f.location) for f in reads] == [("Value", "line 17")]
     block = report.files[0]
     assert block.variable_analysis_status == "complete"
     stats = {item.name: item for item in block.variable_usage}
@@ -887,3 +888,14 @@ def test_scl_incomplete_blocks_do_not_emit_variable_usage_observations():
     ))])
     assert report.files[0].variable_analysis_status == "unavailable"
     assert not any(f.category.startswith(("Unused SCL", "SCL temporary read", "SCL output")) for f in report.findings)
+
+
+
+def test_scl_call_in_condition_suppresses_dataflow_claims():
+    report = analyze_files([ReviewInputFile(name="sideeffects.scl", content=(
+        "FUNCTION_BLOCK FB_SideEffect\nVAR_TEMP\n Value : Int;\nEND_VAR\n"
+        "BEGIN\nIF FC_Updates(Value => #Value) THEN\n #Result := #Value;\n"
+        "END_IF;\nEND_FUNCTION_BLOCK"
+    ))])
+    assert report.files[0].variable_analysis_status == "partial"
+    assert not any(f.category == "SCL temporary read before assignment" for f in report.findings)

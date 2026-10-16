@@ -644,3 +644,14 @@
   source becomes partial and suppresses all read-before-write findings.
 - This does not prove runtime scheduling, execution counts, or full Siemens SCL
   semantic correctness. Nothing is written to TIA.
+
+## Point 3 UI coverage + false-positive safeguards — 2026-10-16
+
+- Added per-variable SCL read/write tables to AI Code Review, each with explicit
+  complete/partial analysis coverage and guaranteed exit-assignment status.
+  Summaries export into Markdown and are included in existing JSON.
+- IF/ELSIF and CASE predicates containing function calls or parenthesized
+  expressions cause partial dataflow: no definite-initialization claims.
+- Updated old control-flow regression expectation: a TEMP read after IF without
+  ELSE is now correctly flagged because the uninitialized path is explicit.
+- Added Chromium coverage of variable tables and Markdown representation.

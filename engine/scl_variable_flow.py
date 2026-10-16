@@ -101,10 +101,14 @@ def _parse_body(body: list[tuple[int, str]]) -> list[_Statement]:
                 position += 1
                 continue
             if match := _IF.fullmatch(stripped):
+                if "(" in match.group(1) or ")" in match.group(1):
+                    raise _UnsupportedSyntax()
                 position += 1
                 branches = [(match.group(1), walk({"ELSIF", "ELSE", "END_IF"}, depth + 1))]
                 while position < len(body) and _ELSIF.fullmatch(body[position][1].strip()):
                     cond = _ELSIF.fullmatch(body[position][1].strip()).group(1)
+                    if "(" in cond or ")" in cond:
+                        raise _UnsupportedSyntax()
                     position += 1
                     branches.append((cond, walk({"ELSIF", "ELSE", "END_IF"}, depth + 1)))
                 alternative = None
@@ -117,6 +121,8 @@ def _parse_body(body: list[tuple[int, str]]) -> list[_Statement]:
                 output.append(_Statement("if", lineno, branches=branches, otherwise=alternative))
                 continue
             if match := _CASE.fullmatch(stripped):
+                if "(" in match.group(1) or ")" in match.group(1):
+                    raise _UnsupportedSyntax()
                 position += 1
                 branches: list[tuple[str | None, list[_Statement]]] = []
                 alternative = None
