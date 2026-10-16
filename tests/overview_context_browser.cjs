@@ -41,6 +41,17 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         });
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
         assert.equal(await page.locator('[data-tab-panel="project"]').isVisible(),true);
+        assert.deepEqual(await page.locator(".header-context > div").evaluateAll(
+            els => els.map(el => el.id)
+        ), ["header-tia-live-status","active-plc-summary","header-profile-summary"]);
+        assert.equal(await page.locator("#header-tia-live-status").innerText(),
+            "TIA: not connected");
+        assert.equal(await page.locator("#header-tia-live-status")
+            .evaluate(el => el.classList.contains("connection-offline")),true);
+        assert.equal(await page.locator("#active-plc-summary")
+            .evaluate(el => el.classList.contains("connection-offline")),true);
+        assert.equal(await page.locator("#header-profile-summary")
+            .evaluate(el => el.classList.contains("connection-online")),true);
         assert.equal(await page.locator('#overview-profile-management #project-profile-selector').count(),1);
         assert.equal(await page.locator('#overview-tia-controls #tia-process').count(),1);
         assert.equal(await page.locator('[data-tab-panel="plc"] #tia-process').count(),0);
@@ -54,12 +65,20 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         }
         await page.locator('#tia-process option[value="123"]').waitFor({state:"attached"});
         await page.locator("#tia-process").selectOption("123");
+        await page.waitForFunction(() => document.getElementById("header-tia-live-status")
+            ?.textContent.includes("TIA Portal PID 123"));
+        assert.equal(await page.locator("#header-tia-live-status").innerText(),
+            "TIA Portal PID 123");
+        assert.equal(await page.locator("#header-tia-live-status")
+            .evaluate(el => el.classList.contains("connection-online")),true);
         await page.locator('#tia-existing-plcs-body').getByRole("button",{name:"Use"}).click();
         await page.waitForFunction(() => document.getElementById("project-active-plc")
             .textContent.trim() === "PLC_1");
         assert.equal(await page.locator("#tia-status").isVisible(),false,
             "Selecting a PLC must not leave the redundant green success banner visible");
         assert.match(await page.locator("#overview-project-name").innerText(),/TIA_Demo_Copy/);
+        assert.equal(await page.locator("#active-plc-summary")
+            .evaluate(el => el.classList.contains("connection-online")),true);
 
         const profiles = page.locator("#project-profile-selector");
         const initial = await profiles.inputValue();
@@ -80,6 +99,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
             .textContent.includes("Station B"));
         assert.equal(await page.locator("#tia-process").inputValue(),"");
         assert.equal(await page.locator("#project-active-plc").innerText(),"Not selected");
+        assert.equal(await page.locator("#active-plc-summary")
+            .evaluate(el => el.classList.contains("connection-offline")),true);
         assert.equal(await page.locator("#overview-profile-name").innerText(),"Station B");
         assert.equal(await page.evaluate(async () => {
             const {projectConfig} = await import("/gui/js/state.js");
