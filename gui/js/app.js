@@ -24,6 +24,7 @@ import {
     renderDbs,
     setDbCategoryOptions,
 } from "./db.js";
+import {addFunctionBlock, renderFunctionBlocks} from "./fb.js";
 
 import {
     listCategories,
@@ -91,6 +92,10 @@ const dbContainer =
         "db-container"
     );
 
+const newFbNameInput = document.getElementById("new-fb-name");
+const addFbButton = document.getElementById("add-fb-button");
+const fbContainer = document.getElementById("fb-container");
+
 
 const generatePreviewButton =
     document.getElementById(
@@ -157,6 +162,7 @@ function renderAll() {
             renderAll
         );
     }
+    if (fbContainer) renderFunctionBlocks(fbContainer, renderAll);
 
 
     if (devicesUi) {
@@ -342,6 +348,14 @@ if (
             }
         }
     );
+}
+
+if (addFbButton && newFbNameInput) {
+    const createFb = () => addFunctionBlock(newFbNameInput, renderAll);
+    addFbButton.addEventListener("click", createFb);
+    newFbNameInput.addEventListener("keydown", event => {
+        if (event.key === "Enter") createFb();
+    });
 }
 
 
