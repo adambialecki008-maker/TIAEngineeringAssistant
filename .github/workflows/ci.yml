@@ -190,6 +190,7 @@ jobs:
 
       - name: Verify collapsible engineering sections and unified heading typography
         run: node tests/engineering_sections_browser.cjs
+          node tests/single_engineering_items_browser.cjs
 
       - name: Verify compact FB FC declarations and LAD display
         run: node tests/program_declarations_browser.cjs
