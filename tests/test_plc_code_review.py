@@ -535,9 +535,9 @@ def test_call_type_review_uses_unambiguous_local_variable_declarations():
     ])
     flagged = [x for x in report.findings if x.category == "Call parameter type mismatch"]
     assert len(flagged) == 2
-    assert {f.location for f in flagged} == {"line 8"}
+    assert {f.location for f in flagged} == {"line 9"}
     assert all("local declaration" in f.explanation for f in flagged)
-    assert not any(f.location == "line 9" for f in flagged)
+    assert not any(f.location == "line 10" for f in flagged)
 
 
 def test_call_type_review_ignores_expressions_structs_and_missing_context():
