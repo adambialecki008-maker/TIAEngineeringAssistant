@@ -456,3 +456,21 @@
   location, evidence, detection method and verification status without
   embedding uploaded source code.
 
+
+## AI Code Review real-format parser hardening — 2026-10-16
+
+- Siemens SCL analysis now accepts quoted block/declaration names, ARRAY[...] OF
+  references and parameterized STRING/WSTRING without inventing an ARRAY dependency.
+- SimaticML analysis uses explicit SW.Blocks.* / SW.Types.* tags and the nested
+  AttributeList/Name/ProgrammingLanguage metadata when present. TIA snapshots
+  with non-descriptive filenames resolve to their actual exported block name.
+- Nested STRUCT members retain qualified declaration paths. Read-only Siemens
+  IEC timer/counter internal XML projections are not counted as independently
+  declared members or false duplicate names.
+- Multi-instance cycle detection uses only FB Static declarations and resolves
+  FB names case-insensitively; non-Static references cannot create cycles.
+- Multi-block XML and multi-header SCL explicitly yield partial/unsupported
+  results rather than silently attributing contents to the wrong block.
+- Added offline tests for these concrete edge cases. Existing TIA import, HMI,
+  Openness adapter and original PLC files are unchanged; analysis is read-only.
+

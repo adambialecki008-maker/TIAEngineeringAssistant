@@ -39,3 +39,101 @@ def test_multi_instance_cycles_and_iec_context_are_reported_from_loaded_source()
     assert all(item.evidence == "FB_A -> FB_B -> FB_A" for item in cycles)
     assert any(item.category == "Invalid IEC instance context" and item.evidence == "TON_TIME" for item in report.findings)
     assert any(item.category == "Invalid instruction declaration" and item.evidence == "TON" for item in report.findings)
+
+
+def test_scl_quoted_identifiers_and_array_of_udt_are_resolved():
+    report = analyze_files([
+        ReviewInputFile(name="MotorType.scl", content='TYPE "UDT_Motor"\\nEND_TYPE'),
+        ReviewInputFile(name="Motor.scl", content=(
+            'FUNCTION_BLOCK "FB_Motor"\\nVAR_INPUT\\n'
+            '    "Motors" : ARRAY[1..4] OF "UDT_Motor";\\n'
+            '    "Label" : STRING[24];\\nEND_VAR\\n'
+        )),
+    ])
+    assert report.files[1].name == "FB_Motor"
+    assert [(d.name, d.data_type) for d in report.files[1].declarations] == [
+        ("Motors", 'ARRAY[1..4] OF "UDT_Motor"'), ("Label", "STRING[24]"),
+    ]
+    assert report.files[1].dependencies == ["UDT_Motor"]
+    assert not any(x.category == "Unresolved dependency" for x in report.findings)
+
+
+def test_simaticml_block_metadata_preferred_over_filename_and_iec_internals_ignored():
+    report = analyze_files([ReviewInputFile(
+        name="exports/export-001.xml",
+        content=(
+            '<Document><SW.Blocks.FB><AttributeList>'
+            '<Name>FB_Drive</Name><ProgrammingLanguage>KOP</ProgrammingLanguage>'
+            '<Interface><Sections><Section Name="Static">'
+            '<Member Name="Timer" Datatype="TON_TIME"><Sections>'
+            '<Section Name="Static"><Member Name="ET" Datatype="Time"/>'
+            '</Section></Sections></Member>'
+            '<Member Name="State" Datatype="Struct"><Sections>'
+            '<Section Name="Static"><Member Name="Flag" Datatype="Bool"/>'
+            '</Section></Sections></Member>'
+            '</Section></Sections></Interface></AttributeList>'
+            '<ObjectList><SW.Blocks.CompileUnit/></ObjectList>'
+            '</SW.Blocks.FB></Document>'
+        ),
+    )])
+    block = report.files[0]
+    assert (block.name, block.block_type, block.language) == ("FB_Drive", "FB", "LAD")
+    assert [d.name for d in block.declarations] == ["Timer", "State", "State.Flag"]
+    assert block.networks == ["network 1"]
+    assert not report.findings
+
+
+def test_iec_projection_same_names_and_nested_structs_do_not_false_flag_duplicates():
+    report = analyze_files([ReviewInputFile(name="FB_Test.xml", content=(
+        '<SW.Blocks.FB Name="FB_Test"><Section Name="Static">'
+        '<Member Name="A" Datatype="Struct"><Member Name="Enabled" Datatype="Bool"/></Member>'
+        '<Member Name="B" Datatype="Struct"><Member Name="Enabled" Datatype="Bool"/></Member>'
+        '<Member Name="Timer" Datatype="TON_TIME"><Member Name="Enabled" Datatype="Bool"/></Member>'
+        '</Section></SW.Blocks.FB>'
+    ))])
+    assert not any(f.category == "Duplicate declaration" for f in report.findings)
+    assert not any(f.category == "Invalid IEC instance context" for f in report.findings)
+    assert [d.name for d in report.files[0].declarations] == [
+        "A", "A.Enabled", "B", "B.Enabled", "Timer",
+    ]
+
+
+def test_multi_instance_cycles_are_static_only_and_case_insensitive():
+    report = analyze_files([
+        ReviewInputFile(name="one.scl", content=(
+            'FUNCTION_BLOCK "FB_One"\\nVAR_INPUT\\n InputRef : "FB_Two";\\nEND_VAR\\n'
+        )),
+        ReviewInputFile(name="two.scl", content=(
+            'FUNCTION_BLOCK "FB_Two"\\nVAR_STATIC\\n Back : "fb_one";\\nEND_VAR\\n'
+        )),
+    ])
+    assert not any(f.category == "Cyclic multi-instance dependency" for f in report.findings)
+
+    report = analyze_files([
+        ReviewInputFile(name="one.scl", content=(
+            'FUNCTION_BLOCK "FB_One"\\nVAR_STATIC\\n Child : "fb_two";\\nEND_VAR'
+        )),
+        ReviewInputFile(name="two.scl", content=(
+            'FUNCTION_BLOCK "FB_Two"\\nVAR_STATIC\\n Back : "FB_ONE";\\nEND_VAR'
+        )),
+    ])
+    cycles = [f for f in report.findings if f.category == "Cyclic multi-instance dependency"]
+    assert len(cycles) == 2
+    assert all(f.evidence == "FB_One -> FB_Two -> FB_One" for f in cycles)
+
+
+def test_multiple_xml_blocks_or_scl_headers_report_partial_not_misattributed():
+    xml = analyze_files([ReviewInputFile(name="many.xml", content=(
+        '<Document><SW.Blocks.FB/><SW.Blocks.FC/></Document>'
+    ))]).files[0]
+    assert xml.verification_status == "partial"
+    assert xml.block_type == "Unknown"
+    assert "Multiple TIA blocks" in xml.parsing_warnings[0]
+    scl = analyze_files([ReviewInputFile(name="many.scl", content=(
+        'FUNCTION_BLOCK FB_A\\nVAR_INPUT\\n Value : Bool;\\nEND_VAR\\n'
+        'FUNCTION_BLOCK FB_B\\nVAR_INPUT\\n Flag : Bool;\\nEND_VAR'
+    ))]).files[0]
+    assert scl.name == "FB_A"
+    assert scl.verification_status == "partial"
+    assert len(scl.declarations) == 1
+    assert "Several SCL block headers" in scl.parsing_warnings[0]

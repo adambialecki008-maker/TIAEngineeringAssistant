@@ -22,8 +22,12 @@ MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_AI_CHUNK_CHARS = 6000
 MAX_AI_CHUNKS_PER_FILE = 12
 SUPPORTED_SUFFIXES = {".scl", ".xml"}
-_BLOCK = re.compile(r"^\s*(FUNCTION_BLOCK|FUNCTION|DATA_BLOCK|TYPE|ORGANIZATION_BLOCK)\s+([A-Za-z_][A-Za-z0-9_]*)", re.I)
-_DECL = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\s*\[[^;]+\])?)\s*;", re.I)
+_IDENTIFIER = r'(?:"[^"\\r\\n]+"|[A-Za-z_][A-Za-z0-9_]*)'
+_BLOCK = re.compile(
+    r"^\\s*(FUNCTION_BLOCK|FUNCTION|DATA_BLOCK|TYPE|ORGANIZATION_BLOCK)\\s+(" + _IDENTIFIER + r")", re.I,
+)
+_DECL = re.compile(r"^\\s*(" + _IDENTIFIER + r")\\s*:\\s*([^;]+)\\s*;", re.I)
+_ARRAY_OF = re.compile(r"^ARRAY\\s*\\[[^]]+\\]\\s*OF\\s*(.+)$", re.I)
 _DANGEROUS_XML = re.compile(r"<!\s*(?:DOCTYPE|ENTITY)\b", re.I)
 _LINE_LOCATION = re.compile(r"^line\s+(\d+)$", re.I)
 _NETWORK_LOCATION = re.compile(r"^network\s+(\d+)$", re.I)
@@ -99,59 +103,159 @@ def _suffix(name: str) -> str:
     return "." + name.rsplit(".", 1)[-1].lower() if "." in name else ""
 
 
+def _identifier(value: str) -> str:
+    """Normalize PLC names for comparison; keep quoted identifiers intact in source."""
+    value = value.strip()
+    return value[1:-1] if len(value) >= 2 and value.startswith('"') and value.endswith('"') else value
+
+
+def _type_reference(data_type: str) -> str:
+    """Return the referenced element type, including ARRAY[..] OF "UDT"."""
+    value = data_type.split(":=", 1)[0].strip()
+    while match := _ARRAY_OF.match(value):
+        value = match.group(1).strip()
+    if value.casefold() in {"struct", "array"}:
+        return ""
+    # STRING[20] and WSTRING[20] are parameterized primitive types.
+    if re.match(r"^(?:W?STRING)\\s*\\[\\s*\\d+\\s*\\]$", value, re.I):
+        return value.split("[", 1)[0].strip()
+    return _identifier(value)
+
+
 def _scl(file: ReviewInputFile) -> ReviewBlock:
     block = ReviewBlock(source_file=file.name, name=file.name, block_type="Unknown", language="SCL")
+    sections = {
+        "VAR": "Static", "VAR_STAT": "Static", "VAR_STATIC": "Static",
+        "VAR_INPUT": "Input", "VAR_OUTPUT": "Output", "VAR_IN_OUT": "InOut",
+        "VAR_TEMP": "Temp", "VAR_CONSTANT": "Constant",
+    }
     section = ""
     for line_no, line in enumerate(file.content.splitlines(), 1):
         hit = _BLOCK.match(line)
         if hit:
-            block.block_type, block.name = hit.group(1).upper(), hit.group(2)
-        if line.strip().upper().startswith("VAR_") or line.strip().upper() in {"VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT", "VAR_TEMP", "VAR_STATIC", "VAR_CONSTANT"}:
-            section = line.strip().upper().replace("VAR_", "").replace("VAR", "STATIC")
-        elif line.strip().upper() == "END_VAR":
+            if block.block_type != "Unknown":
+                block.parsing_warnings.append(
+                    "Several SCL block headers found; only the first block was analyzed. "
+                    "Export blocks into separate files for a reliable result."
+                )
+                break
+            block.block_type, block.name = hit.group(1).upper(), _identifier(hit.group(2))
+        token = line.strip().upper().split(None, 1)[0] if line.strip() else ""
+        if token in sections:
+            section = sections[token]
+        elif token == "END_VAR":
             section = ""
         elif section and (decl := _DECL.match(line)):
-            block.declarations.append(ReviewDeclaration(name=decl.group(1), data_type=decl.group(2), section=section, location=f"line {line_no}"))
+            block.declarations.append(ReviewDeclaration(
+                name=_identifier(decl.group(1)), data_type=decl.group(2).strip(),
+                section=section, location=f"line {line_no}",
+            ))
     if block.block_type == "Unknown":
         block.parsing_warnings.append("No supported SCL block header was found.")
-        block.verification_status = "partial"
-    else:
-        block.verification_status = "parsed"
+    block.verification_status = "partial" if block.parsing_warnings else "parsed"
     return block
+
+
+_XML_BLOCK_TAGS = {
+    "sw.blocks.fb": "FB", "sw.blocks.fc": "FC", "sw.blocks.ob": "OB",
+    "sw.blocks.globaldb": "DB", "sw.blocks.instancedb": "InstanceDB",
+    "sw.types.plcstruct": "UDT",
+}
+
+
+def _direct_text(node: ET.Element, name: str) -> str:
+    for child in node:
+        if xml_local_name(child.tag).casefold() == name.casefold():
+            return (child.text or "").strip()
+    return ""
 
 
 def _xml(file: ReviewInputFile) -> ReviewBlock:
     if _DANGEROUS_XML.search(file.content):
         return ReviewBlock(
-            source_file=file.name,
-            name=file.name,
-            block_type="Unknown",
-            language="XML",
+            source_file=file.name, name=file.name, block_type="Unknown", language="XML",
             parsing_warnings=["XML DTD/entity declarations are rejected for safe local analysis."],
             verification_status="failed",
         )
     try:
         root = ET.fromstring(file.content)
     except ET.ParseError as exc:
-        return ReviewBlock(source_file=file.name, name=file.name, block_type="Unknown", language="XML", parsing_warnings=[f"Invalid XML: {exc}."], verification_status="failed")
-    root_name = xml_local_name(root.tag)
-    source_name = xml_attribute(root, "Name") or file.name
-    joined = (" ".join(xml_local_name(node.tag) for node in root.iter()) + " " + source_name).upper()
-    block_type = "FB" if ".FB" in joined or source_name.upper().startswith("FB_") or root_name.upper().endswith("FB") else "FC" if ".FC" in joined or source_name.upper().startswith("FC_") or root_name.upper().endswith("FC") else "DB" if "DB" in joined else "UDT" if "UDT" in joined or "TYPE" in joined else "Unknown"
-    language = xml_attribute(root, "ProgrammingLanguage", "Language") or ("LAD/FBD XML" if block_type in {"FB", "FC"} else "SimaticML XML")
-    block = ReviewBlock(source_file=file.name, name=source_name, block_type=block_type, language=language)
-    section = ""
-    for node in root.iter():
-        tag = xml_local_name(node.tag)
-        if tag == "Section": section = xml_attribute(node, "Name")
-        if tag == "Member":
-            name, data_type = xml_attribute(node, "Name"), xml_attribute(node, "Datatype", "DataType", "Type")
-            if name and data_type:
-                block.declarations.append(ReviewDeclaration(name=name, data_type=data_type, section=section, location="XML member " + name))
-        if tag in {"CompileUnit", "Network"}:
-            block.networks.append("network " + str(len(block.networks) + 1))
-    if block_type == "Unknown": block.parsing_warnings.append("Unsupported XML export variant; declarations are best-effort only.")
-    if not block.declarations and not block.networks: block.parsing_warnings.append("XML contains no recognized declarations or networks.")
+        return ReviewBlock(
+            source_file=file.name, name=file.name, block_type="Unknown", language="XML",
+            parsing_warnings=[f"Invalid XML: {exc}."], verification_status="failed",
+        )
+    objects = [
+        node for node in root.iter()
+        if xml_local_name(node.tag).casefold() in _XML_BLOCK_TAGS
+    ]
+    if len(objects) > 1:
+        return ReviewBlock(
+            source_file=file.name, name=file.name, block_type="Unknown", language="XML",
+            parsing_warnings=["Multiple TIA blocks in one XML file are not supported; export each separately."],
+            verification_status="partial",
+        )
+    target = objects[0] if objects else root
+    root_name = xml_local_name(target.tag)
+    filename = file.name.replace("\\\\", "/").rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    attributes = next((child for child in target if xml_local_name(child.tag).casefold() == "attributelist"), None)
+    xml_name = (_direct_text(attributes, "Name") if attributes is not None else "") or xml_attribute(target, "Name")
+    source_name = xml_name or xml_attribute(root, "Name") or filename
+    kind = _XML_BLOCK_TAGS.get(root_name.casefold())
+    if not kind:
+        # Preserve compatibility with simple non-SimaticML XML fixtures, but
+        # never claim a fully interpreted graphical program from this fallback.
+        guess = source_name.upper()
+        kind = (
+            "FB" if guess.startswith("FB_") else "FC" if guess.startswith("FC_")
+            else "DB" if guess.startswith("DB_") else "UDT" if guess.startswith("UDT_")
+            else "Unknown"
+        )
+    language = (
+        (_direct_text(attributes, "ProgrammingLanguage") if attributes is not None else "")
+        or xml_attribute(target, "ProgrammingLanguage", "Language")
+        or xml_attribute(root, "ProgrammingLanguage", "Language")
+        or ("LAD/FBD XML" if kind in {"FB", "FC", "OB"} else "SimaticML XML")
+    )
+    language = "LAD" if language.upper() == "KOP" else language
+    block = ReviewBlock(source_file=file.name, name=source_name, block_type=kind, language=language)
+
+    def walk(node: ET.Element, section: str = "", parent: str = "", structural: bool = True) -> None:
+        tag = xml_local_name(node.tag).casefold()
+        if tag == "section" and not parent:
+            section = xml_attribute(node, "Name") or section
+        if tag == "member":
+            name = xml_attribute(node, "Name")
+            data_type = xml_attribute(node, "Datatype", "DataType", "Type")
+            if not name:
+                return
+            path = parent + "." + name if parent else name
+            if structural and data_type:
+                block.declarations.append(ReviewDeclaration(
+                    name=path, data_type=data_type, section=section, location="XML member " + path,
+                ))
+            # Nested Struct declarations are real members, but native Siemens
+            # IEC instance internals are an observed read-only projection only.
+            nested_struct = data_type.strip().casefold() == "struct"
+            for child in node:
+                walk(child, section, path, structural and nested_struct)
+            return
+        for child in node:
+            walk(child, section, parent, structural)
+
+    walk(target)
+    units = [
+        node for node in target.iter()
+        if xml_local_name(node.tag).casefold() in {"sw.blocks.compileunit", "compileunit"}
+    ]
+    if not units:
+        units = [node for node in target.iter() if xml_local_name(node.tag).casefold() == "network"]
+    block.networks = [f"network {index}" for index in range(1, len(units) + 1)]
+    if kind == "Unknown":
+        block.parsing_warnings.append("Unsupported XML export variant; declarations are best-effort only.")
+    if objects and not xml_name:
+        block.parsing_warnings.append("Block name absent in SimaticML attributes; using filename or root metadata.")
+    if not block.declarations and not block.networks:
+        block.parsing_warnings.append("XML contains no recognized declarations or networks.")
     block.verification_status = "partial"
     return block
 
@@ -175,7 +279,9 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
             if key in seen:
                 report.findings.append(ReviewFinding(source_file=block.source_file, block=block.name, language=block.language, location=declaration.location, severity="error", category="Duplicate declaration", explanation=f"{declaration.name} is declared more than once in this parsed block.", evidence=declaration.name))
             seen.add(key)
-            data_type = declaration.data_type.split("[")[0].strip()
+            data_type = _type_reference(declaration.data_type)
+            if not data_type:
+                continue
             registry_entry = type_entry(data_type)
             system_instance = bool(registry_entry and str(registry_entry.get("kind", "")).endswith("_instance"))
             allowed_system_instance = block.block_type in {"FUNCTION_BLOCK", "FB"} and declaration.section.casefold() == "static"
@@ -205,12 +311,23 @@ def analyze_files(files: list[ReviewInputFile]) -> ReviewReport:
 
 
 def _add_multi_instance_cycle_findings(report: ReviewReport) -> None:
-    """Report only cycles wholly demonstrated by loaded Function Block declarations."""
-    blocks = {
-        block.name: {dep for dep in block.dependencies if dep in {item.name for item in report.files if item.block_type in {"FUNCTION_BLOCK", "FB"}}}
-        for block in report.files if block.block_type in {"FUNCTION_BLOCK", "FB"}
+    """Only verified Static FB references can establish multi-instance cycles."""
+    by_key = {
+        block.name.casefold(): block for block in report.files
+        if block.block_type in {"FUNCTION_BLOCK", "FB"}
     }
-    visited, active, cycles = set(), [], set()
+    graph: dict[str, set[str]] = {}
+    for key, block in by_key.items():
+        graph[key] = {
+            referenced
+            for member in block.declarations
+            if member.section.casefold() == "static"
+            if (referenced := _type_reference(member.data_type).casefold()) in by_key
+        }
+
+    visited: set[str] = set()
+    active: list[str] = []
+    cycles: set[tuple[str, ...]] = set()
 
     def visit(name: str) -> None:
         if name in active:
@@ -221,21 +338,20 @@ def _add_multi_instance_cycle_findings(report: ReviewReport) -> None:
             return
         visited.add(name)
         active.append(name)
-        for dependency in blocks.get(name, set()):
+        for dependency in sorted(graph.get(name, ())):
             visit(dependency)
         active.pop()
 
-    for name in blocks:
+    for name in graph:
         visit(name)
-    by_name = {block.name: block for block in report.files}
-    for cycle in cycles:
-        evidence = " -> ".join(cycle)
-        for name in set(cycle[:-1]):
-            block = by_name[name]
+    for cycle in sorted(cycles):
+        evidence = " -> ".join(by_key[name].name for name in cycle)
+        for key in set(cycle[:-1]):
+            block = by_key[key]
             report.findings.append(ReviewFinding(
-                source_file=block.source_file, block=name, language=block.language,
+                source_file=block.source_file, block=block.name, language=block.language,
                 severity="error", category="Cyclic multi-instance dependency",
-                explanation="Loaded Function Block declarations form a multi-instance cycle.",
+                explanation="Loaded Function Block Static declarations form a multi-instance cycle.",
                 suggested_fix="Break the cycle before importing or reusing these blocks.", evidence=evidence,
             ))
 
