@@ -2749,6 +2749,24 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     margin-left: auto;
 }
 .header-context .active-plc-summary { margin-left: 0; }
+/* Compact shared live-state badges: TIA process, Active PLC, application profile. */
+.header-context .active-plc-summary {
+    font-size: 13px;
+    line-height: 1.35;
+    border-width: 1px;
+    transition: color 130ms ease, border-color 130ms ease, background-color 130ms ease;
+}
+.header-context .active-plc-summary.connection-online {
+    color: var(--ui-success, #8cdfa9);
+    border-color: #32684a;
+    background: #15271e;
+}
+.header-context .active-plc-summary.connection-offline {
+    color: var(--ui-danger, #ef9da2);
+    border-color: #794047;
+    background: #321f25;
+}
+
 #overview-profile-management > .card { margin-bottom: 18px; }
 #overview-profile-management .action-row { margin-top: 12px; }
 #overview-tia-controls .table-wrapper { max-height: 400px; overflow: auto; }
