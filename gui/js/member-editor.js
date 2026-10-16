@@ -548,6 +548,7 @@ export function createMemberTree({
     allowSystemInstances = false,
     allowFbInstances = false,
     allowRetain = false,
+    readOnlySystemInstances = false,
 }) {
     const root = document.createElement("div");
     root.className = "member-tree";
@@ -605,6 +606,7 @@ export function createMemberTree({
 
             let expanded = false;
             let dirty = false;
+            const systemReadOnly = member.system_instance === true && readOnlySystemInstances;
             const toggle = createButton("▸", () => {
                 if (expanded) closeEditor(true);
                 else openEditor();
@@ -648,8 +650,8 @@ export function createMemberTree({
                     const label = document.createElement("p");
                     label.className = "hint";
                     label.textContent = member.system_preview?.length
-                        ? "Native IEC instance — internal fields from exported TIA XML (read-only)."
-                        : "Native IEC instance — no internal field structure available in this TIA export.";
+                        ? "System instance — Read-only. Internal fields are from exported TIA XML."
+                        : "System instance — Read-only. No internal field structure is available in this TIA export.";
                     preview.appendChild(label);
                     if (member.system_preview?.length) {
                         const table = document.createElement("table");
@@ -680,7 +682,7 @@ export function createMemberTree({
                     }
                     editCell.appendChild(preview);
                 }
-                editCell.appendChild(createMemberEditor({
+                if (!systemReadOnly) editCell.appendChild(createMemberEditor({
                     prefix: prefix + "-edit-" + memberPath.join("-"),
                     existingMembers: list,
                     excludeUdtName: ownerUdtName,
@@ -723,13 +725,14 @@ export function createMemberTree({
                 ? tableFlagCell({
                     member, key:"retain",
                     inherited:effectiveRetain,
-                    editable:ownRetain,
+                    editable:ownRetain && !systemReadOnly,
                     onChange:value => mutate(path, rows => { rows[index].retain = value; }),
                 })
                 : createTextCell("—");
             if (!isDb && !allowRetain) retainCell.title = "Retain is unavailable in this declaration section";
             const attrCells = TABLE_FIELDS.map(([key]) => tableFlagCell({
                 member, key, inherited:null,
+                editable: !systemReadOnly,
                 onChange:value => mutate(path, rows => { rows[index][key] = value; }),
             }));
             row.append(
@@ -742,21 +745,24 @@ export function createMemberTree({
             );
             const actions = document.createElement("td");
             actions.className = "member-tree-actions";
-            actions.appendChild(createButton("Delete", () => {
+            const remove = createButton("Delete", () => {
                 if (!confirm('Delete member "' + member.name + '"?')) return;
                 mutate(path, (target) => target.splice(index, 1));
-            }));
+            });
+            remove.disabled = systemReadOnly;
+            if (systemReadOnly) remove.title = "System instance — Read-only";
+            actions.appendChild(remove);
             const up = createButton("Move up", () => mutate(path, (target) => {
                 [target[index - 1], target[index]] =
                     [target[index], target[index - 1]];
             }));
-            up.disabled = index === 0;
+            up.disabled = systemReadOnly || index === 0;
             actions.appendChild(up);
             const down = createButton("Move down", () => mutate(path, (target) => {
                 [target[index + 1], target[index]] =
                     [target[index], target[index + 1]];
             }));
-            down.disabled = index === list.length - 1;
+            down.disabled = systemReadOnly || index === list.length - 1;
             actions.appendChild(down);
             row.appendChild(actions);
             body.appendChild(row);

@@ -30,7 +30,12 @@ const FB_DEPENDENCY = {
     name: "FB_Dependency", number: 7, language: "SCL", source_mode: "tia_read_only",
     source_xml: "<SW.Blocks.FB />", interface_verified: true,
     input: section("Input"), output: section("Output"), inout: section("InOut"),
-    static: section("Static", [member("Retained")]), temp: section("Temp"), constant: section("Constant"),
+    static: section("Static", [member("Retained"), {
+        name: "TON_ReadOnly", data_type: "TON_TIME", system_instance: true,
+        system_preview: [
+            {name: "PT", path: "TON_ReadOnly.PT", data_type: "Time", level: 1},
+        ],
+    }]), temp: section("Temp"), constant: section("Constant"),
 };
 const FC = {
     name: "FC_Test", language: "FBD", source_mode: "tia_read_only",
@@ -115,6 +120,17 @@ const FC = {
         assert.match(await fb.locator(".program-meta-details").innerText(),
             /Multi-instance: Nested\.Motor → FB_Dependency/);
         assert.equal(await fb.locator(".program-state-draft").count(), 1);
+
+        const importedFb = page.locator("#fb-container .program-block-card").nth(1);
+        const importedStatic = importedFb.locator(".program-declaration-section").nth(3);
+        await importedStatic.locator(":scope > summary").click();
+        const importedTimer = importedStatic.locator("tr[data-member-path]").filter({hasText: "TON_ReadOnly"});
+        await importedTimer.locator("button.member-tree-toggle").click();
+        const readOnlyPreview = importedStatic.locator(".native-instance-preview");
+        assert.match(await readOnlyPreview.innerText(), /System instance — Read-only/);
+        assert.equal(await readOnlyPreview.locator("input, select, button").count(), 0);
+        assert.deepEqual(await importedTimer.locator(".member-tree-actions button").evaluateAll(
+            buttons => buttons.map(button => button.disabled)), [true, true, true]);
 
         await openSection(page, "fc-editor");
         const fc = page.locator("#fc-container .program-block-card").first();

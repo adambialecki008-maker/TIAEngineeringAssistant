@@ -368,3 +368,17 @@
   and browser regression — passed. Playwright Chromium will run in GitHub
   Actions after push.
 
+## Read-only IEC instances in imported FB snapshots — 2026-10-16
+
+- A system timer/counter instance in a read-only TIA FB snapshot now opens
+  only its exported native-field projection. The UI labels it `System
+  instance — Read-only` and does not render an editable declaration form.
+- Attribute checkboxes and Delete/Move actions for that imported instance are
+  disabled. Locally declared FB system instances retain their existing local
+  declaration workflow.
+- The browser regression covers a verified imported FB with an observed IEC
+  child field and verifies that its preview has no inputs, selects or buttons.
+- Validation: `pytest -q` — 526 passed; `node --check` for the member editor,
+  FB UI and browser regression — passed. Playwright Chromium will run in
+  GitHub Actions after push.
+

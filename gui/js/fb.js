@@ -82,6 +82,7 @@ export function renderFunctionBlocks(host, refresh) {
                 allowSystemInstances: section === "Static",
                 allowFbInstances: section === "Static",
                 allowRetain: section === "Static",
+                readOnlySystemInstances: fb.source_mode === "tia_read_only",
                 onChange: next => {
                     const conflict = findSectionNameConflict(fb, section, next);
                     if (conflict) { alert(conflict); return false; }
