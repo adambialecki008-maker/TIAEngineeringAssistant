@@ -29,6 +29,7 @@ const setup = [
     '{ name: "Empty", fields: [] }',
     '] };',
     'const getPlcDataTypes = () => ["Bool", "Word"];',
+    'const getSystemInstanceTypes = () => [{name: "IEC_TIMER"}];',
     'const createButton = () => {};',
     'const createDataTypeSelect = () => {};',
     'const createInput = () => {};',

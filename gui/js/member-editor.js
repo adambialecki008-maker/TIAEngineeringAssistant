@@ -5,7 +5,7 @@ import {
     createInput,
     createTextCell,
 } from "./ui.js";
-import { getPlcDataTypes } from "./plc-types.js";
+import { getPlcDataTypes, getSystemInstanceTypes } from "./plc-types.js";
 
 const ARRAY_MIN_BOUND = -32768;
 const ARRAY_MAX_BOUND = 32767;
@@ -14,10 +14,10 @@ function normalized(value) {
     return String(value ?? "").trim().toLowerCase();
 }
 
-function availableTypes() {
-    return new Set(
-        getPlcDataTypes(projectConfig.plc_family).map(normalized)
-    );
+function availableTypes(allowSystemInstances = false) {
+    const types = getPlcDataTypes(projectConfig.plc_family);
+    if (allowSystemInstances) types.push(...getSystemInstanceTypes(projectConfig.plc_family).map(item => item.name));
+    return new Set(types.map(normalized));
 }
 
 function udtDefinitions(ownerUdtName, replacement) {
@@ -139,8 +139,8 @@ function memberReferences(members, references) {
     }
 }
 
-export function validateMemberList(members, ownerUdtName = null) {
-    const types = availableTypes();
+export function validateMemberList(members, ownerUdtName = null, allowSystemInstances = false) {
+    const types = availableTypes(allowSystemInstances);
     const udts = udtDefinitions(ownerUdtName, members);
     const targetName = ownerUdtName || "DB";
     const error = validateGroup(members, targetName, types, udts);
@@ -223,6 +223,7 @@ export function createMemberEditor({
     isDb = false,
     retainDefault = false,
     inheritedRetain = null,
+    allowSystemInstances = false,
 }) {
     const root = document.createElement("div");
     root.className = "member-editor-form";
@@ -374,7 +375,9 @@ export function createMemberEditor({
                     isDb,
                     retainDefault,
                     inheritedRetain: member?.retain ?? inheritedRetain ?? retainDefault,
+                    allowSystemInstances,
                     nested: true,
+                    allowSystemInstances,
                     onChange: (next) => {
                         structMembers = next;
                         onDraftChange?.();
@@ -431,7 +434,7 @@ export function createMemberEditor({
             candidate.struct_members = structuredClone(structMembers);
         }
         const error = validateGroup(
-            [candidate], "Member", availableTypes(),
+            [candidate], "Member", availableTypes(allowSystemInstances),
             udtDefinitions(excludeUdtName, [candidate])
         );
         if (error) {
@@ -525,6 +528,7 @@ export function createMemberTree({
     retainDefault = false,
     inheritedRetain = null,
     nested = false,
+    allowSystemInstances = false,
 }) {
     const root = document.createElement("div");
     root.className = "member-tree";
@@ -536,7 +540,7 @@ export function createMemberTree({
 
     function apply(next) {
         if (validateOnChange) {
-            const error = validateMemberList(next, ownerUdtName);
+            const error = validateMemberList(next, ownerUdtName, allowSystemInstances);
             if (error) {
                 alert(error);
                 return false;
@@ -705,6 +709,7 @@ export function createMemberTree({
             existingMembers: list,
             excludeUdtName: ownerUdtName,
             isDb, retainDefault, inheritedRetain,
+            allowSystemInstances,
             onAdd: (candidate) => mutate(path, (target) => {
                 target.push(candidate);
             }),

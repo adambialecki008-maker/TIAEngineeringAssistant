@@ -26,6 +26,11 @@ export function getPlcDataTypes(plcFamily) {
         .map(entry => entry.name);
 }
 
+export function getSystemInstanceTypes(plcFamily) {
+    return registry.types.filter(entry => entry.kind.endsWith("_instance")
+        && (!plcFamily || entry.families.includes(plcFamily)));
+}
+
 // Compatibility export, derived from the canonical registry.
 export const PLC_DATA_TYPES = Object.freeze(Object.fromEntries(
     registry.families.map(family => [family, getPlcDataTypes(family)])
