@@ -58,7 +58,6 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
                 validation_warnings:["Compile in TIA before use."],
             })});
         });
-        await page.route("**/api/v1/code-review/ollama", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[],findings:[{source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",severity:"warning",category:"Style",explanation:"Review suggestion.",suggested_fix:"",evidence:"",detection_method:"AI",verification_status:"AI suggestion — unverified",confidence:0.4}],file_warnings:[],read_only:true})}));
         await page.addInitScript(() => localStorage.setItem("tiaEngineeringAssistant.projectConfig", JSON.stringify({
             plc_family:"", udts:[], dbs:[], fcs:[], instance_dbs:[], device_config:{templates:[],groups:[],mappings:[],mapping_mode:"device"}, tia_target:null,
             fbs:[{name:"FB_FromTia", language:"LAD", source_mode:"tia_read_only", source_xml:"<SW.Blocks.FB Name=\"FB_FromTia\"><CompileUnit/></SW.Blocks.FB>", interface_verified:true}],
@@ -66,12 +65,13 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
         await page.locator('[data-tab="review"]').click();
         assert.equal(await page.locator("#review-files").isVisible(), true);
-        assert.equal(await page.locator("#review-ai").isDisabled(), true);
+        assert.equal(await page.locator("#review-ai").count(), 0, "Local AI must be removed");
+        assert.equal(await page.locator("#review-export-llm").isVisible(), true);
         await page.locator("#review-files").setInputFiles({name:"FB.scl", mimeType:"text/plain", buffer:Buffer.from("FUNCTION_BLOCK FB_Test\nBEGIN\n#Value := 1;\nEND_FUNCTION_BLOCK\n")});
         await page.locator("#review-analyze").click();
         await page.waitForSelector("text=Read-only deterministic analysis complete");
-        assert.equal(await page.locator("#review-ai").isDisabled(), false);
-        assert.equal(await page.locator("#review-ai-block").inputValue(), "FB_Test");
+        assert.equal(await page.locator("#review-ai").count(), 0);
+        assert.equal(await page.locator("#review-ai-block").count(), 0);
         assert.match(await page.locator("#review-results .review-project-summary").innerText(), /Project overview/);
         assert.match(await page.locator("#review-results .review-project-summary").innerText(), /P0: 1/);
         assert.match(await page.locator("#review-results .review-project-summary").innerText(), /P2: 1/);
@@ -157,20 +157,25 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         assert.match(reviewedText, /#Value := 2;/);
         assert.doesNotMatch(reviewedText, /#Value := 1;/);
         assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
-        await page.locator("#review-ai").click();
-        await page.waitForSelector("text=AI review complete");
-        assert.equal((await page.locator("#review-results").innerText()).includes("Review suggestion."), true);
+        const archivePromise = page.waitForEvent("download");
+        await page.locator("#review-export-llm").click();
+        const archive = await archivePromise;
+        assert.equal(archive.suggestedFilename(), "TIAEngineeringAssistant_LLM_Review.zip");
+        const archiveBytes = require("node:fs").readFileSync(await archive.path());
+        assert.equal(archiveBytes.subarray(0, 2).toString(), "PK");
+        assert.match(await page.locator("#review-export-llm-status").innerText(), /Exported ZIP/);
+        assert.equal((await page.locator("#review-results").innerText()).includes("Review suggestion."), false);
         const markdownDownload = page.waitForEvent("download");
         await page.locator("#review-download-markdown").click();
         assert.equal((await markdownDownload).suggestedFilename(), "plc-code-review.md");
         await page.locator("#review-tia-analyze").click();
         await page.waitForSelector("text=loaded TIA snapshot(s) analyzed");
         assert.match(await page.locator("#review-status").innerText(), /loaded TIA snapshots complete/);
-        assert.equal(await page.locator("#review-ai").isDisabled(), true,
-            "LAD/FBD XML should not be sent to slow local AI");
+        assert.equal(await page.locator("#review-ai").count(), 0,
+            "No local AI review action for LAD/FBD or SCL");
         assert.equal(await proposalPanel.evaluate(el => el.hidden), true,
             "TIA XML snapshots must not offer an SCL patch download");
-        console.log("PLC code review Analyze Files and optional local AI review: PASS");
+        console.log("PLC review and LLM archive export: PASS");
     } finally {
         await browser.close();
     }

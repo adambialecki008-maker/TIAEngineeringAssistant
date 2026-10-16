@@ -20,12 +20,11 @@ from engine.program_dependencies import report_program_dependencies
 from engine.plc_patch_proposal import (
     SclPatchPreviewRequest, SclPatchPreviewResponse, preview_scl_change,
 )
+from engine.llm_project_export import router as llm_project_export_router
 from engine.plc_code_review import (
-    AiReviewRequest,
     ReviewInputFile,
     ReviewReport,
     analyze_files,
-    review_with_ollama,
 )
 from engine.project import (
     GeneratedProjectSource,
@@ -56,6 +55,7 @@ app = FastAPI(
 
 
 app.include_router(tia_openness_router)
+app.include_router(llm_project_export_router)
 
 
 app.mount(
@@ -74,12 +74,6 @@ def preview_scl_patch(request: SclPatchPreviewRequest) -> SclPatchPreviewRespons
 def analyze_code_review_files(files: list[ReviewInputFile]) -> ReviewReport:
     """Analyze supplied PLC source text locally; no TIA or external service is called."""
     return analyze_files(files)
-
-
-@app.post("/api/v1/code-review/ollama", response_model=ReviewReport)
-def review_code_with_ollama(request: AiReviewRequest) -> ReviewReport:
-    """Add optional, unverified suggestions from the user's local Ollama server."""
-    return review_with_ollama(request)
 
 
 @app.get("/")

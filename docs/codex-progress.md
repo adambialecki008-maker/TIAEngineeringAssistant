@@ -748,3 +748,10 @@
   copy only. No file system writes, TIA calls or automatic import.
 - Live compile in TIA Portal and real source validation remain user-controlled
   acceptance gates. Local Ollama remains one SCL block/short excerpt.
+
+## Replace slow local AI review with offline LLM export — 2026-10-16
+
+- Removed Code Review Ollama API and GUI review action; HMI translation remains available.
+- Added Export file for LLM review to create a local ZIP of loaded PLC declarations, native FB/FC XML snapshots, user-selected SCL/XML, generated (uncompiled) UDT/DB SCL, manifest SHA-256 and deterministic structural analysis.
+- Source completeness is explicit: missing blocks and full-project limitation documented; no fabricated logic and no connection to any hosted model.
+- Added backend and browser tests for ZIP validity, scope, path safety, no AI endpoint and deterministic preservation.

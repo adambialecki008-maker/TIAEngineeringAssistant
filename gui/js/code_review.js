@@ -753,11 +753,11 @@ export function initCodeReviewUi() {
     const files = document.getElementById("review-files"), folder = document.getElementById("review-folder");
     const run = document.getElementById("review-analyze"), status = document.getElementById("review-status");
     const list = document.getElementById("review-files-list"), results = document.getElementById("review-results");
-    const download = document.getElementById("review-download"), markdown = document.getElementById("review-download-markdown"), ai = document.getElementById("review-ai");
-    const model = document.getElementById("review-ollama-model");
-    const blockSelect = document.getElementById("review-ai-block");
+    const download = document.getElementById("review-download"), markdown = document.getElementById("review-download-markdown");
+    const exportLlm = document.getElementById("review-export-llm");
+    const exportLlmStatus = document.getElementById("review-export-llm-status");
     const tiaRun = document.getElementById("review-tia-analyze"), tiaStatus = document.getElementById("review-tia-status");
-    if (!files || !folder || !run || !status || !list || !results || !download || !markdown || !ai || !model || !blockSelect || !tiaRun || !tiaStatus) return;
+    if (!files || !folder || !run || !status || !list || !results || !download || !markdown || !exportLlm || !exportLlmStatus || !tiaRun || !tiaStatus) return;
     let selected = [], report = null, payload = [];
     const proposals = setupSclProposalUi();
     const refresh = () => {
@@ -768,28 +768,12 @@ export function initCodeReviewUi() {
             return item;
         }));
         status.textContent = selected.length ? selected.length + " supported file(s) selected." : "Select PLC source files or a folder.";
-        ai.disabled = true;
-        blockSelect.replaceChildren();
-        blockSelect.disabled = true;
         report = null;
         payload = [];
         results.replaceChildren();
         download.disabled = true;
         markdown.disabled = true;
         proposals?.configure(null, []);
-    };
-    const populateAiBlocks = () => {
-        blockSelect.replaceChildren(...(report?.files || []).filter(block =>
-            block.language === "SCL" && /\.scl$/i.test(block.source_file)
-            && block.verification_status !== "failed"
-        ).map(block => {
-            const option = document.createElement("option");
-            option.value = block.name;
-            option.textContent = block.name + " — " + block.source_file;
-            return option;
-        }));
-        blockSelect.disabled = !blockSelect.options.length;
-        ai.disabled = blockSelect.disabled;
     };
     const readPayload = () => Promise.all(selected.map(async file => ({
         name:file.webkitRelativePath || file.name, content:await file.text(),
@@ -805,38 +789,15 @@ export function initCodeReviewUi() {
             payload = await readPayload();
             report = await postJson("/api/v1/code-review/analyze-files", payload);
             renderReport(report, results, finding => proposals?.prepare(finding));
-            status.textContent = "Read-only deterministic analysis complete. You can optionally run local Ollama review.";
+            status.textContent = "Read-only deterministic analysis complete. You can export the loaded sources for ChatGPT review.";
             download.disabled = false;
             markdown.disabled = false;
-            populateAiBlocks();
             proposals?.configure(report, payload);
         } catch (error) {
             status.textContent = "Analysis failed: " + error.message;
             status.classList.add("error");
         } finally {
             run.disabled = false;
-        }
-    });
-    ai.addEventListener("click", async () => {
-        if (!payload.length || !blockSelect.value) return;
-        ai.disabled = true;
-        status.classList.remove("error");
-        status.textContent = "Reviewing one selected SCL block with local Ollama (short excerpt, bounded request)…";
-        try {
-            report = await postJson("/api/v1/code-review/ollama", {files:payload, model:model.value.trim() || null, block_names:[blockSelect.value]});
-            renderReport(report, results, finding => proposals?.prepare(finding));
-            const aiStatus = report.ai_review_status || "complete";
-            status.textContent = aiStatus === "unavailable"
-                ? "Ollama did not return usable JSON. Deterministic findings remain available; see report warnings."
-                : aiStatus === "partial"
-                ? "AI review partially completed. Some Ollama responses were invalid; see report warnings."
-                : "Read-only AI review complete. AI findings are unverified suggestions.";
-            status.classList.toggle("error", aiStatus !== "complete");
-        } catch (error) {
-            status.textContent = "Local AI review failed: " + error.message + ". Deterministic results remain available.";
-            status.classList.add("error");
-        } finally {
-            ai.disabled = blockSelect.disabled;
         }
     });
     tiaRun.addEventListener("click", async () => {
@@ -860,7 +821,6 @@ export function initCodeReviewUi() {
             tiaStatus.textContent = snapshots.length + " loaded TIA snapshot(s) analyzed. TIA Portal was not contacted.";
             download.disabled = false;
             markdown.disabled = false;
-            populateAiBlocks();
             proposals?.configure(report, payload);
         } catch (error) {
             tiaStatus.textContent = "TIA snapshot analysis failed: " + error.message;
@@ -875,5 +835,45 @@ export function initCodeReviewUi() {
     });
     markdown.addEventListener("click", () => {
         if (report) downloadReport(reportMarkdown(report), "plc-code-review.md", "text/markdown;charset=utf-8");
+    });
+    exportLlm.addEventListener("click", async () => {
+        exportLlm.disabled = true;
+        exportLlmStatus.classList.remove("error");
+        exportLlmStatus.textContent = "Preparing offline LLM review bundle…";
+        try {
+            const selectedSources = await readPayload();
+            const response = await fetch("/api/v1/code-review/export-for-llm-review", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    profile_name: document.getElementById("overview-profile-name")?.textContent || "Current profile",
+                    project:projectConfig,
+                    files:selectedSources,
+                }),
+            });
+            if (!response.ok) {
+                const message = await response.text();
+                let reason = message;
+                try { reason = JSON.parse(message).detail || reason; } catch {}
+                throw Error(String(reason).slice(0,250));
+            }
+            const result = await response.blob();
+            if (!result.size) throw Error("Received an empty archive.");
+            const url = URL.createObjectURL(result);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "TIAEngineeringAssistant_LLM_Review.zip";
+            link.click();
+            URL.revokeObjectURL(url);
+            exportLlmStatus.textContent =
+                "Exported ZIP with available local PLC data. Review MANIFEST.json, "
+                + "MISSING_SOURCES.json and confidential content before uploading to ChatGPT. "
+                + "Unloaded TIA blocks are not included.";
+        } catch (error) {
+            exportLlmStatus.textContent = "LLM export failed: " + error.message;
+            exportLlmStatus.classList.add("error");
+        } finally {
+            exportLlm.disabled = false;
+        }
     });
 }
