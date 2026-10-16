@@ -44,7 +44,7 @@ const {openSection} = require("./ui_disclosures.cjs");
         await page.locator("#add-db-button").click();
         assert.equal(await page.locator("#db-container > details").count(),2);
         await page.locator('[data-tab="devices"]').click();
-        const section = page.locator('details.device-section').first();
+        const section = page.locator('[data-tab-panel="devices"] details.device-section').first();
         if (!(await section.evaluate(el=>el.open))) await section.locator(":scope > summary").click();
         assert.equal(await page.locator("#device-template-container > details").count(),0);
         assert.equal(await page.locator("#device-template-container > .single-engineering-item > h4").innerText(),
