@@ -119,9 +119,10 @@ const {openSection} = require("./ui_disclosures.cjs");
         assert.equal(await editor.evaluate(el => el.open),true);
         assert.equal(await page.locator("#new-fb-name").isVisible(),true);
         await page.reload();
-        await page.locator('[data-tab="fb"]').click();
+        await page.locator('[data-tab="project"]').click();
         assert.equal(await help.locator(":scope > .hint").isVisible(), true,
             "Engineering context stays visible across refreshes");
+        await page.locator('[data-tab="fb"]').click();
         assert.equal(await editor.evaluate(el => el.open),true,
             "Section expansion preference must survive a full refresh");
         await openSection(page, "fc-editor");
