@@ -148,3 +148,10 @@ def test_native_system_children_are_read_only_projection_not_extra_fb_declaratio
     assert len(spec.static.members) == 1
     assert spec.static.members[0].struct_members is None
     assert len(spec.static.members[0].system_preview) == 4
+
+
+def test_fb_import_rejects_local_fc_name_collision_before_and_after_validation():
+    root = Path(__file__).resolve().parents[1]
+    fb_import = (root / "gui" / "js" / "fb_import.js").read_text(encoding="utf-8")
+    assert "projectConfig.fcs.some(fc => fc.name.toLocaleLowerCase()" in fb_import
+    assert "projectConfig.fcs.some(item => item.name.toLocaleLowerCase()" in fb_import

@@ -1,3 +1,25 @@
+## New FB/FC declaration creation — 2026-10-16
+
+- Added `Add new FB` and `Add new FC` forms alongside existing read-only
+  TIA import on the FB/FC tab. Name, optional number and LAD/FBD/SCL label can
+  be selected without an attached TIA process or Active PLC.
+- New local drafts have `source_mode=local`, `created_locally=true`,
+  `interface_verified=false`, no XML/program code and all valid section shells.
+  They persist in the active project profile and backups. Legacy and TIA
+  snapshots remain distinguishable.
+- Editable local FB: Input, Output, InOut, Static, Temp, Constant;
+  Static also supports Retain and IEC system instance declarations.
+  Editable local FC: Input, Output, InOut, Temp, Constant; no Static or
+  Instance DB.
+- Added explicit backend validation for new local FB/FC, unique names across
+  FB/FC, optional numeric block IDs and duplicate member-name checks across
+  declaration sections. TIA-snapshot-only validation endpoints remain unchanged.
+- New local blocks cannot be claimed as TIA-verified, exported as runnable
+  FB/FC code, or written to a real TIA project.
+- CI run `38866798072`: **522 pytest PASS**, JS syntax **PASS**, and
+  full Playwright **PASS**, including new local FB/FC create/edit/isolation
+  regression. Windows adapter build and real-TIA writes were not performed.
+
 ## Native IEC read-only XML projections and full CI (2026-10-16)
 
 - The FB import converter now treats actual XML children beneath native Siemens

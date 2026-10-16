@@ -52,7 +52,8 @@ export function initFbTiaImportUi(renderAll) {
             if (!sameTarget(scannedTarget, active)) throw Error("Active PLC or local project profile changed. Scan FBs again.");
             const selected = available[Number(select.value)];
             if (!selected) throw Error("Select a TIA Function Block.");
-            if (projectConfig.fbs.some(fb => fb.name.toLocaleLowerCase() === selected.name.toLocaleLowerCase()))
+            if (projectConfig.fbs.some(fb => fb.name.toLocaleLowerCase() === selected.name.toLocaleLowerCase())
+                || projectConfig.fcs.some(fc => fc.name.toLocaleLowerCase() === selected.name.toLocaleLowerCase()))
                 throw Error(selected.name + " already exists in the local analyzer. Nothing was overwritten.");
             const detail = await getJson("/api/v1/tia/plc-program-block?" + query(active, {
                 group_path:selected.group_path || "", name:selected.name, include_source:"true",
@@ -64,7 +65,8 @@ export function initFbTiaImportUi(renderAll) {
             const fb = convertTiaFbDetail(detail);
             await postJson("/api/v1/function-block-specifications", fb);
             if (!sameTarget(scannedTarget, targetIdentity())) throw Error("Active PLC or local project profile changed during validation. Nothing imported.");
-            if (projectConfig.fbs.some(item => item.name.toLocaleLowerCase() === fb.name.toLocaleLowerCase()))
+            if (projectConfig.fbs.some(item => item.name.toLocaleLowerCase() === fb.name.toLocaleLowerCase())
+                || projectConfig.fcs.some(item => item.name.toLocaleLowerCase() === fb.name.toLocaleLowerCase()))
                 throw Error(fb.name + " was added locally while TIA was read. Nothing was overwritten.");
             const originalInterface = Object.fromEntries(["input", "output", "inout", "static", "temp", "constant"]
                 .map(key => [key, structuredClone(fb[key]) ]));
