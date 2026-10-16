@@ -488,3 +488,104 @@ def test_non_loaded_and_partial_xml_call_interfaces_do_not_claim_verified_error(
     assert len(findings) == 1
     assert findings[0].verification_status == "requires TIA verification"
     assert findings[0].evidence == "FC_XML(Unknown := ...)"
+
+
+
+def test_call_type_review_flags_only_proven_disjoint_literal_categories():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION_BLOCK FB_Main\nBEGIN\n"
+            "FC_Check(Flag := INT#1, Amount := TRUE, Message := BOOL#FALSE);\n"
+            "FC_Check(Flag := FALSE, Amount := DINT#123, Message := 'hello');\n"
+            "FC_Check(Flag := 1, Amount := 2.0, Message := 'x');\n"
+            "END_FUNCTION_BLOCK"
+        )),
+        ReviewInputFile(name="callee.scl", content=(
+            "FUNCTION FC_Check : Int\nVAR_INPUT\n"
+            " Flag : Bool;\n Amount : Real;\n Message : String[30];\n"
+            "END_VAR\nEND_FUNCTION"
+        )),
+    ])
+    findings = [f for f in report.findings if f.category == "Call parameter type mismatch"]
+    assert len(findings) == 3
+    assert {f.location for f in findings} == {"line 3"}
+    assert all(f.verification_status == "verified" for f in findings)
+    calls = report.files[0].calls
+    assert [(a.actual_type, a.type_origin) for a in calls[0].arguments] == [
+        ("INT", "literal"), ("Bool", "literal"), ("Bool", "literal"),
+    ]
+    assert calls[2].arguments[0].actual_type == ""
+    assert calls[2].arguments[1].actual_type == ""
+    assert calls[2].arguments[2].actual_type == ""  # 'x' might be CHAR
+
+
+def test_call_type_review_uses_unambiguous_local_variable_declarations():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION_BLOCK FB_Main\nVAR_INPUT\n IsReady : Bool;\n"
+            "END_VAR\nVAR_TEMP\n Count : DInt;\nEND_VAR\nBEGIN\n"
+            "FC_Check(Flag := #Count, Amount := #IsReady);\n"
+            "FC_Check(Flag := #IsReady, Amount := #Count);\n"
+            "END_FUNCTION_BLOCK"
+        )),
+        ReviewInputFile(name="callee.scl", content=(
+            "FUNCTION FC_Check : Int\nVAR_INPUT\n"
+            " Flag : Bool;\n Amount : Real;\nEND_VAR\nEND_FUNCTION"
+        )),
+    ])
+    flagged = [x for x in report.findings if x.category == "Call parameter type mismatch"]
+    assert len(flagged) == 2
+    assert {f.location for f in flagged} == {"line 8"}
+    assert all("local declaration" in f.explanation for f in flagged)
+    assert not any(f.location == "line 9" for f in flagged)
+
+
+def test_call_type_review_ignores_expressions_structs_and_missing_context():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION_BLOCK FB_Main\nBEGIN\n"
+            "FC_Check(Flag := NOT TRUE, Amount := SIN(1), Message := #DB.Value);\n"
+            "FC_External(Flag := BOOL#TRUE);\nEND_FUNCTION_BLOCK"
+        )),
+        ReviewInputFile(name="callee.scl", content=(
+            "FUNCTION FC_Check : Int\nVAR_INPUT\n"
+            " Flag : Bool;\n Amount : Real;\n Message : String;\nEND_VAR\nEND_FUNCTION"
+        )),
+    ])
+    assert not any(x.category == "Call parameter type mismatch" for x in report.findings)
+    assert all(not arg.actual_type for arg in report.files[0].calls[0].arguments)
+
+
+def test_call_type_review_partial_tia_xml_requires_manual_verification():
+    xml = (
+        '<Document><SW.Blocks.FC><AttributeList><Name>FC_Check</Name>'
+        '<Interface><Sections><Section Name="Input">'
+        '<Member Name="Flag" Datatype="Bool"/>'
+        '</Section></Sections></Interface></AttributeList></SW.Blocks.FC></Document>'
+    )
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION_BLOCK FB_Main\nBEGIN\nFC_Check(Flag := DINT#5);\nEND_FUNCTION_BLOCK"
+        )),
+        ReviewInputFile(name="fc.xml", content=xml),
+    ])
+    issues = [f for f in report.findings if f.category == "Call parameter type mismatch"]
+    assert len(issues) == 1
+    assert issues[0].verification_status == "requires TIA verification"
+    assert issues[0].location == "line 3"
+
+
+def test_call_type_review_skips_duplicate_local_declaration_evidence():
+    report = analyze_files([
+        ReviewInputFile(name="caller.scl", content=(
+            "FUNCTION_BLOCK FB_Main\nVAR_INPUT\n Value : Bool;\n"
+            "END_VAR\nVAR_TEMP\n Value : Int;\nEND_VAR\nBEGIN\n"
+            "FC_Check(Flag := #Value);\nEND_FUNCTION_BLOCK"
+        )),
+        ReviewInputFile(name="callee.scl", content=(
+            "FUNCTION FC_Check : Int\nVAR_INPUT\n Flag : Bool;\nEND_VAR\nEND_FUNCTION"
+        )),
+    ])
+    assert any(f.category == "Duplicate declaration" for f in report.findings)
+    assert not any(f.category == "Call parameter type mismatch" for f in report.findings)
+    assert report.files[0].calls[0].arguments[0].actual_type == ""

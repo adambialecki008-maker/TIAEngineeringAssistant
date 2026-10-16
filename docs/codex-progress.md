@@ -567,3 +567,18 @@
 - Per-call binding names are shown in GUI and exported in Markdown.
 - Adds Python regression and browser coverage. Does not alter TIA, project
   blocks, source files or existing HMI/UDT/DB import behavior.
+
+## Conservative offline FB/FC call type validation — 2026-10-16
+
+- Named SCL arguments now retain the inferred **type category only**, not the
+  raw source expression: explicit BOOL literals, typed numeric literals,
+  multi-character STRING literals, and unambiguous top-level #Local variables.
+- A read-only diagnostic flags only incompatible boolean/numeric/string
+  categories against loaded Input/Output/InOut declarations. It does not
+  claim INT/DINT/REAL conversions are incorrect, nor assign types to untyped
+  numeric constants, one-character strings, functions or complex expressions.
+- XML interface mismatches remain "requires TIA verification" and missing
+  interface declarations do not generate speculative diagnostics.
+- Added tests for definite mismatches, safe matches, unresolved expressions,
+  duplicate local declarations and incomplete TIA exports.
+- Original uploaded files and TIA project are never changed.

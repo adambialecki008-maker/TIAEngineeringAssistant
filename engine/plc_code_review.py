@@ -77,6 +77,9 @@ class ReviewLogicNetwork(BaseModel):
 class ReviewCallArgument(BaseModel):
     name: str
     operator: Literal[":=", "=>"]
+    # Data type only; raw argument expressions remain in the user's source.
+    actual_type: str = ""
+    type_origin: Literal["literal", "local declaration", "unresolved"] = "unresolved"
 
 
 class ReviewCall(BaseModel):
@@ -617,8 +620,78 @@ _NAMED_CALL_ARGUMENT = re.compile(
 )
 
 
+# Conservative primitive groups: never report numeric-to-numeric conversions
+# or untyped numeric literals because TIA overloads and coercion rules vary.
+_NUMERIC_SCALARS = frozenset({
+    "sint", "usint", "int", "uint", "dint", "udint", "lint", "ulint",
+    "real", "lreal", "byte", "word", "dword", "lword",
+})
+_TYPED_NUMERIC = re.compile(
+    r"^(SINT|USINT|INT|UINT|DINT|UDINT|LINT|ULINT|REAL|LREAL|BYTE|WORD|DWORD|LWORD)"
+    r"#(?:[+-]?[0-9]+(?:\.[0-9]+)?(?:[Ee][+-]?[0-9]+)?|(?:2|8|16)#[0-9A-Fa-f_]+)$",
+    re.I,
+)
+_BOOL_LITERAL = re.compile(r"^(?:BOOL#)?(?:TRUE|FALSE)$", re.I)
+_STRING_LITERAL = re.compile(r"^(?:STRING#)?'(?:[^']|'')*'$", re.I)
+_SIMPLE_LOCAL = re.compile(r"^#(" + _IDENTIFIER + r")$", re.I)
+
+
+def _primitive_category(type_name: str) -> str:
+    """Only disjoint scalar categories are safe to compare offline."""
+    dtype = type_name.strip().casefold()
+    if dtype == "bool":
+        return "boolean"
+    if dtype in _NUMERIC_SCALARS:
+        return "numeric"
+    if dtype == "string" or re.fullmatch(r"string\s*\[\s*\d+\s*\]", dtype):
+        return "string"
+    return ""
+
+
+def _argument_type(
+    expression: str, local_types: dict[str, str] | None,
+) -> tuple[str, Literal["literal", "local declaration", "unresolved"]]:
+    """Return exact broad type evidence, never infer arbitrary SCL expressions."""
+    value = expression.strip()
+    if _BOOL_LITERAL.fullmatch(value):
+        return "Bool", "literal"
+    if _TYPED_NUMERIC.fullmatch(value):
+        return value.split("#", 1)[0], "literal"
+    if _STRING_LITERAL.fullmatch(value):
+        # A single-character literal can also represent CHAR in TIA.
+        string_part = value.partition("#")[2] if value.upper().startswith("STRING#") else value
+        if len(string_part[1:-1].replace("''", "'")) > 1:
+            return "String", "literal"
+    if local_types is not None and (match := _SIMPLE_LOCAL.fullmatch(value)):
+        dtype = local_types.get(_identifier(match.group(1)).casefold())
+        if dtype and _primitive_category(dtype):
+            return dtype, "local declaration"
+    return "", "unresolved"
+
+
+def _caller_local_types(block: ReviewBlock) -> dict[str, str]:
+    """Only unambiguous top-level local declarations can prove an operand type."""
+    if block.verification_status != "parsed":
+        return {}
+    types: dict[str, str] = {}
+    duplicates: set[str] = set()
+    for member in block.declarations:
+        if member.section.casefold() not in {
+            "input", "output", "inout", "temp", "static",
+        } or "." in member.name:
+            continue
+        key = member.name.casefold()
+        if key in types:
+            duplicates.add(key)
+        types[key] = member.data_type
+    for key in duplicates:
+        types.pop(key, None)
+    return types
+
+
 def _scl_call_arguments(
     lines: list[str], start_line: int, after_open_paren: int,
+    local_types: dict[str, str] | None = None,
 ) -> tuple[list[ReviewCallArgument], bool]:
     """Read bounded, balanced call arguments; never infer a complex expression's type.
 
@@ -679,8 +752,10 @@ def _scl_call_arguments(
         match = _NAMED_CALL_ARGUMENT.fullmatch(piece)
         if not match:
             return [], False
+        actual_type, type_origin = _argument_type(match.group(3), local_types)
         arguments.append(ReviewCallArgument(
             name=_identifier(match.group(1)), operator=match.group(2),
+            actual_type=actual_type, type_origin=type_origin,
         ))
     return arguments, True
 
@@ -697,6 +772,7 @@ def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[Revie
     body = False
     calls: list[ReviewCall] = []
     lines = _scl_without_comments(file.content)[0]
+    local_types = _caller_local_types(block)
     for line_number, line in enumerate(lines, 1):
         token = line.strip().upper().split(None, 1)[0] if line.strip() else ""
         if token == "BEGIN":
@@ -718,7 +794,9 @@ def _scl_observed_calls(file: ReviewInputFile, block: ReviewBlock) -> list[Revie
         # expressions that the lightweight scanner cannot authenticate.
         if declared_type is None and not target.casefold().startswith(("fc_", "fb_")):
             continue
-        arguments, complete = _scl_call_arguments(lines, line_number - 1, match.end())
+        arguments, complete = _scl_call_arguments(
+            lines, line_number - 1, match.end(), local_types,
+        )
         calls.append(ReviewCall(
             target=target, location=f"line {line_number}", source="SCL",
             language="SCL", instance=raw if declared_type else "",
@@ -812,6 +890,18 @@ def _check_call_interfaces(report: ReviewReport) -> None:
                             f"{argument.name} belongs to {formal[key].section} "
                             f"but uses {argument.operator}."
                         )
+                # Compare only disjoint scalar groups with explicit evidence.
+                # No implicit numeric-conversion or compound-expression guesses.
+                if not category and key in formal and argument.actual_type:
+                    expected = _primitive_category(formal[key].data_type)
+                    actual = _primitive_category(argument.actual_type)
+                    if expected and actual and expected != actual:
+                        category = "Call parameter type mismatch"
+                        detail = (
+                            f"{argument.name} is declared as {formal[key].data_type} "
+                            f"({expected}) but receives a proven {argument.actual_type} "
+                            f"({actual}) from {argument.type_origin}."
+                        )
                 seen.add(key)
                 if category:
                     report.findings.append(ReviewFinding(
@@ -820,7 +910,11 @@ def _check_call_interfaces(report: ReviewReport) -> None:
                         severity="warning", category=category,
                         explanation=detail,
                         evidence=f"{call.target}({argument.name} {argument.operator} ...)",
-                        suggested_fix="Compare named bindings with the exported FB/FC interface.",
+                        suggested_fix=(
+                            "Check the parameter type and use an explicitly valid conversion "
+                            "if supported by TIA." if category == "Call parameter type mismatch"
+                            else "Compare named bindings with the exported FB/FC interface."
+                        ),
                         verification_status=verification,
                     ))
 
