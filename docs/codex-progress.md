@@ -17,7 +17,8 @@
 - Source generation fails closed for a read-only LAD/KOP snapshot: it reports
   that the original logic cannot safely be emitted as SCL.
 - Validation: targeted model/API/editor tests — 38 passed; Node syntax checks
-  for all changed browser modules passed. Full regression and commit pending.
+  for all changed browser modules passed; full regression — 491 passed.
+- Commit: `8708240` (`feat(fb): preserve LAD and KOP snapshots`).
 
 ## Read-only Function Block import and compact engineering controls
 
