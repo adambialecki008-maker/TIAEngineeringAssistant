@@ -4,7 +4,7 @@ from engine.plc_db import DataBlockSpecification
 from engine.udt import UdtSpecification
 from engine.function_block import FunctionBlockSpecification
 from engine.function import FunctionSpecification
-from engine.instance_db import InstanceDbSpecification
+from engine.instance_db import InstanceDbSpecification, InstanceDbSnapshot
 
 
 class ProjectSpecification(BaseModel):
@@ -16,7 +16,7 @@ class ProjectSpecification(BaseModel):
     dbs: list[DataBlockSpecification] = []
     fbs: list[FunctionBlockSpecification] = []
     fcs: list[FunctionSpecification] = []
-    instance_dbs: list[InstanceDbSpecification] = []
+    instance_dbs: list[InstanceDbSpecification | InstanceDbSnapshot] = []
 
     @model_validator(mode="after")
     def validate_function_block_dependencies(self):
@@ -68,6 +68,10 @@ class ProjectSpecification(BaseModel):
             visiting.remove(key); visited.add(key)
         for fb in self.fbs: visit(fb)
         for instance in self.instance_dbs:
+            # Inventoried TIA Instance DBs carry no verified owner. Keep them
+            # as opaque snapshots so unrelated UDT/DB operations still work.
+            if isinstance(instance, InstanceDbSnapshot):
+                continue
             if instance.function_block.casefold() not in by_name:
                 raise ValueError("Instance DB references unknown Function Block: " + instance.function_block)
         return self

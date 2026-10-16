@@ -65,6 +65,13 @@ export function initFcTiaImportUi(renderAll) {
                 || detail.group_path !== (selected.group_path || "")) throw Error("Exported FC identity changed. Nothing imported.");
             const fc = convertTiaFcDetail(detail);
             await postJson("/api/v1/function-specifications", fc);
+            if (!sameTarget(scannedTarget, targetIdentity())) {
+                throw Error("Active PLC or local project profile changed during FC validation. Nothing imported.");
+            }
+            if (projectConfig.fcs.some(item => item.name.toLocaleLowerCase() === fc.name.toLocaleLowerCase())
+                || projectConfig.fbs.some(item => item.name.toLocaleLowerCase() === fc.name.toLocaleLowerCase())) {
+                throw Error(fc.name + " was added locally while TIA was read. Nothing was overwritten.");
+            }
             const originalInterface = Object.fromEntries(["input", "output", "inout", "temp", "constant"]
                 .map(key => [key, structuredClone(fc[key]) ]));
             projectConfig.fcs.push({...fc, original_interface: originalInterface, declaration_draft: false,
