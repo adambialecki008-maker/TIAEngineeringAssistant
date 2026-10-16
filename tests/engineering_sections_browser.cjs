@@ -12,7 +12,7 @@ const {openSection} = require("./ui_disclosures.cjs");
         await page.goto(process.env.APP_URL || "http://127.0.0.1:8765/");
         const names = [
             ["plc", "plc-tags"], ["plc", "plc-program"],
-            ["plc", "plc-structures"], ["plc", "plc-create"],
+            ["plc", "plc-structures"],
             ["udt", "udt-editor"], ["udt", "udt-import"],
             ["db", "db-editor"], ["db", "db-import"],
             ["fb", "fb-editor"], ["fb", "fb-import"],
@@ -29,6 +29,9 @@ const {openSection} = require("./ui_disclosures.cjs");
                 "Exactly one semantic heading: "+id);
             assert.equal(await el.locator(":scope > .ui-disclosure-body").count(),1);
         }
+        assert.equal(await page.locator('[data-ui-section="plc-create"]').count(), 0);
+        assert.equal(await page.locator("#tia-create-plc-button").count(), 0);
+        assert.equal(await page.locator("#tia-load-models-button").count(), 0);
         const help = page.locator('[data-ui-section="overview-help"]');
         assert.equal(await help.count(), 1);
         assert.equal(await help.evaluate(el => el.tagName), "DIV");

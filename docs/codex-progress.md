@@ -763,3 +763,10 @@
 - Failed/unsupported exports are listed in TIA_MISSING.tsv; manifest explicitly refuses to claim full native TIA project fidelity.
 - ZIP includes original XML/TSV, inventory, missing-object report, SHA-256 and a bounded deterministic review without invoking a local LLM.
 - Added API tests using simulated Openness exports and browser integration tests; real TIA V21 adapter build and practical export remain an acceptance gate.
+
+## Remove unused Create PLC UI — 2026-10-16
+
+- Removed Create PLC card (hardware catalog, model/family selector, new-device fields and create action) from PLC tab.
+- Removed dead GUI create-PLC handlers and catalog startup logic, leaving existing PLC selection, inventory, program analysis, HMI and full TIA project LLM export unaffected.
+- PLC tags, PLC program and PLC data structures remain available.
+- Added regression assertions that creation controls are absent.

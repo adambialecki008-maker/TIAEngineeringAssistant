@@ -6,11 +6,7 @@ import {
     getActiveProjectProfileId,
 } from "./state.js";
 
-import {
-    findIncompatibleDataTypes,
-} from "./plc-types.js";
-
-import {
+ import {
     addUdt,
     renderUdts,
     setUdtCategoryOptions,
@@ -55,13 +51,7 @@ import {
 initCodeReviewUi();
 
 
-const plcFamilySelect =
-    document.getElementById(
-        "plc-family"
-    );
-
-
-const newUdtNameInput =
+ const newUdtNameInput =
     document.getElementById(
         "new-udt-name"
     );
@@ -123,13 +113,7 @@ initEngineeringDisclosures();
 const sourceImportUi = initSourceImportUi();
 
 
-if (plcFamilySelect) {
-    plcFamilySelect.value =
-        projectConfig.plc_family;
-}
-
-
-/*
+ /*
  * TIA UI is a core feature.
  *
  * It must start independently from
@@ -222,79 +206,6 @@ async function refreshLibraryCategoryOptions() {
     } catch (error) {
         console.error("Cannot load library categories:", error);
     }
-}
-
-
-function changePlcFamily() {
-    if (!plcFamilySelect) {
-        return;
-    }
-
-
-    const previousFamily =
-        projectConfig.plc_family;
-
-    const newFamily =
-        plcFamilySelect.value;
-
-
-    if (!newFamily) {
-        plcFamilySelect.value =
-            previousFamily;
-
-        return;
-    }
-
-
-    if (
-        previousFamily
-        &&
-        previousFamily !== newFamily
-    ) {
-        const incompatible =
-            findIncompatibleDataTypes(
-                projectConfig,
-                newFamily
-            );
-
-
-        if (
-            incompatible.length > 0
-        ) {
-            alert(
-                `Cannot change PLC to ${newFamily}.\n\n`
-                +
-                `Unsupported data types:\n`
-                +
-                incompatible.join("\n")
-            );
-
-
-            plcFamilySelect.value =
-                previousFamily;
-
-            return;
-        }
-    }
-
-
-    projectConfig.plc_family =
-        newFamily;
-
-
-    saveProjectConfig();
-
-    renderAll();
-
-    tiaUi.familyChanged();
-}
-
-
-if (plcFamilySelect) {
-    plcFamilySelect.addEventListener(
-        "change",
-        changePlcFamily
-    );
 }
 
 
@@ -393,7 +304,6 @@ initInstanceDbTiaUi(renderAll);
 initProgramDependencies();
 initLocalProgramCreationUi(renderAll);
 const dataLibrariesUi = initDataLibrariesUi(() => {
-    if (plcFamilySelect) plcFamilySelect.value = projectConfig.plc_family;
     sourceImportUi?.refreshSelection();
     renderAll();
     tiaUi.updateTargetSummary();

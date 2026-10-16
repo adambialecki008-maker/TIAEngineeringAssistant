@@ -14,9 +14,6 @@ import { createPlcMemberTree } from "./plc_member_tree.js";
 import { createHmiSkippedManager } from "./hmi_skipped_manager.js";
 
 
-const MANUAL_SELECTION =
-    "__manual__";
-
 // Same Project texts transaction limit for manual and automatic workflows.
 const HMI_PROJECT_BATCH_MAX = 50;
 
@@ -440,41 +437,6 @@ export function initTiaUi(
         );
 
 
-    const loadModelsButton =
-        document.getElementById(
-            "tia-load-models-button"
-        );
-
-    const modelSelect =
-        document.getElementById(
-            "tia-plc-model"
-        );
-
-    const manualContainer =
-        document.getElementById(
-            "tia-manual-container"
-        );
-
-    const manualCodeInput =
-        document.getElementById(
-            "tia-manual-code"
-        );
-
-    const deviceNameInput =
-        document.getElementById(
-            "tia-device-name"
-        );
-
-    const plcNameInput =
-        document.getElementById(
-            "tia-plc-name"
-        );
-
-    const createPlcButton =
-        document.getElementById(
-            "tia-create-plc-button"
-        );
-
     const statusElement =
         document.getElementById(
             "tia-status"
@@ -694,52 +656,9 @@ export function initTiaUi(
     }
 
 
-    function resetModels(
-        message =
-            "Load models first"
-    ) {
-        modelSelect.replaceChildren();
-
-
-        const option =
-            document.createElement(
-                "option"
-            );
-
-        option.value = "";
-
-        option.textContent =
-            message;
-
-
-        modelSelect.appendChild(
-            option
-        );
-
-        modelSelect.disabled = true;
-
-        manualContainer.classList.add(
-            "hidden"
-        );
-
-        manualCodeInput.value = "";
-    }
-
-
     function familyChanged() {
-        resetModels(
-            "Load models for selected PLC family"
-        );
-
-        suggestCreateNames();
-
         updateTargetSummary();
-
-        setStatus(
-            "PLC family changed. Load Hardware Catalog models again."
-        );
     }
-
 
     function sameTarget(
         plc,
@@ -8565,13 +8484,6 @@ export function initTiaUi(
 
         refreshPlcsButton.disabled = true;
 
-        loadModelsButton.disabled = true;
-
-        createPlcButton.disabled = true;
-
-
-        resetModels();
-
 
         processSelect.replaceChildren();
 
@@ -8744,11 +8656,7 @@ export function initTiaUi(
             refreshPlcsButton.disabled =
                 false;
 
-            loadModelsButton.disabled =
-                false;
 
-            createPlcButton.disabled =
-                false;
             syncHmiConnectionControls();
         }
     }
@@ -8859,8 +8767,7 @@ export function initTiaUi(
 
             await refreshProjectLanguages();
 
-            suggestCreateNames();
-
+        
 
             // The PLC and HMI lists already expose this result. Do not leave
             // a redundant success banner below the overview controls.
@@ -8894,521 +8801,6 @@ export function initTiaUi(
             refreshPlcsButton.disabled =
                 false;
             syncHmiConnectionControls();
-        }
-    }
-
-
-    function nextIndexFor(
-        values,
-        prefix
-    ) {
-        const pattern =
-            new RegExp(
-                `^${prefix.replace(
-                    /[.*+?^${}()|[\]\\]/g,
-                    "\\$&"
-                )}(\\d+)$`,
-                "i"
-            );
-
-
-        let highest = 0;
-
-
-        for (
-            const value
-            of values
-        ) {
-            const match =
-                value.match(
-                    pattern
-                );
-
-
-            if (!match) {
-                continue;
-            }
-
-
-            highest =
-                Math.max(
-                    highest,
-                    Number(
-                        match[1]
-                    )
-                );
-        }
-
-
-        return highest + 1;
-    }
-
-
-    function suggestCreateNames() {
-        const plcNames =
-            existingPlcs.map(
-                (plc) =>
-                    plc.plc_name
-            );
-
-
-        const nextPlcIndex =
-            nextIndexFor(
-                plcNames,
-                "PLC_"
-            );
-
-
-        if (
-            !plcNameInput.value.trim()
-            ||
-            /^PLC_\d+$/i.test(
-                plcNameInput.value.trim()
-            )
-        ) {
-            plcNameInput.value =
-                `PLC_${nextPlcIndex}`;
-        }
-
-
-        const family =
-            getPlcFamily();
-
-
-        if (
-            family
-            &&
-            (
-                !deviceNameInput.value.trim()
-                ||
-                /^S7-[^ ]+ Station_\d+$/i.test(
-                    deviceNameInput.value.trim()
-                )
-            )
-        ) {
-            const devicePrefix =
-                `${family} Station_`;
-
-
-            const nextDeviceIndex =
-                nextIndexFor(
-                    existingPlcs.map(
-                        (plc) =>
-                            plc.device_name
-                    ),
-                    devicePrefix
-                );
-
-
-            deviceNameInput.value =
-                `${devicePrefix}${nextDeviceIndex}`;
-        }
-    }
-
-
-    async function loadModels() {
-        const processId =
-            selectedProcessId();
-
-        const family =
-            getPlcFamily();
-
-
-        if (!processId) {
-            setStatus(
-                "Select a TIA Portal process first.",
-                "error"
-            );
-
-            return;
-        }
-
-
-        if (!family) {
-            setStatus(
-                "Select PLC family first.",
-                "error"
-            );
-
-            return;
-        }
-
-
-        loadModelsButton.disabled = true;
-
-        modelSelect.disabled = true;
-
-        createPlcButton.disabled = true;
-
-
-        resetModels(
-            "Loading PLC models..."
-        );
-
-
-        setStatus(
-            `Loading ${family} models from the local TIA V21 Hardware Catalog...`
-        );
-
-
-        try {
-            const query =
-                new URLSearchParams({
-                    process_id:
-                        String(
-                            processId
-                        ),
-
-                    family:
-                        family,
-                });
-
-
-            const models =
-                await getJson(
-                    "/api/v1/tia/plc-models?"
-                    +
-                    query.toString()
-                );
-
-
-            modelSelect.replaceChildren();
-
-
-            const defaultOption =
-                document.createElement(
-                    "option"
-                );
-
-            defaultOption.value = "";
-
-            defaultOption.textContent =
-                "Select PLC model";
-
-
-            modelSelect.appendChild(
-                defaultOption
-            );
-
-
-            for (
-                const model
-                of models
-            ) {
-                const option =
-                    document.createElement(
-                        "option"
-                    );
-
-                option.value =
-                    model.type_identifier;
-
-                option.textContent =
-                    model.name;
-
-                option.title =
-                    [
-                        model.article_number,
-                        model.version,
-                    ]
-                        .filter(Boolean)
-                        .join(" ");
-
-
-                modelSelect.appendChild(
-                    option
-                );
-            }
-
-
-            const manualOption =
-                document.createElement(
-                    "option"
-                );
-
-            manualOption.value =
-                MANUAL_SELECTION;
-
-            manualOption.textContent =
-                "Wybierz inny...";
-
-
-            modelSelect.appendChild(
-                manualOption
-            );
-
-
-            modelSelect.disabled =
-                false;
-
-
-            if (
-                models.length === 0
-            ) {
-                modelSelect.value =
-                    MANUAL_SELECTION;
-
-                manualContainer.classList.remove(
-                    "hidden"
-                );
-
-                manualCodeInput.focus();
-            }
-
-
-            setStatus(
-                `${models.length} unique PLC model(s) loaded.`
-            );
-
-        } catch (error) {
-            resetModels(
-                "PLC model load failed"
-            );
-
-
-            setStatus(
-                error.message,
-                "error"
-            );
-
-        } finally {
-            loadModelsButton.disabled =
-                false;
-
-            createPlcButton.disabled =
-                false;
-        }
-    }
-
-
-    function modelChanged() {
-        const manual =
-            modelSelect.value
-            ===
-            MANUAL_SELECTION;
-
-
-        manualContainer.classList.toggle(
-            "hidden",
-            !manual
-        );
-
-
-        if (manual) {
-            manualCodeInput.focus();
-        }
-    }
-
-
-    function getCreateSelection() {
-        if (
-            modelSelect.value
-            ===
-            MANUAL_SELECTION
-        ) {
-            return manualCodeInput
-                .value
-                .trim();
-        }
-
-
-        return modelSelect
-            .value
-            .trim();
-    }
-
-
-    function nameExists(
-        propertyName,
-        value
-    ) {
-        return existingPlcs.some(
-            (plc) =>
-                plc[propertyName]
-                    .toLowerCase()
-                ===
-                value.toLowerCase()
-        );
-    }
-
-
-    async function createPlc() {
-        const processId =
-            selectedProcessId();
-
-        const selection =
-            getCreateSelection();
-
-        const deviceName =
-            deviceNameInput
-                .value
-                .trim();
-
-        const plcName =
-            plcNameInput
-                .value
-                .trim();
-
-
-        if (!processId) {
-            setStatus(
-                "Select a TIA Portal process first.",
-                "error"
-            );
-
-            return;
-        }
-
-
-        if (!getPlcFamily()) {
-            setStatus(
-                "Select PLC family first.",
-                "error"
-            );
-
-            return;
-        }
-
-
-        if (!selection) {
-            setStatus(
-                modelSelect.value
-                ===
-                MANUAL_SELECTION
-                    ? "Enter a catalog order number or full TypeIdentifier."
-                    : "Select a PLC model.",
-                "error"
-            );
-
-            return;
-        }
-
-
-        if (!deviceName) {
-            setStatus(
-                "Device name is required.",
-                "error"
-            );
-
-            deviceNameInput.focus();
-
-            return;
-        }
-
-
-        if (!plcName) {
-            setStatus(
-                "PLC name is required.",
-                "error"
-            );
-
-            plcNameInput.focus();
-
-            return;
-        }
-
-
-        if (
-            nameExists(
-                "device_name",
-                deviceName
-            )
-        ) {
-            setStatus(
-                `Device name "${deviceName}" already exists.`,
-                "error"
-            );
-
-            return;
-        }
-
-
-        if (
-            nameExists(
-                "plc_name",
-                plcName
-            )
-        ) {
-            setStatus(
-                `PLC name "${plcName}" already exists.`,
-                "error"
-            );
-
-            return;
-        }
-
-
-        createPlcButton.disabled = true;
-
-
-        setStatus(
-            "Creating PLC in TIA Portal..."
-        );
-
-
-        try {
-            const result =
-                await postJson(
-                    "/api/v1/tia/plcs",
-                    {
-                        process_id:
-                            processId,
-
-                        selection:
-                            selection,
-
-                        plc_name:
-                            plcName,
-
-                        device_name:
-                            deviceName,
-                    }
-                );
-
-
-            await refreshProjectPlcs();
-
-
-            const created =
-                existingPlcs.find(
-                    (plc) =>
-                        plc.device_name
-                            .toLowerCase()
-                        ===
-                        result.device_name
-                            .toLowerCase()
-                        &&
-                        plc.plc_name
-                            .toLowerCase()
-                        ===
-                        result.plc_name
-                            .toLowerCase()
-                );
-
-
-            if (created) {
-                selectTarget(
-                    created
-                );
-            }
-
-
-            setStatus(
-                `PLC created: ${result.plc_name} `
-                +
-                `(${result.device_name}).`,
-                "success"
-            );
-
-        } catch (error) {
-            setStatus(
-                error.message,
-                "error"
-            );
-
-        } finally {
-            createPlcButton.disabled =
-                false;
         }
     }
 
@@ -9754,7 +9146,6 @@ export function initTiaUi(
     processSelect.addEventListener(
         "change",
         async () => {
-            resetModels();
 
             existingPlcs = [];
 
@@ -9815,19 +9206,6 @@ export function initTiaUi(
             }
         }
     );
-
-
-    loadModelsButton.addEventListener(
-        "click",
-        loadModels
-    );
-
-
-    modelSelect.addEventListener(
-        "change",
-        modelChanged
-    );
-
 
 
     if (hmiSourceLanguageSelect) {
@@ -10005,24 +9383,6 @@ export function initTiaUi(
     }
 
 
-    createPlcButton.addEventListener(
-        "click",
-        createPlc
-    );
-
-
-    manualCodeInput.addEventListener(
-        "keydown",
-        (event) => {
-            if (
-                event.key === "Enter"
-            ) {
-                createPlc();
-            }
-        }
-    );
-
-
     updateTargetSummary();
     syncHmiConnectionControls();
     renderHmiBatchProgress(0, 0);
@@ -10070,7 +9430,6 @@ export function initTiaUi(
             : "Select an Active PLC first."
     );
 
-    suggestCreateNames();
 
 
     return {
