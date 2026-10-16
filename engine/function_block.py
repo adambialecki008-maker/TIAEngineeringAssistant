@@ -1,4 +1,5 @@
 """Local Function Block declaration model; no TIA write operations."""
+from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from engine.tia_member import TiaMember
@@ -21,6 +22,12 @@ class FunctionBlockSpecification(BaseModel):
     name: str = Field(min_length=1)
     number: int | None = Field(default=None, ge=0)
     language: str = "SCL"
+    # A source snapshot is opaque: it preserves an imported LAD/KOP network
+    # without presenting it as editable SCL declarations.
+    source_mode: Literal["local", "tia_read_only"] = "local"
+    source_xml: str | None = None
+    interface_verified: bool = True
+    unverified_reasons: list[str] = Field(default_factory=list)
     input: FunctionBlockSection = Field(default_factory=lambda: FunctionBlockSection(name="Input"))
     output: FunctionBlockSection = Field(default_factory=lambda: FunctionBlockSection(name="Output"))
     inout: FunctionBlockSection = Field(default_factory=lambda: FunctionBlockSection(name="InOut"))
@@ -30,8 +37,19 @@ class FunctionBlockSpecification(BaseModel):
 
     @model_validator(mode="after")
     def validate_sections(self):
-        if self.language != "SCL":
-            raise ValueError("Only SCL Function Blocks are currently supported.")
+        language = self.language.strip().upper()
+        if language not in {"SCL", "LAD", "KOP"}:
+            raise ValueError("Only SCL, LAD and KOP Function Blocks are supported.")
+        self.language = language
+        if language == "SCL" and self.source_mode != "local":
+            raise ValueError("SCL Function Blocks use local declarations, not an opaque TIA source snapshot.")
+        if language in {"LAD", "KOP"}:
+            if self.source_mode != "tia_read_only":
+                raise ValueError("LAD/KOP Function Blocks must remain a read-only TIA source snapshot.")
+            if not self.source_xml:
+                raise ValueError("LAD/KOP import requires the original TIA XML source to preserve its logic.")
+        if self.interface_verified and self.unverified_reasons:
+            raise ValueError("Verified FB interfaces cannot contain unverified reasons.")
         for section in (self.input, self.output, self.inout, self.temp, self.constant):
             for member in section.members:
                 if member.system_instance:

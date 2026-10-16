@@ -70,3 +70,26 @@ def test_system_instance_stays_blocked_for_udt_and_global_db():
         UdtSpecification.model_validate({"name": "UDT_Bad", "fields": [payload]})
     with pytest.raises(ValidationError, match="Static FB"):
         DataBlockSpecification.model_validate({"name": "DB_Bad", "members": [payload]})
+
+
+def test_lad_snapshot_preserves_source_and_cannot_generate_scl():
+    fb = FunctionBlockSpecification.model_validate({
+        "name": "FB_LadMotor", "number": 18, "language": "LAD",
+        "source_mode": "tia_read_only", "source_xml": "<SW.Blocks.FB><CompileUnit/></SW.Blocks.FB>",
+        "static": {"name": "Static", "members": [{"name": "Delay", "data_type": "TON_TIME", "system_instance": True}]},
+    })
+    assert fb.source_mode == "tia_read_only"
+    with pytest.raises(ValueError, match="read-only LAD"):
+        generate_fb_source(fb.name, fb, {})
+
+
+def test_unverified_lad_interface_cannot_be_used_as_multi_instance():
+    with pytest.raises(ValidationError, match="unverified interface"):
+        ProjectSpecification.model_validate({"fbs": [
+            {"name": "FB_Lad", "language": "LAD", "source_mode": "tia_read_only",
+             "source_xml": "<FB/>", "interface_verified": False,
+             "unverified_reasons": ["Static declaration unavailable"]},
+            {"name": "FB_Consumer", "static": {"name": "Static", "members": [
+                {"name": "Legacy", "data_type": "FB_Lad"},
+            ]}},
+        ]})

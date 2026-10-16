@@ -75,7 +75,8 @@ export function createDataTypeSelect(
     id,
     excludeUdtName = null,
     includeArray = true,
-    includeStruct = true
+    includeStruct = true,
+    includeFbInstances = false
 ) {
     const select =
         document.createElement(
@@ -254,6 +255,22 @@ export function createDataTypeSelect(
         select.appendChild(
             udtGroup
         );
+    }
+
+    if (includeFbInstances) {
+        const functionBlocks = projectConfig.fbs.filter(fb =>
+            fb.interface_verified !== false && String(fb.name || "").trim());
+        if (functionBlocks.length) {
+            const group = document.createElement("optgroup");
+            group.label = "Verified Function Blocks (multi-instance)";
+            for (const fb of functionBlocks) {
+                const option = document.createElement("option");
+                option.value = fb.name;
+                option.textContent = fb.name + " (" + (fb.language || "SCL") + ")";
+                group.appendChild(option);
+            }
+            select.appendChild(group);
+        }
     }
 
 

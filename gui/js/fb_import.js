@@ -34,12 +34,13 @@ export function initFbTiaImportUi(renderAll) {
             const inventory = await getJson("/api/v1/tia/plc-program-blocks?" + query(target, {program_only:"true"}));
             if (!sameTarget(target, targetIdentity())) throw Error("Active PLC or local project profile changed during scan. Scan FBs again.");
             available = inventory.filter(block => String(block.kind || "").toUpperCase() === "FB"
-                && block.name && block.is_consistent === true && String(block.programming_language || "").toUpperCase() === "SCL");
+                && block.name && block.is_consistent === true
+                && ["SCL", "LAD", "KOP"].includes(String(block.programming_language || "").toUpperCase()));
             scannedTarget = target;
             available.forEach((block, index) => select.append(new Option(
                 block.name + " [" + (block.group_path || "root") + "]", String(index))));
             load.disabled = available.length === 0;
-            report(available.length + " consistent SCL Function Block(s) available for read-only import. Other languages are excluded.");
+            report(available.length + " consistent SCL/LAD/KOP Function Block(s) available for import. LAD/KOP logic is retained read-only.");
         } catch (error) { report(error.message, true); }
         finally { busy = false; scan.disabled = false; }
     });
@@ -54,7 +55,7 @@ export function initFbTiaImportUi(renderAll) {
             if (projectConfig.fbs.some(fb => fb.name.toLocaleLowerCase() === selected.name.toLocaleLowerCase()))
                 throw Error(selected.name + " already exists in the local editor. Nothing was overwritten.");
             const detail = await getJson("/api/v1/tia/plc-program-block?" + query(active, {
-                group_path:selected.group_path || "", name:selected.name,
+                group_path:selected.group_path || "", name:selected.name, include_source:"true",
             }));
             if (!sameTarget(scannedTarget, targetIdentity())) throw Error("Active PLC or local project profile changed during export. Nothing imported.");
             if (String(detail.kind || "").toUpperCase() !== "FB" || detail.name !== selected.name
@@ -70,7 +71,9 @@ export function initFbTiaImportUi(renderAll) {
             catch (error) { projectConfig.fbs.pop(); throw error; }
             renderAll();
             const count = Object.values(fb).filter(section => section?.members).reduce((sum, section) => sum + section.members.length, 0);
-            report(fb.name + " imported into the local editor (" + count + " declared members). TIA Portal was NOT modified.");
+            report(fb.name + " imported into the local editor (" + count + " declared members; "
+                + (fb.interface_verified ? "interface verified" : "interface Unverified")
+                + "). TIA Portal was NOT modified.");
         } catch (error) { report(error.message, true); }
         finally { busy = false; load.disabled = available.length === 0; }
     });

@@ -48,6 +48,28 @@ def test_program_block_export_retains_fb_declaration_sections(monkeypatch):
     ]
 
 
+def test_lad_export_returns_original_source_only_when_requested(monkeypatch):
+    source = """<Document><SW.Blocks.FB><AttributeList><Interface><Sections>
+      <Section Name=\"Input\"><Member Name=\"Enable\" Datatype=\"Bool\" /></Section>
+      <Section Name=\"Static\"><Member Name=\"Timer\" Datatype=\"IEC_TIMER\" /></Section>
+    </Sections></Interface></AttributeList><ObjectList><SW.Blocks.CompileUnit/></ObjectList></SW.Blocks.FB></Document>"""
+
+    def adapter(*arguments):
+        Path(arguments[-1]).write_text(source, encoding="utf-8")
+        return ["PROGRAM_BLOCK_EXPORTED|Logic|FB_LadMotor|FB|19|LAD|true|100|40"]
+
+    monkeypatch.setattr(program, "run_adapter", adapter)
+    params = {"process_id": 22, "device_name": "Station", "plc_name": "PLC",
+              "group_path": "Logic", "name": "FB_LadMotor"}
+    hidden = client.get("/api/v1/tia/plc-program-block", params=params)
+    exported = client.get("/api/v1/tia/plc-program-block", params={**params, "include_source": "true"})
+    assert hidden.status_code == exported.status_code == 200
+    assert "source_xml" not in hidden.json()
+    assert exported.json()["programming_language"] == "LAD"
+    assert exported.json()["source_xml"] == source
+    assert exported.json()["members"][1]["system_instance"] is True
+
+
 def test_fb_import_ui_is_wired_to_read_only_program_block_endpoints():
     root = Path(__file__).resolve().parents[1]
     page = (root / "gui" / "index.html").read_text(encoding="utf-8")
@@ -55,6 +77,8 @@ def test_fb_import_ui_is_wired_to_read_only_program_block_endpoints():
     converter = (root / "gui" / "js" / "fb_import_converter.js").read_text(encoding="utf-8")
     assert 'id="tia-fb-scan"' in page and 'id="tia-fb-load"' in page
     assert 'plc-program-blocks' in ui and 'plc-program-block?' in ui
+    assert 'include_source:"true"' in ui
     assert 'function-block-specifications' in ui
     assert 'TIA Portal was NOT modified' in ui
     assert 'unsupported FB section' in converter
+    assert '"LAD", "KOP"' in converter and 'source_xml' in converter

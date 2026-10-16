@@ -1,5 +1,24 @@
 # Codex development progress
 
+## Read-only LAD/KOP Function Block snapshots
+
+- Extended the TIA FB inventory/import flow to include consistent `LAD` and
+  `KOP` blocks alongside SCL. The importer requests and stores the original
+  XML only for LAD/KOP, preserving their network logic as an opaque snapshot;
+  it never translates that logic to SCL or writes to TIA.
+- Added explicit FB source modes and interface verification. A read-only
+  LAD/KOP snapshot shows its original XML and declarations in the local model.
+  Any declaration that cannot be converted losslessly marks the interface
+  **Unverified**, keeping the source while blocking export and multi-instance
+  use.
+- Verified LAD/KOP snapshots now appear as multi-instance type candidates in
+  the Static section of local SCL FBs. Project dependency validation rejects
+  unverified snapshots as multi-instance targets.
+- Source generation fails closed for a read-only LAD/KOP snapshot: it reports
+  that the original logic cannot safely be emitted as SCL.
+- Validation: targeted model/API/editor tests — 38 passed; Node syntax checks
+  for all changed browser modules passed. Full regression and commit pending.
+
 ## Read-only Function Block import and compact engineering controls
 
 - Added a read-only TIA Function Block import on the **Function Blocks** tab.

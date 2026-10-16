@@ -183,6 +183,7 @@ def get_plc_program_block(
         min_length=1,
         max_length=128,
     ),
+    include_source: bool = Query(default=False),
 ):
     temporary_path = None
 
@@ -293,6 +294,7 @@ def get_plc_program_block(
 
 
         try:
+            source_xml = temporary_path.read_text(encoding="utf-8")
             members = parse_structure_xml(
                 temporary_path
             )
@@ -310,6 +312,7 @@ def get_plc_program_block(
         return PlcProgramBlockDetail(
             **metadata.model_dump(),
             members=members,
+            source_xml=source_xml if include_source else None,
         )
 
     finally:

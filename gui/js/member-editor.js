@@ -14,9 +14,11 @@ function normalized(value) {
     return String(value ?? "").trim().toLowerCase();
 }
 
-function availableTypes(allowSystemInstances = false) {
+function availableTypes(allowSystemInstances = false, allowFbInstances = false) {
     const types = getPlcDataTypes(projectConfig.plc_family);
     if (allowSystemInstances) types.push(...getSystemInstanceTypes(projectConfig.plc_family).map(item => item.name));
+    if (allowFbInstances) types.push(...projectConfig.fbs
+        .filter(fb => fb.interface_verified !== false).map(fb => fb.name));
     return new Set(types.map(normalized));
 }
 
@@ -139,8 +141,8 @@ function memberReferences(members, references) {
     }
 }
 
-export function validateMemberList(members, ownerUdtName = null, allowSystemInstances = false) {
-    const types = availableTypes(allowSystemInstances);
+export function validateMemberList(members, ownerUdtName = null, allowSystemInstances = false, allowFbInstances = false) {
+    const types = availableTypes(allowSystemInstances, allowFbInstances);
     const udts = udtDefinitions(ownerUdtName, members);
     const targetName = ownerUdtName || "DB";
     const error = validateGroup(members, targetName, types, udts);
@@ -224,6 +226,7 @@ export function createMemberEditor({
     retainDefault = false,
     inheritedRetain = null,
     allowSystemInstances = false,
+    allowFbInstances = false,
 }) {
     const root = document.createElement("div");
     root.className = "member-editor-form";
@@ -231,7 +234,7 @@ export function createMemberEditor({
     row.className = "editor-row";
     const nameInput = createInput(prefix + "-name", "Name");
     const typeSelect = createDataTypeSelect(
-        prefix + "-type", excludeUdtName, true, true
+        prefix + "-type", excludeUdtName, true, true, allowFbInstances
     );
     const commentInput = createInput(prefix + "-comment", "Comment");
     nameInput.value = member?.name ?? "";
@@ -377,7 +380,7 @@ export function createMemberEditor({
                     inheritedRetain: member?.retain ?? inheritedRetain ?? retainDefault,
                     allowSystemInstances,
                     nested: true,
-                    allowSystemInstances,
+                    allowFbInstances,
                     onChange: (next) => {
                         structMembers = next;
                         onDraftChange?.();
@@ -434,7 +437,7 @@ export function createMemberEditor({
             candidate.struct_members = structuredClone(structMembers);
         }
         const error = validateGroup(
-            [candidate], "Member", availableTypes(allowSystemInstances),
+            [candidate], "Member", availableTypes(allowSystemInstances, allowFbInstances),
             udtDefinitions(excludeUdtName, [candidate])
         );
         if (error) {
@@ -529,6 +532,7 @@ export function createMemberTree({
     inheritedRetain = null,
     nested = false,
     allowSystemInstances = false,
+    allowFbInstances = false,
 }) {
     const root = document.createElement("div");
     root.className = "member-tree";
@@ -540,7 +544,7 @@ export function createMemberTree({
 
     function apply(next) {
         if (validateOnChange) {
-            const error = validateMemberList(next, ownerUdtName, allowSystemInstances);
+            const error = validateMemberList(next, ownerUdtName, allowSystemInstances, allowFbInstances);
             if (error) {
                 alert(error);
                 return false;
@@ -628,6 +632,8 @@ export function createMemberTree({
                     editIndex: index,
                     isDb, retainDefault,
                     inheritedRetain: member.retain ?? inheritedRetain ?? retainDefault,
+                    allowSystemInstances,
+                    allowFbInstances,
                     onDraftChange: () => { dirty = true; },
                     onSave: (candidate) => {
                         // The renderer preserves expanded paths on refresh.
@@ -710,6 +716,7 @@ export function createMemberTree({
             excludeUdtName: ownerUdtName,
             isDb, retainDefault, inheritedRetain,
             allowSystemInstances,
+            allowFbInstances,
             onAdd: (candidate) => mutate(path, (target) => {
                 target.push(candidate);
             }),

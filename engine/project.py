@@ -29,7 +29,12 @@ class ProjectSpecification(BaseModel):
             visiting.add(key)
             for member in fb.static.members:
                 child = by_name.get(member.data_type.casefold())
-                if child: visit(child)
+                if child:
+                    if not child.interface_verified:
+                        raise ValueError(
+                            "Function Block dependency has an unverified interface: " + child.name
+                        )
+                    visit(child)
             visiting.remove(key); visited.add(key)
         for fb in self.fbs: visit(fb)
         for instance in self.instance_dbs:

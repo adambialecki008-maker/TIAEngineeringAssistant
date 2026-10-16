@@ -159,6 +159,9 @@ class PlcProgramBlockDetail(PlcProgramBlockInfo):
     members: list[PlcStructureMemberInfo] = Field(
         default_factory=list
     )
+    # Returned only when a caller explicitly needs a read-only source snapshot.
+    # It is required to retain LAD/KOP network logic without translating it.
+    source_xml: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class PlcStructureDetail(BaseModel):

@@ -45,6 +45,13 @@ def generate_fb_source(name, fb, udt_names: dict[str, str]) -> str:
     IEC system instances are intentionally rejected here until their exact TIA
     declaration context is verified on a real V21 project.
     """
+    if getattr(fb, "source_mode", "local") != "local" or fb.language != "SCL":
+        raise ValueError(
+            f"{name} is a read-only {fb.language} TIA snapshot. "
+            "TIA compilation not verified; its original logic cannot be exported as SCL."
+        )
+    if not getattr(fb, "interface_verified", True):
+        raise ValueError(f"{name} has an unverified interface and cannot be exported.")
     lines = [f'FUNCTION_BLOCK "{name}"', "VERSION : 0.1"]
     sections = (("VAR_INPUT", fb.input.members), ("VAR_OUTPUT", fb.output.members),
                 ("VAR_IN_OUT", fb.inout.members), ("VAR", fb.static.members),
