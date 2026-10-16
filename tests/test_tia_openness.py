@@ -284,17 +284,25 @@ def test_tia_project_info_is_parsed(
 def test_existing_project_plcs_are_parsed(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        tia_openness,
-        "_run_adapter",
-        lambda *args: [
+    calls = []
+
+
+    def fake_run_adapter(*args):
+        calls.append(args)
+        return [
             "PROJECT|OpennessTests",
             (
                 "PLC|S7-1500 Station_1|PLC_1|"
                 "System:Device.S71500|"
                 "OrderNumber:6ES7 516-3AP03-0AB0/V4.1"
             ),
-        ],
+        ]
+
+
+    monkeypatch.setattr(
+        tia_openness,
+        "_run_adapter",
+        fake_run_adapter,
     )
 
     response = client.get(
@@ -305,6 +313,7 @@ def test_existing_project_plcs_are_parsed(
     )
 
     assert response.status_code == 200
+    assert calls == [("list-project-plcs-fast", "3544")]
 
     assert response.json() == [
         {

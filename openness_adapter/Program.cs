@@ -54,6 +54,9 @@ namespace TiaOpennessAdapter
                     case "list-project-plcs":
                         return ListProjectPlcs(args);
 
+                    case "list-project-plcs-fast":
+                        return ListProjectPlcsFast(args);
+
                     case "export-entire-project-llm":
                         return ExportEntireProjectForLlm(args);
 
@@ -197,6 +200,25 @@ namespace TiaOpennessAdapter
 
 
             return TiaService.ListProjectPlcs(
+                processId
+            );
+        }
+
+
+        private static int ListProjectPlcsFast(
+            string[] args
+        )
+        {
+            if (!TryReadProcessId(
+                args,
+                out int processId
+            ))
+            {
+                return 1;
+            }
+
+
+            return TiaService.ListProjectPlcsFast(
                 processId
             );
         }
@@ -848,6 +870,10 @@ namespace TiaOpennessAdapter
 
             Console.WriteLine(
                 "  list-project-plcs <PID>"
+            );
+
+            Console.WriteLine(
+                "  list-project-plcs-fast <PID>"
             );
 
             Console.WriteLine(

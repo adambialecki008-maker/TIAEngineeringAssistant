@@ -12,6 +12,7 @@ export function initTiaConnectionMonitor() {
     let pending = false;
     let queued = false;
     let readingProject = false;
+    let activePlcVerified = false;
     const pid = () => Number(select.value) || 0;
     const mark = (node, ok) => {
         if (!node) return;
@@ -34,16 +35,18 @@ export function initTiaConnectionMonitor() {
             exportIndicator.textContent = text;
             mark(exportIndicator, active);
         }
-        // "Active PLC" denotes the engineering target selected in this app.
-        // It does not represent a physically connected / online CPU and is
-        // independent of the TIA process-presence badge.
+        // A persisted target is not evidence that the open TIA project still
+        // contains it. Green means the current fast Openness inventory has
+        // confirmed the same device and PLC name.
         const plcSelected = !!headerPlc?.textContent?.trim()
             && !/not selected/i.test(headerPlc.textContent);
-        mark(headerPlc, plcSelected);
+        mark(headerPlc, plcSelected && activePlcVerified);
         if (headerPlc) {
-            headerPlc.title = plcSelected
-                ? "Selected PLC target in TIAEngineeringAssistant. This is not a PLC online/physical connection indicator."
-                : "No PLC selected as the active engineering target.";
+            headerPlc.title = !plcSelected
+                ? "No PLC selected as the active engineering target."
+                : activePlcVerified
+                    ? "Active PLC confirmed in the current TIA project. This is not a PLC online/physical connection indicator."
+                    : "Saved PLC target awaiting verification in the current TIA project.";
         }
         const profileSelected = !!headerProfile?.textContent?.trim()
             && !/not selected/i.test(headerProfile.textContent);
@@ -104,6 +107,10 @@ export function initTiaConnectionMonitor() {
     window.addEventListener("tia-project-refresh-end", () => {
         readingProject = false;
         void check();
+    });
+    window.addEventListener("tia-active-plc-validation", event => {
+        activePlcVerified = event.detail?.verified === true;
+        render();
     });
     // Re-style on PLC selection or project profile switches without modifying
     // either feature or creating an extra source of truth.

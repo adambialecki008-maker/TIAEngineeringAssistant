@@ -17,18 +17,28 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         page = await context.newPage();
         page.on("dialog", d => d.accept());
         const requests = [];
-        await page.route("**/api/v1/tia/**", route => {
+        await page.route("**/api/v1/tia/**", async route => {
             const parsed = new URL(route.request().url());
             const action = parsed.pathname;
             requests.push({method:route.request().method(),action});
             if (action === "/api/v1/tia/processes")
                 return route.fulfill({json:[{process_id:123}]});
-            if (action === "/api/v1/tia/project-context")
+            if (action === "/api/v1/tia/plcs")
+                return route.fulfill({json:[{
+                    device_name:"Station_1",plc_name:"PLC_1",
+                    plc_type_identifier:"S7-1500",
+                }]});
+            if (action === "/api/v1/tia/project-context") {
+                // Resource/HMI discovery is deliberately slower than the
+                // lightweight PLC inventory. The PLC Use control must appear
+                // before the detailed request completes.
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 return route.fulfill({json:{project_name:"TIA_Demo_Copy", plcs:[{
                     device_name:"Station_1",plc_name:"PLC_1",
                     plc_type_identifier:"S7-1500",online_state:"Offline",
                     block_count:2,resource_rows:[],resource_attributes:[],
                 }],hmis:[]}});
+            }
             return route.fulfill({status:503,json:{detail:"read-only TIA fixture"}});
         });
         await page.addInitScript(() => {
@@ -69,6 +79,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         }
         await page.locator('#tia-process option[value="123"]').waitFor({state:"attached"});
         await page.locator("#tia-process").selectOption("123");
+        await page.locator('#tia-existing-plcs-body').getByRole("button",{name:"Use"})
+            .waitFor({state:"visible",timeout:700});
         await page.waitForFunction(() => document.getElementById("header-tia-live-status")
             ?.textContent.includes("TIA Portal PID 123"));
         assert.equal(await page.locator("#header-tia-live-status").innerText(),

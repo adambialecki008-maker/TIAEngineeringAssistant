@@ -12,6 +12,7 @@ from engine.tia import adapter
 def test_ordinary_adapter_commands_keep_three_minute_timeout(monkeypatch):
     monkeypatch.setenv("TIA_PROJECT_TEXT_TIMEOUT_SECONDS", "1200")
     assert adapter.adapter_timeout_seconds("list-project-plcs") == 180
+    assert adapter.adapter_timeout_seconds("list-project-plcs-fast") == 180
     assert adapter.adapter_timeout_seconds("list-project-languages") == 180
 
 

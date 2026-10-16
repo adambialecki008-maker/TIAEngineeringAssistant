@@ -422,7 +422,7 @@ def get_project_plcs(
     ),
 ):
     lines = run_adapter(
-        "list-project-plcs",
+        "list-project-plcs-fast",
         str(
             process_id
         ),

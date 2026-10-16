@@ -525,6 +525,14 @@ export function initTiaUi(
 
     let existingHmis = [];
 
+    // A saved target is only local configuration until the currently selected
+    // TIA process confirms the same device and PLC name through Openness.
+    let activeTargetVerified = false;
+
+    // Do not start another Openness read while the optional detailed inventory
+    // still owns the session. The basic PLC table remains usable for selection.
+    let detailedContextLoading = false;
+
     let projectLanguages = [];
 
     let selectedHmiForTranslation = null;
@@ -793,20 +801,31 @@ export function initTiaUi(
 
         if (target) {
             text =
-                `Active PLC: ${target.plc_name} `
+                (
+                    activeTargetVerified
+                        ? `Active PLC: ${target.plc_name} `
+                        : `Saved PLC target: ${target.plc_name} `
+                )
                 +
-                `(${target.device_name})`;
+                `(${target.device_name})`
+                +
+                (
+                    activeTargetVerified
+                        ? ""
+                        : " — awaiting TIA verification"
+                );
 
             overviewPlcText =
-                target.plc_name;
+                activeTargetVerified
+                    ? target.plc_name
+                    : target.plc_name + " (awaiting verification)";
 
             overviewDeviceText =
                 target.device_name;
 
-            previewText =
-                `Target PLC: ${target.plc_name} `
-                +
-                `(${target.device_name})`;
+            previewText = activeTargetVerified
+                ? `Target PLC: ${target.plc_name} (${target.device_name})`
+                : "Target PLC: awaiting TIA verification";
         }
 
 
@@ -853,20 +872,53 @@ export function initTiaUi(
 
         if (readTagsButton) {
             readTagsButton.disabled =
-                !target;
+                !target
+                ||
+                !activeTargetVerified
+                ||
+                detailedContextLoading;
         }
 
 
         if (readProgramBlocksButton) {
             readProgramBlocksButton.disabled =
-                !target;
+                !target
+                ||
+                !activeTargetVerified
+                ||
+                detailedContextLoading;
         }
 
 
         if (readStructuresButton) {
             readStructuresButton.disabled =
-                !target;
+                !target
+                ||
+                !activeTargetVerified
+                ||
+                detailedContextLoading;
         }
+    }
+
+
+    function setActiveTargetVerification(
+        verified
+    ) {
+        activeTargetVerified =
+            Boolean(verified)
+            &&
+            Boolean(projectConfig.tia_target);
+
+        window.dispatchEvent(
+            new CustomEvent(
+                "tia-active-plc-validation",
+                {
+                    detail: {
+                        verified: activeTargetVerified,
+                    },
+                }
+            )
+        );
     }
 
     function selectTarget(
@@ -886,6 +938,8 @@ export function initTiaUi(
 
 
         saveProjectConfig();
+
+        setActiveTargetVerification(true);
 
         updateTargetSummary();
 
@@ -935,6 +989,8 @@ export function initTiaUi(
 
 
     function clearTarget() {
+        setActiveTargetVerification(false);
+
         projectConfig.tia_target =
             null;
 
@@ -8760,6 +8816,8 @@ export function initTiaUi(
 
 
         if (!processId) {
+            detailedContextLoading = false;
+            setActiveTargetVerification(false);
             clearTarget();
             existingPlcs = [];
 
@@ -8786,6 +8844,9 @@ export function initTiaUi(
 
 
         refreshPlcsButton.disabled = true;
+        detailedContextLoading = false;
+        setActiveTargetVerification(false);
+        updateTargetSummary();
         syncHmiConnectionControls();
 
 
@@ -8808,31 +8869,21 @@ export function initTiaUi(
                 });
 
 
-            const context =
+            // Render the target list after the lightweight inventory. The
+            // detailed context intentionally runs afterwards: it reads every
+            // block, tag and HMI object and may take substantially longer.
+            const fastPlcs =
                 await getJson(
-                    "/api/v1/tia/project-context?"
+                    "/api/v1/tia/plcs?"
                     +
                     query.toString()
                 );
 
 
-            currentProjectName =
-                context.project_name
-                ||
-                "";
-
             existingPlcs =
-                context.plcs
+                fastPlcs
                 ??
                 [];
-
-            existingHmis =
-                context.hmis
-                ??
-                [];
-
-            updateTargetSummary();
-
 
             const savedTarget =
                 projectConfig.tia_target;
@@ -8850,23 +8901,80 @@ export function initTiaUi(
                 )
             ) {
                 clearTarget();
+            } else if (savedTarget) {
+                setActiveTargetVerification(true);
             }
 
 
+            updateTargetSummary();
             renderExistingPlcs();
 
-            renderExistingHmis();
 
-            await refreshProjectLanguages();
+            detailedContextLoading = true;
+            updateTargetSummary();
 
-            suggestCreateNames();
+            try {
+                const context =
+                    await getJson(
+                        "/api/v1/tia/project-context?"
+                        +
+                        query.toString()
+                    );
 
 
-            // The PLC and HMI lists already expose this result. Do not leave
-            // a redundant success banner below the overview controls.
-            setStatus("");
+                currentProjectName =
+                    context.project_name
+                    ||
+                    "";
+
+                existingPlcs =
+                    context.plcs
+                    ??
+                    [];
+
+                existingHmis =
+                    context.hmis
+                    ??
+                    [];
+
+                updateTargetSummary();
+
+
+                renderExistingPlcs();
+
+                renderExistingHmis();
+
+                await refreshProjectLanguages();
+
+                suggestCreateNames();
+
+
+                // The PLC and HMI lists already expose this result. Do not leave
+                // a redundant success banner below the overview controls.
+                setStatus("");
+
+            } catch (error) {
+                // A detailed scan is optional enrichment. Retain the already
+                // rendered fast PLC inventory if a large project, HMI object
+                // or stale Openness session prevents it from completing.
+                existingHmis = [];
+                currentProjectName = "";
+                renderEmptyHmis(
+                    "HMI and PLC details could not be loaded."
+                );
+                setStatus(
+                    "PLC list loaded, but detailed project data failed: "
+                    + error.message,
+                    "error"
+                );
+            } finally {
+                detailedContextLoading = false;
+                updateTargetSummary();
+            }
 
         } catch (error) {
+            detailedContextLoading = false;
+            setActiveTargetVerification(false);
             clearTarget();
             existingPlcs = [];
 
@@ -9755,6 +9863,9 @@ export function initTiaUi(
         "change",
         async () => {
             resetModels();
+
+            detailedContextLoading = false;
+            setActiveTargetVerification(false);
 
             existingPlcs = [];
 

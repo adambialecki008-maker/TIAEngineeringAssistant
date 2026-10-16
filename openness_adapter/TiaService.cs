@@ -240,6 +240,79 @@ namespace TiaOpennessAdapter
         }
 
 
+        // Fast inventory for the Overview table. Keep this separate from the
+        // detailed context command: block metrics and HMI discovery can touch
+        // thousands of engineering objects and must not delay the first PLC row.
+        public static int ListProjectPlcsFast(
+            int processId
+        )
+        {
+            TiaPortalProcess process =
+                FindProcess(
+                    processId
+                );
+
+
+            if (process == null)
+            {
+                return WriteProcessNotFound(
+                    processId
+                );
+            }
+
+
+            using (
+                TiaPortal portal =
+                    process.Attach()
+            )
+            {
+                Project project =
+                    GetSingleOpenProject(
+                        portal,
+                        out int errorCode
+                    );
+
+
+                if (project == null)
+                {
+                    return errorCode;
+                }
+
+
+                Console.WriteLine(
+                    "PROJECT|" +
+                    SanitizeOutput(
+                        project.Name
+                    )
+                );
+
+
+                foreach (
+                    PlcTarget target
+                    in EnumeratePlcTargets(
+                        project
+                    )
+                    .OrderBy(
+                        item => item.Device.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+                    .ThenBy(
+                        item => item.DeviceItem.Name,
+                        StringComparer.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    WritePlc(
+                        target
+                    );
+                }
+            }
+
+
+            return 0;
+        }
+
+
         public static int ListProjectLanguages(
             int processId
         )

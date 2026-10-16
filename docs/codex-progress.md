@@ -808,3 +808,18 @@
   backend preview endpoint unchanged for compatibility.
 - Updated Chromium regression to verify removed UI, restored Create PLC,
   TIA snapshot analysis and the whole-project ZIP download.
+
+## Fast PLC inventory and verified active target - 2026-10-16
+
+- Split the Overview refresh into a fast, read-only PLC inventory and a
+  follow-up detailed context scan. The first call only identifies PLC targets;
+  it does not enumerate all blocks, tag tables, resource attributes or HMI
+  device items before rendering the PLC table.
+- The detailed scan remains sequential, so the app does not attach two
+  concurrent Openness sessions to the same TIA project. If it fails, the
+  already-rendered PLC inventory remains available and the HMI/details area
+  shows the error.
+- A persisted Active PLC is now marked as awaiting TIA verification and stays
+  red. It turns green only after the fast inventory confirms the matching
+  device and PLC name in the currently selected TIA project. PLC reads are
+  disabled until that confirmation.
