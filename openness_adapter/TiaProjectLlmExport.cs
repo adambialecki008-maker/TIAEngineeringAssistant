@@ -43,6 +43,10 @@ namespace TiaOpennessAdapter
                     deviceIndex++;
                     report.Record("DEVICE", device.Name, "",
                         device.TypeIdentifier ?? "", "");
+                    string pnName = ReadProfinetDeviceName(device);
+                    if (!string.IsNullOrWhiteSpace(pnName))
+                        report.Record("PROFINET_DEVICE_NAME", device.Name, "",
+                            pnName, "");
                     try
                     {
                         foreach (DeviceItemPath itemPath in EnumerateDeviceItems(device))
@@ -50,7 +54,33 @@ namespace TiaOpennessAdapter
                             DeviceItem item = itemPath.Item;
                             report.Record("HARDWARE", device.Name, itemPath.Path,
                                 (item.TypeIdentifier ?? "") + " | plugged=" +
-                                item.IsPlugged, "");
+                                item.IsPlugged + " | addresses=" + item.Addresses.Count
+                                + " | channels=" + item.Channels.Count, "");
+                            foreach (Address address in item.Addresses)
+                            {
+                                if ((address.IoType == AddressIoType.Input ||
+                                     address.IoType == AddressIoType.Output) &&
+                                     address.StartAddress >= 0)
+                                    report.Record("IO_ADDRESS", device.Name, itemPath.Path,
+                                        address.IoType + " start=" + address.StartAddress
+                                        + " length=" + address.Length, "");
+                            }
+                            foreach (Channel channel in item.Channels)
+                            {
+                                string type = channel.IoType.ToString();
+                                if (type != "Input" && type != "Output") continue;
+                                if (!TryGetIntAttribute(channel, "ChannelAddress",
+                                                        out int channelAddress)
+                                    || channelAddress < 0)
+                                    continue;
+                                if (!TryGetIntAttribute(channel, "ChannelWidth",
+                                                        out int channelWidth))
+                                    channelWidth = 0;
+                                report.Record("IO_CHANNEL", device.Name, itemPath.Path,
+                                    "channel=" + channel.Number + " type=" + channel.Type
+                                    + " direction=" + type + " address=" + channelAddress
+                                    + " width=" + channelWidth, "");
+                            }
                             SoftwareContainer container = null;
                             try { container = item.GetService<SoftwareContainer>(); }
                             catch (Exception e) {
