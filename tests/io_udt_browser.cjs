@@ -70,7 +70,7 @@ const initial={plc_family:"S7-1500",udts:[],dbs:[],tia_target:{
   // instead of bypassing visibility checks on hidden controls.
   for (const control of ["#device-mapping-mode", "#refresh-hardware-button",
                          "#generated-plc-tags-body"]) {
-    await page.locator(control).locator("xpath=ancestor::details.device-section[1]")
+    await page.locator(control).locator("xpath=ancestor::details[1]")
       .locator(":scope > summary").click();
   }
   await page.locator("#device-mapping-mode").waitFor({state:"visible"});
