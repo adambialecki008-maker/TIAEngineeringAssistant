@@ -200,3 +200,178 @@ def export_for_llm_review(request: LlmExportRequest) -> Response:
         "Content-Disposition":'attachment; filename="TIAEngineeringAssistant_LLM_Review.zip"',
         "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff",
     })
+
+
+# Unlike the historical loaded-profile export above, this endpoint connects
+# through Openness to the ENTIRE currently opened TIA Portal project. Hardware,
+# every enumerated PLC and HMI are traversed in a SINGLE read-only adapter
+# attachment and exported to a temporary local folder before ZIP packaging.
+import io as _io
+import os as _os
+import tempfile as _tempfile
+import zipfile as _zipfile
+from pathlib import Path as _Path
+from fastapi import Query as _Query
+from engine.tia.adapter import run_adapter as _run_adapter
+
+_MAX_TIA_FILES = 30000
+_MAX_TIA_ARCHIVE_BYTES = 180 * 1024 * 1024
+_MAX_TIA_ONE_FILE = 25 * 1024 * 1024
+
+
+@router.post("/export-tia-project-for-llm")
+def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
+    """Export read-only Open TIA project objects, NOT just app profile.
+
+    TIA XML/TSV exports are written to a server-owned temporary folder.
+    No TIA project save, imports, writes, or calls to a language model.
+    Never claim Siemens project completeness if unsupported objects remain.
+    """
+    with _tempfile.TemporaryDirectory(prefix="tia_llm_export_") as directory:
+        lines = _run_adapter("export-entire-project-llm", str(process_id), directory)
+        result = [line for line in lines if line.startswith("LLM_PROJECT_EXPORTED|")]
+        if len(result) != 1:
+            raise HTTPException(502, "TIA did not confirm the whole-project export.")
+        parts = result[0].split("|", 3)
+        if len(parts) != 4:
+            raise HTTPException(502, "Malformed TIA export confirmation.")
+        project_name = parts[1].strip()
+        if not project_name:
+            raise HTTPException(502, "TIA export did not identify an open project.")
+        root = _Path(directory).resolve()
+        files: dict[str, bytes] = {}
+        cumulative = 0
+        listed = sorted(root.rglob("*"))
+        if len(listed) > _MAX_TIA_FILES:
+            raise HTTPException(413, "TIA project export exceeds 30,000 file entries.")
+        skipped: list[str] = []
+        for item in listed:
+            if not item.is_file():
+                continue
+            resolved = item.resolve()
+            if root not in resolved.parents or item.is_symlink():
+                raise HTTPException(422, "TIA export contains an unsafe file path.")
+            relative = item.relative_to(root).as_posix()
+            if item.stat().st_size > _MAX_TIA_ONE_FILE:
+                skipped.append(relative + ": exceeds 25 MB object limit")
+                continue
+            content = item.read_bytes()
+            cumulative += len(content)
+            if cumulative > _MAX_TIA_ARCHIVE_BYTES:
+                raise HTTPException(413,
+                    "TIA project export exceeds 180 MB of uncompressed source data.")
+            files["tia-project/" + relative] = content
+        if "tia-project/TIA_OBJECTS.tsv" not in files:
+            raise HTTPException(502, "TIA export has no project inventory.")
+        if "tia-project/TIA_MISSING.tsv" not in files:
+            raise HTTPException(502, "TIA export has no missing-object report.")
+        object_rows = files["tia-project/TIA_OBJECTS.tsv"].decode("utf-8-sig", "replace").splitlines()
+        missing_rows = files["tia-project/TIA_MISSING.tsv"].decode("utf-8-sig", "replace").splitlines()
+        missing_count = max(0, len(missing_rows) - 1) + len(skipped)
+        source_files = [
+            (path, content) for path, content in files.items()
+            if path.casefold().endswith(".xml") and len(content) <= MAX_FILE_BYTES
+        ]
+        review_input = []
+        for path, content in source_files[:250]:
+            try:
+                review_input.append(ReviewInputFile(
+                    name=path, content=content.decode("utf-8-sig"),
+                ))
+            except (UnicodeError, ValueError):
+                skipped.append(path + ": source not parsed as UTF-8 text")
+        missing_count += len(skipped) - (missing_count - max(0, len(missing_rows) - 1))
+        if review_input:
+            analysis = analyze_files(review_input)
+            compact = {
+                "notice": "Static review only; no TIA compile or network verification",
+                "sources_reviewed": len(review_input),
+                "sources_in_zip": len(source_files),
+                "summary": analysis.summary.model_dump(),
+                "findings": [x.model_dump() for x in analysis.findings],
+                "dependencies": [
+                    {"source":x.source_file, "block":x.name,
+                     "dependencies":x.dependencies,
+                     "calls":[c.model_dump() for c in x.calls]}
+                    for x in analysis.files
+                ],
+            }
+            files["review/DETERMINISTIC_ANALYSIS.json"] = _json(compact)
+        missing_lines = [
+            "# Missing or unsupported objects",
+            "",
+            "Siemens Openness object exports vary by technology and permissions.",
+            "See tia-project/TIA_MISSING.tsv for every failed/unsupported export.",
+            "Export successes do not prove complete project fidelity.",
+            "",
+            *["- " + item for item in skipped],
+        ]
+        files["MISSING_SOURCES.md"] = ("\n".join(missing_lines) + "\n").encode("utf-8")
+        docs = [
+            "# Complete open TIA Portal project — export for LLM review",
+            "",
+            "This export was generated by attaching read-only to the OPEN TIA Portal",
+            "project, not by reading the app's cached profile.",
+            "TIA Project: " + project_name,
+            "Process ID: " + str(process_id),
+            "Devices, hardware sub-items, PLC blocks/UDTs, PLC tag tables and",
+            "available HMI objects are inventoried across the project.",
+            "All successfully exported native XML and TSV files are included.",
+            "",
+            "## Read before reviewing",
+            "1. Start with MANIFEST.json and tia-project/TIA_OBJECTS.tsv.",
+            "2. Inspect tia-project/TIA_MISSING.tsv before judging completeness.",
+            "3. Read source XML in tia-project/plc/ and tia-project/hmi/.",
+            "4. Review PLC logic, dependencies and interfaces; distinguish",
+            "   verified source evidence from any speculative analysis.",
+            "5. No project edit/save/compile/import or external LLM call occurred.",
+            "",
+            "## Known intrinsic API limitations",
+            "Openness exports independent objects, not one native readable project.",
+            "Some hardware details, library items, HMI Unified exports,",
+            "password-protected blocks and unsupported object formats may be",
+            "inaccessible. Their absence is reported; a .ap21/.zap21 backup is",
+            "NOT generated and must not be inferred from this ZIP.",
+            "Large XML files may be present but omitted from static analysis.",
+            "",
+            "## Confidentiality",
+            "This project may contain proprietary PLC logic, network addresses,",
+            "customer names and process data. Inspect the ZIP before uploading.",
+        ]
+        files["README_FOR_CHATGPT.md"] = ("\n".join(docs) + "\n").encode("utf-8")
+        inventory = {
+            "format":"TIAEngineeringAssistant_open_TIA_project_review",
+            "schema_version":2,
+            "project_name":project_name,
+            "tia_process_id":process_id,
+            "source_scope":"entire_open_tia_project",
+            "native_tia_archive":False,
+            "full_fidelity_guaranteed":False,
+            "object_rows":max(0, len(object_rows) - 1),
+            "missing_object_rows":max(0, len(missing_rows) - 1),
+            "skipped_oversized_or_unreadable":skipped,
+            "sources_in_archive":len(source_files),
+            "source_files_statically_reviewed":len(review_input),
+            "read_only":True,
+            "ollama_used":False,
+            "files":[{
+                "name":name,
+                "bytes":len(blob),
+                "sha256":hashlib.sha256(blob).hexdigest(),
+            } for name, blob in sorted(files.items())],
+        }
+        files["MANIFEST.json"] = _json(inventory)
+        out = _io.BytesIO()
+        with _zipfile.ZipFile(out, "w", _zipfile.ZIP_DEFLATED,
+                              compresslevel=6, allowZip64=True) as zip_file:
+            for name in sorted(files):
+                zip_file.writestr(name, files[name])
+        archive = out.getvalue()
+        if len(archive) > _MAX_TIA_ARCHIVE_BYTES:
+            raise HTTPException(413, "TIA project archive exceeds 180 MB compressed.")
+        return Response(content=archive, media_type="application/zip", headers={
+            "Content-Disposition":
+                'attachment; filename="TIA_Portal_Entire_Project_LLM_Review.zip"',
+            "Cache-Control":"no-store",
+            "X-Content-Type-Options":"nosniff",
+        })

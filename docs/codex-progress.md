@@ -755,3 +755,11 @@
 - Added Export file for LLM review to create a local ZIP of loaded PLC declarations, native FB/FC XML snapshots, user-selected SCL/XML, generated (uncompiled) UDT/DB SCL, manifest SHA-256 and deterministic structural analysis.
 - Source completeness is explicit: missing blocks and full-project limitation documented; no fabricated logic and no connection to any hosted model.
 - Added backend and browser tests for ZIP validity, scope, path safety, no AI endpoint and deterministic preservation.
+
+## Entire open TIA project -> LLM readable review archive (2026-10-16)
+
+- Corrected earlier loaded-profile-only export. The button now requires a TIA process and invokes a single Openness project-level traversal.
+- Added read-only bulk V21 adapter command for all project devices/PLCs and supported HMI objects. Recursively exports PLC FB/FC/OB/DB, PLC types and tag tables; inventories hardware.
+- Failed/unsupported exports are listed in TIA_MISSING.tsv; manifest explicitly refuses to claim full native TIA project fidelity.
+- ZIP includes original XML/TSV, inventory, missing-object report, SHA-256 and a bounded deterministic review without invoking a local LLM.
+- Added API tests using simulated Openness exports and browser integration tests; real TIA V21 adapter build and practical export remain an acceptance gate.

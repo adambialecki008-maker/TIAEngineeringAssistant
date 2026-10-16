@@ -837,43 +837,47 @@ export function initCodeReviewUi() {
         if (report) downloadReport(reportMarkdown(report), "plc-code-review.md", "text/markdown;charset=utf-8");
     });
     exportLlm.addEventListener("click", async () => {
+        const processId = Number(document.getElementById("tia-process")?.value);
+        if (!Number.isInteger(processId) || processId < 1) {
+            exportLlmStatus.classList.add("error");
+            exportLlmStatus.textContent =
+                "Select a running TIA Portal process under TIA connection "
+                + "(Refresh TIA) to export the entire OPEN TIA project.";
+            return;
+        }
         exportLlm.disabled = true;
         exportLlmStatus.classList.remove("error");
-        exportLlmStatus.textContent = "Preparing offline LLM review bundle…";
+        exportLlmStatus.textContent =
+            "Reading the entire open TIA project with Openness: all PLCs, "
+            + "devices, hardware and supported HMI objects. Large projects may take time.";
         try {
-            const selectedSources = await readPayload();
-            const response = await fetch("/api/v1/code-review/export-for-llm-review", {
-                method:"POST",
-                headers:{"Content-Type":"application/json"},
-                body:JSON.stringify({
-                    profile_name: document.getElementById("overview-profile-name")?.textContent || "Current profile",
-                    project:projectConfig,
-                    files:selectedSources,
-                }),
-            });
+            const response = await fetch(
+                "/api/v1/code-review/export-tia-project-for-llm?process_id="
+                + encodeURIComponent(processId), {method:"POST"},
+            );
             if (!response.ok) {
-                const message = await response.text();
-                let reason = message;
-                try { reason = JSON.parse(message).detail || reason; } catch {}
-                throw Error(String(reason).slice(0,250));
+                const body = await response.text();
+                let message = body;
+                try { message = JSON.parse(body).detail || body; } catch {}
+                throw Error(String(message).slice(0, 320));
             }
-            const result = await response.blob();
-            if (!result.size) throw Error("Received an empty archive.");
-            const url = URL.createObjectURL(result);
+            const file = await response.blob();
+            if (!file.size) throw Error("Empty whole-project ZIP.");
+            const url = URL.createObjectURL(file);
             const link = document.createElement("a");
             link.href = url;
-            link.download = "TIAEngineeringAssistant_LLM_Review.zip";
+            link.download = "TIA_Portal_Entire_Project_LLM_Review.zip";
             link.click();
             URL.revokeObjectURL(url);
             exportLlmStatus.textContent =
-                "Exported ZIP with available local PLC data. Review MANIFEST.json, "
-                + "MISSING_SOURCES.json and confidential content before uploading to ChatGPT. "
-                + "Unloaded TIA blocks are not included.";
+                "Exported open TIA Portal project. Read TIA_OBJECTS.tsv and "
+                + "TIA_MISSING.tsv for supported and missing objects. "
+                + "Review confidential source contents before uploading to ChatGPT.";
         } catch (error) {
-            exportLlmStatus.textContent = "LLM export failed: " + error.message;
             exportLlmStatus.classList.add("error");
+            exportLlmStatus.textContent = "TIA project export failed: " + error.message;
         } finally {
             exportLlm.disabled = false;
         }
-    });
+    });;
 }

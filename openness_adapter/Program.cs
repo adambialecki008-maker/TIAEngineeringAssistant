@@ -54,6 +54,9 @@ namespace TiaOpennessAdapter
                     case "list-project-plcs":
                         return ListProjectPlcs(args);
 
+                    case "export-entire-project-llm":
+                        return ExportEntireProjectForLlm(args);
+
 
                     case "list-project-languages":
                         return ListProjectLanguages(args);
@@ -168,6 +171,17 @@ namespace TiaOpennessAdapter
             );
         }
 
+
+        private static int ExportEntireProjectForLlm(string[] args)
+        {
+            if (args.Length != 3)
+            {
+                Console.Error.WriteLine("PID and output directory required.");
+                return 1;
+            }
+            if (!TryReadProcessId(args, out int processId)) return 1;
+            return TiaService.ExportEntireProjectForLlm(processId, args[2]);
+        }
 
         private static int ListProjectPlcs(
             string[] args

@@ -77,6 +77,7 @@ def adapter_error_status(
 DEFAULT_ADAPTER_TIMEOUT_SECONDS = 180
 DEFAULT_PROJECT_TEXT_TIMEOUT_SECONDS = 900
 PROJECT_TEXT_COMMANDS = frozenset({
+    "export-entire-project-llm",
     "export-project-texts",
     "export-hmi-text-lists",
     "import-hmi-text-list",

@@ -33,6 +33,15 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
                 findings:[], file_warnings:[], read_only:true,
             })});
         });
+        await page.route("**/api/v1/code-review/export-tia-project-for-llm?process_id=321", route => {
+            assert.equal(route.request().method(), "POST");
+            return route.fulfill({
+                status:200,
+                contentType:"application/zip",
+                headers:{"Content-Disposition":'attachment; filename="TIA_Portal_Entire_Project_LLM_Review.zip"'},
+                body:Buffer.from("PK\x03\x04fake-zip-test"),
+            });
+        });
         await page.route("**/api/v1/code-review/preview-scl-change", route => {
             const body = route.request().postDataJSON();
             const source = "FUNCTION_BLOCK FB_Test\\nBEGIN\\n#Value := 1;\\nEND_FUNCTION_BLOCK\\n".replaceAll("\\n", "\n");
@@ -157,13 +166,22 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         assert.match(reviewedText, /#Value := 2;/);
         assert.doesNotMatch(reviewedText, /#Value := 1;/);
         assert.equal(await page.locator("#review-proposal-download").isDisabled(), true);
+        // Whole-project export must use the selected TIA process, not a cached
+        // PLC profile. Explicitly select a fake attached process in this test.
+        await page.locator("#tia-process").evaluate(select => {
+            const option = document.createElement("option");
+            option.value = "321";
+            option.textContent = "TIA Portal 321";
+            select.appendChild(option);
+            select.value = "321";
+        });
         const archivePromise = page.waitForEvent("download");
         await page.locator("#review-export-llm").click();
         const archive = await archivePromise;
-        assert.equal(archive.suggestedFilename(), "TIAEngineeringAssistant_LLM_Review.zip");
+        assert.equal(archive.suggestedFilename(), "TIA_Portal_Entire_Project_LLM_Review.zip");
         const archiveBytes = require("node:fs").readFileSync(await archive.path());
         assert.equal(archiveBytes.subarray(0, 2).toString(), "PK");
-        assert.match(await page.locator("#review-export-llm-status").innerText(), /Exported ZIP/);
+        assert.match(await page.locator("#review-export-llm-status").innerText(), /Exported open TIA Portal project/);
         assert.equal((await page.locator("#review-results").innerText()).includes("Review suggestion."), false);
         const markdownDownload = page.waitForEvent("download");
         await page.locator("#review-download-markdown").click();

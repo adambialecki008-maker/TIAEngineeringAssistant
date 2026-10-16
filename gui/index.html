@@ -2419,12 +2419,12 @@
                 <h3>Analyze Files</h3>
                 <p class="hint">Select `.scl` and XML/SimaticML exports. Files stay in this browser session and are sent only to the local application.</p>
                 <div class="action-row"><input id="review-files" type="file" accept=".scl,.xml" multiple><input id="review-folder" type="file" accept=".scl,.xml" webkitdirectory multiple><button id="review-analyze" type="button">Analyze</button><button id="review-download" type="button" class="secondary-button" disabled>Download JSON</button><button id="review-download-markdown" type="button" class="secondary-button" disabled>Download Markdown</button></div>
-                <p class="hint">Deterministic local review — no built-in AI analysis. Export file for LLM review creates a ZIP of currently loaded PLC data for ChatGPT.</p>
+                <p class="hint">Deterministic local review, without built-in AI. Export file for LLM review reads the <strong>entire open TIA Portal project</strong> through Siemens Openness, not just the loaded profile.</p>
                 <p id="review-status" class="status-box" aria-live="polite">Select PLC source files or a folder.</p>
                 <ul id="review-files-list" class="hint"></ul>
                 <div id="review-results"></div>
-                <div class="action-row"><button id="review-export-llm" type="button" class="secondary-button">Export file for LLM review</button></div>
-                <p id="review-export-llm-status" class="hint" aria-live="polite">Export all currently loaded PLC definitions, original FB/FC XML where available, and selected SCL/XML files. Missing native project sources are listed in the ZIP.</p>
+                <div class="action-row"><button id="review-export-llm" type="button" class="secondary-button">Export file for LLM review — entire TIA project</button></div>
+                <p id="review-export-llm-status" class="hint" aria-live="polite">Requires a running TIA Portal V21 process with one open project. Exports all detected PLCs, their blocks, UDTs, tags, hardware inventory and supported HMI objects to a read-only ZIP. Unsupported or protected objects are recorded in TIA_MISSING.tsv; this is not a native .zap21 backup.</p>
                 <details id="review-proposal-panel" class="ui-disclosure review-proposal-panel" hidden>
                     <summary class="ui-disclosure-heading">SCL change proposal — preview and export copy</summary>
                     <div class="review-proposal-content">
