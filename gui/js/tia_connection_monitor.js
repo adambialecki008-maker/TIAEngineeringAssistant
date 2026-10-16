@@ -25,11 +25,9 @@ export function initTiaConnectionMonitor() {
         const current = pid();
         const active = !!current && checkResult?.pid === current
             && checkResult.running === true;
-        const text = !current ? "TIA: not connected"
-            : active ? "TIA Portal PID " + current
-            : checkResult?.pid === current && checkResult.running === false
-                ? "TIA PID " + current + ": disconnected"
-                : "TIA PID " + current + ": unavailable";
+        // One compact label. Color alone communicates live availability.
+        // A PID can remain selected after TIA closes; such a badge stays red.
+        const text = current ? "TIA Portal PID " + current : "TIA: not connected";
         headerTia.textContent = text;
         mark(headerTia, active);
         if (exportIndicator) {
