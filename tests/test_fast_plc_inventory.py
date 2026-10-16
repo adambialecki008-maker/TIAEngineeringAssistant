@@ -33,4 +33,5 @@ def test_saved_active_target_stays_unverified_until_fast_inventory_confirms_it()
     assert '"tia-active-plc-validation"' in TIA_JS
     assert "activeTargetVerified = false" in TIA_JS
     assert "detailedContextLoading" in TIA_JS
-    assert "plcSelected && activePlcVerified" in CONNECTION_MONITOR
+    assert "dataset.tiaTargetVerified === \"true\"" in CONNECTION_MONITOR
+    assert "dataset.tiaTargetVerified" in TIA_JS

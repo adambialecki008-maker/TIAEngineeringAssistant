@@ -12,7 +12,6 @@ export function initTiaConnectionMonitor() {
     let pending = false;
     let queued = false;
     let readingProject = false;
-    let activePlcVerified = false;
     const pid = () => Number(select.value) || 0;
     const mark = (node, ok) => {
         if (!node) return;
@@ -40,6 +39,8 @@ export function initTiaConnectionMonitor() {
         // confirmed the same device and PLC name.
         const plcSelected = !!headerPlc?.textContent?.trim()
             && !/not selected/i.test(headerPlc.textContent);
+        const activePlcVerified =
+            headerPlc?.dataset.tiaTargetVerified === "true";
         mark(headerPlc, plcSelected && activePlcVerified);
         if (headerPlc) {
             headerPlc.title = !plcSelected
@@ -108,8 +109,7 @@ export function initTiaConnectionMonitor() {
         readingProject = false;
         void check();
     });
-    window.addEventListener("tia-active-plc-validation", event => {
-        activePlcVerified = event.detail?.verified === true;
+    window.addEventListener("tia-active-plc-validation", () => {
         render();
     });
     // Re-style on PLC selection or project profile switches without modifying

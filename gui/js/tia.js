@@ -786,6 +786,15 @@ export function initTiaUi(
             getPlcFamily();
 
 
+        // The connection monitor can initialize after this UI module. Persist
+        // the verification on the shared header node so it cannot miss an
+        // earlier CustomEvent and render a stale color for the same label.
+        headerActivePlcElement.dataset.tiaTargetVerified =
+            activeTargetVerified
+                ? "true"
+                : "false";
+
+
         let text =
             "Active PLC: not selected";
 
