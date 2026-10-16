@@ -993,3 +993,29 @@ def test_flgnet_unsupported_parts_duplicate_wires_and_single_endpoint_are_review
     assert any("Duplicate wire UId" in warning for warning in net.warnings)
     assert any("fewer than two" in warning for warning in net.warnings)
     assert all(f.verification_status == "requires TIA verification" for f in report.findings)
+
+
+
+def test_flgnet_access_symbol_and_literal_constant_expose_wire_membership():
+    source = (
+        '<SW.Blocks.FC Name="FC_Logic"><SW.Blocks.CompileUnit>'
+        '<NetworkSource><FlgNet><Parts>'
+        '<Access Scope="LocalVariable" UId="21"><Symbol>'
+        '<Component Name="Valve"/><Component Name="Open"/></Symbol></Access>'
+        '<Access Scope="LiteralConstant" UId="22"><Constant>'
+        '<ConstantType>Bool</ConstantType><ConstantValue>TRUE</ConstantValue></Constant></Access>'
+        '<Part Name="And" UId="23"/>'
+        '</Parts><Wires>'
+        '<Wire UId="24"><IdentCon UId="21"/><NameCon UId="23" Name="in1"/></Wire>'
+        '<Wire UId="25"><IdentCon UId="22"/><NameCon UId="23" Name="in2"/></Wire>'
+        '</Wires></FlgNet></NetworkSource></SW.Blocks.CompileUnit></SW.Blocks.FC>'
+    )
+    result = analyze_files([ReviewInputFile(name="logic.xml", content=source)])
+    network = result.files[0].network_details[0]
+    variable, literal, gate = network.nodes
+    assert variable.symbol == "Valve.Open"
+    assert [(c.port, c.wire_uid) for c in variable.connections] == [("(reference)", "24")]
+    assert "And" in variable.connections[0].peers[0]
+    assert [(c.port, c.wire_uid) for c in literal.connections] == [("(reference)", "25")]
+    assert "TRUE" in gate.connections[1].peers[0]
+    assert not result.findings

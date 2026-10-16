@@ -519,13 +519,14 @@ def _flgnet_network(unit: ET.Element, number: int, language: str) -> ReviewLogic
     by_uid = {node.uid: node for node in network.nodes if node.uid}
     for wire in network.wires:
         for endpoint in wire.endpoints:
-            if endpoint.kind != "NameCon":
+            if endpoint.kind not in {"NameCon", "IdentCon"}:
                 continue
             owner = by_uid.get(endpoint.uid)
             if owner is None:
                 continue
             owner.connections.append(ReviewPortConnection(
-                port=endpoint.port, wire_uid=wire.uid,
+                port=endpoint.port if endpoint.kind == "NameCon" else "(reference)",
+                wire_uid=wire.uid,
                 peers=[
                     endpoint_label(peer, by_uid)
                     for peer in wire.endpoints if peer is not endpoint

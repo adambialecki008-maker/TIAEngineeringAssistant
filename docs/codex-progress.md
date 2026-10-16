@@ -676,3 +676,13 @@
   https://github.com/eliasrhoden/tia-statemachine/blob/main/simatic_ML_format.md.
 - **Not yet validated** against a genuine exported XML from the user's
   TIA Portal V21. This is required before claiming Point 4 fully verified.
+
+## Point 4 Access wiring and V21 acceptance gate — 2026-10-16
+
+- Graph connection projection also attaches IdentCon wire membership to
+  Access symbol/constant nodes, so a reviewer can trace a signal back
+  from either a named instruction pin or the referenced operand.
+- Added test for multi-component symbol and literal constant connected to
+  an FBD gate, with explicit wire UIds and reference membership.
+- Wrote a separate V21 acceptance procedure; without a real V21 export
+  from the target TIA project, the gate remains unverified.
