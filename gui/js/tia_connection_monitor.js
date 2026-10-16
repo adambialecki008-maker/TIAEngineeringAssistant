@@ -86,6 +86,10 @@ export function initTiaConnectionMonitor() {
         render();
         void check();
     });
+    // Refresh TIA auto-selects the sole PID programmatically without a
+    // change event. Detect replacement of its options so the badge updates
+    // immediately, rather than waiting for the periodic presence check.
+    new MutationObserver(() => void check()).observe(select, {childList: true});
     window.addEventListener("tia-project-refresh-start", () => {
         readingProject = true;
     });
