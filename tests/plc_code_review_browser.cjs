@@ -8,6 +8,11 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
  try {
   const page = await browser.newPage({acceptDownloads:true});
   let running = false, exportCalls = 0;
+  // Only a deliberately enabled test fixture exposes the dangerous bulk export.
+  await page.route("**/api/v1/code-review/tia-export-status", route =>
+    route.fulfill({contentType:"application/json",
+      body:JSON.stringify({enabled:true,reason:"Enabled in mocked browser test"})})
+  );
   await page.route("**/api/v1/tia/processes", route => route.fulfill({
    contentType:"application/json",
    body:JSON.stringify(running ? [{process_id:321}] : [])
@@ -34,6 +39,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
   assert.equal(await page.locator("#review-export-llm").isVisible(),false);
   await section.locator(":scope > summary").click();
   assert.equal(await page.locator("#review-export-llm").isVisible(),true);
+  await page.waitForFunction(() => !document.getElementById("review-export-llm")?.disabled);
   await page.locator("#review-export-llm").click();
   assert.match(await page.locator("#review-export-llm-status").innerText(),/Select a running TIA Portal process/);
   assert.equal(exportCalls,0);
