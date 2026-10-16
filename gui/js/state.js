@@ -9,7 +9,7 @@ const DEFAULT_PROFILE = "default";
 
 function emptyProject() {
     return {
-        plc_family: "", udts: [], dbs: [], fbs: [], fcs: [],
+        plc_family: "", udts: [], dbs: [], fbs: [], fcs: [], instance_dbs: [],
         device_config: {templates: [], groups: [], mappings: [], mapping_mode: "device"},
         tia_target: null,
     };
@@ -77,6 +77,7 @@ function assignProject(parsed, clearTiaTarget = false) {
     projectConfig.dbs = Array.isArray(parsed?.dbs) ? parsed.dbs : [];
     projectConfig.fbs = Array.isArray(parsed?.fbs) ? parsed.fbs : [];
     projectConfig.fcs = Array.isArray(parsed?.fcs) ? parsed.fcs : [];
+    projectConfig.instance_dbs = Array.isArray(parsed?.instance_dbs) ? parsed.instance_dbs : [];
     projectConfig.device_config = normalizeDeviceConfig(parsed?.device_config);
     // Preserve startup compatibility; clear bindings only when switching
     // local projects or restoring a portable backup.

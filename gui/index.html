@@ -356,6 +356,13 @@
                 </div>
                 <p id="tia-fc-import-status" class="status-box">Select an Active PLC in TIA Portal, then read available Functions.</p>
             </div>
+            <div class="card">
+                <h3>Instance DB inventory</h3>
+                <p class="hint">Lists existing Instance DBs only. The current read-only TIA inventory does not expose a verified owning-FB relation, so no association is inferred.</p>
+                <button type="button" id="tia-instance-db-scan">Read Instance DBs from TIA</button>
+                <p id="tia-instance-db-status" class="status-box">Select an Active PLC in TIA Portal, then read Instance DB inventory.</p>
+                <div id="instance-db-container"></div>
+            </div>
         </section>
 
 

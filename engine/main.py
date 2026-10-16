@@ -15,6 +15,7 @@ from engine.udt import UdtSpecification
 from engine.plc_db import DataBlockSpecification
 from engine.function_block import FunctionBlockSpecification
 from engine.function import FunctionSpecification
+from engine.instance_db import InstanceDbSnapshot
 from engine.project import (
     GeneratedProjectSource,
     ProjectSpecification,
@@ -197,6 +198,14 @@ def create_function_specification(
             detail="Functions can only be loaded as read-only TIA snapshots.",
         )
     return specification
+
+
+@app.post("/api/v1/instance-db-snapshots")
+def create_instance_db_snapshot(
+    snapshot: InstanceDbSnapshot,
+) -> InstanceDbSnapshot:
+    """Validate read-only Instance DB inventory metadata without TIA writes."""
+    return snapshot
 
 
 @app.post(

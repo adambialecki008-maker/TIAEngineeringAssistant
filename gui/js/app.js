@@ -20,6 +20,7 @@ import { initUdtTiaImportUi } from "./udt_import.js";
 import { initDbTiaImportUi } from "./db_import.js";
 import { initFbTiaImportUi } from "./fb_import.js";
 import { initFcTiaImportUi } from "./fc_import.js";
+import {initInstanceDbTiaUi, renderInstanceDbSnapshots} from "./instance_db.js";
 
 import {
     addDb,
@@ -97,6 +98,7 @@ const dbContainer =
 
 const fbContainer = document.getElementById("fb-container");
 const fcContainer = document.getElementById("fc-container");
+const instanceDbContainer = document.getElementById("instance-db-container");
 
 
 const generatePreviewButton =
@@ -166,6 +168,7 @@ function renderAll() {
     }
     if (fbContainer) renderFunctionBlocks(fbContainer, renderAll);
     if (fcContainer) renderFunctions(fcContainer, renderAll);
+    if (instanceDbContainer) renderInstanceDbSnapshots(instanceDbContainer);
 
 
     if (devicesUi) {
@@ -379,6 +382,7 @@ initUdtTiaImportUi(renderAll);
 initDbTiaImportUi(renderAll);
 initFbTiaImportUi(renderAll);
 initFcTiaImportUi(renderAll);
+initInstanceDbTiaUi(renderAll);
 const dataLibrariesUi = initDataLibrariesUi(() => {
     if (plcFamilySelect) plcFamilySelect.value = projectConfig.plc_family;
     sourceImportUi?.refreshSelection();
