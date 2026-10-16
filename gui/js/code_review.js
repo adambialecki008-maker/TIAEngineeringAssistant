@@ -5,8 +5,146 @@ function markdownText(value) {
     return String(value || "").replaceAll("|", "\\|").replaceAll("\n", " ");
 }
 
+const PRIORITY_ORDER = ["P0", "P1", "P2", "P3"];
+const PRIORITY_RANK = Object.fromEntries(PRIORITY_ORDER.map((key, index) => [key, index]));
+
+function findingPriority(finding) {
+    if (PRIORITY_ORDER.includes(finding.priority)) return finding.priority;
+    const confirmed = finding.detection_method === "rule" && finding.verification_status === "verified";
+    const severity = String(finding.severity || "").toLowerCase();
+    if (severity === "critical" || severity === "error") return confirmed ? "P0" : "P1";
+    if (severity === "warning") return confirmed ? "P1" : "P2";
+    return "P3";
+}
+
+function orderedFindings(findings) {
+    return [...findings].sort((a, b) => (
+        (PRIORITY_RANK[findingPriority(a)] - PRIORITY_RANK[findingPriority(b)])
+        || String(a.source_file || "").localeCompare(String(b.source_file || ""))
+        || String(a.block || "").localeCompare(String(b.block || ""))
+        || String(a.location || "").localeCompare(String(b.location || ""))
+        || String(a.category || "").localeCompare(String(b.category || ""))
+    ));
+}
+
+function projectReviewSummary(report) {
+    if (report.summary && typeof report.summary.total_findings === "number") return report.summary;
+    // Read-only compatibility for reports produced by older local backends.
+    const files = [];
+    const indexed = new Map();
+    for (const block of report.files || []) {
+        let record = indexed.get(block.source_file);
+        if (!record) {
+            record = {source_file:block.source_file, blocks:[], findings:0,
+                by_priority:Object.fromEntries(PRIORITY_ORDER.map(p => [p, 0]))};
+            indexed.set(block.source_file, record);
+            files.push(record);
+        }
+        record.blocks.push(block.name);
+    }
+    const by_priority = Object.fromEntries(PRIORITY_ORDER.map(p => [p, 0]));
+    const by_severity = {critical:0, error:0, warning:0, info:0};
+    const by_method = {rule:0, AI:0};
+    for (const finding of report.findings || []) {
+        const priority = findingPriority(finding);
+        by_priority[priority] += 1;
+        const sev = finding.severity || "info";
+        by_severity[sev] = (by_severity[sev] || 0) + 1;
+        const method = finding.detection_method || "rule";
+        by_method[method] = (by_method[method] || 0) + 1;
+        if (!indexed.has(finding.source_file)) {
+            const record = {source_file:finding.source_file, blocks:[], findings:0,
+                by_priority:Object.fromEntries(PRIORITY_ORDER.map(p => [p, 0]))};
+            indexed.set(finding.source_file, record);
+            files.push(record);
+        }
+        const bucket = indexed.get(finding.source_file);
+        bucket.findings += 1;
+        bucket.by_priority[priority] += 1;
+    }
+    return {
+        analyzed_files:files.length, analyzed_blocks:(report.files || []).length,
+        incomplete_blocks:(report.files || []).filter(b => b.verification_status !== "parsed").length,
+        total_findings:(report.findings || []).length,
+        by_priority, by_severity, by_method, files,
+    };
+}
+
+function appendReviewCell(row, value, tag = "td") {
+    const cell = document.createElement(tag);
+    cell.textContent = String(value ?? "");
+    row.appendChild(cell);
+    return cell;
+}
+
+function renderProjectSummary(report, parent) {
+    const summary = projectReviewSummary(report);
+    const section = document.createElement("section");
+    section.className = "review-project-summary";
+    const title = document.createElement("h3");
+    title.textContent = "Project overview";
+    section.appendChild(title);
+    const metrics = document.createElement("p");
+    metrics.className = "review-summary-metrics";
+    metrics.textContent = summary.analyzed_files + " files · " + summary.analyzed_blocks
+        + " blocks · " + summary.total_findings + " findings · "
+        + summary.incomplete_blocks + " incompletely parsed blocks";
+    section.appendChild(metrics);
+    const priority = document.createElement("p");
+    priority.className = "review-priority-summary";
+    priority.textContent = PRIORITY_ORDER.map(p => p + ": " + (summary.by_priority?.[p] || 0)).join("  ·  ")
+        + "  |  AI: " + (summary.by_method?.AI || 0)
+        + "  |  Rules: " + (summary.by_method?.rule || 0);
+    section.appendChild(priority);
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "P0: verified critical/error · P1: high attention · P2: review · P3: informational. "
+        + "Unverified AI findings cannot be P0. Priorities are triage hints, not PLC compilation results.";
+    section.appendChild(note);
+    const wrapper = document.createElement("div");
+    wrapper.className = "table-wrapper";
+    const table = document.createElement("table");
+    table.className = "management-table review-file-summary";
+    const header = document.createElement("tr");
+    for (const key of ["File", "Blocks", "P0", "P1", "P2", "P3", "Findings"]) {
+        appendReviewCell(header, key, "th");
+    }
+    const thead = document.createElement("thead");
+    thead.appendChild(header);
+    const tbody = document.createElement("tbody");
+    for (const file of summary.files || []) {
+        const row = document.createElement("tr");
+        appendReviewCell(row, file.source_file);
+        appendReviewCell(row, (file.blocks || []).join(", ") || "—");
+        for (const p of PRIORITY_ORDER) appendReviewCell(row, file.by_priority?.[p] || 0);
+        appendReviewCell(row, file.findings || 0);
+        tbody.appendChild(row);
+    }
+    table.append(thead, tbody);
+    wrapper.appendChild(table);
+    section.appendChild(wrapper);
+    parent.appendChild(section);
+}
+
 function reportMarkdown(report) {
     const lines = ["# PLC Code Review", "", "Read-only local analysis report.", ""];
+    const overview = projectReviewSummary(report);
+    lines.push("## Project overview", "",
+        "Files: " + overview.analyzed_files + "; blocks: " + overview.analyzed_blocks
+            + "; findings: " + overview.total_findings
+            + "; incomplete blocks: " + overview.incomplete_blocks + ".", "",
+        "Priority counts: " + PRIORITY_ORDER.map(p => p + "=" + (overview.by_priority?.[p] || 0)).join("; "), "",
+        "P0: verified critical/error. Unverified AI suggestions cannot be P0.", "",
+        "| File | Blocks | P0 | P1 | P2 | P3 | Total |",
+        "| --- | --- | --- | --- | --- | --- | --- |");
+    for (const file of overview.files || []) {
+        lines.push("| " + [
+            file.source_file, (file.blocks || []).join(", ") || "—",
+            ...PRIORITY_ORDER.map(p => String(file.by_priority?.[p] || 0)),
+            String(file.findings || 0),
+        ].map(markdownText).join(" | ") + " |");
+    }
+    lines.push("");
     lines.push("## Files", "", "| Source | Block | Type | Language | Verification |", "| --- | --- | --- | --- | --- |");
     for (const block of report.files) lines.push("| " + [block.source_file, block.name, block.block_type, block.language, block.verification_status].map(markdownText).join(" | ") + " |");
     const networkBlocks = report.files.filter(block => (block.network_details || []).length);
@@ -92,8 +230,8 @@ function reportMarkdown(report) {
     }
     lines.push("", "## Findings", "");
     if (!report.findings.length) lines.push("No findings reported.");
-    for (const finding of report.findings) {
-        lines.push("### " + markdownText(finding.category) + " — " + markdownText(finding.severity));
+    for (const finding of orderedFindings(report.findings)) {
+        lines.push("### [" + findingPriority(finding) + "] " + markdownText(finding.category) + " — " + markdownText(finding.severity));
         lines.push("- Source: " + markdownText(finding.source_file));
         lines.push("- Block: " + markdownText(finding.block));
         lines.push("- Location: " + markdownText(finding.location || "Not provided"));
@@ -284,39 +422,165 @@ function renderVariableUsage(block, parent) {
 }
 
 function renderReport(report, results) {
+    // Preserve selected filters on refresh after a local AI enrichment run.
+    const chosen = Object.fromEntries(["priority", "severity", "method", "file", "query"].map(key => [
+        key, results.querySelector("#review-filter-" + key)?.value || "",
+    ]));
     results.replaceChildren();
-    const summary = document.createElement("p");
-    summary.className = "hint";
-    const aiCount = report.findings.filter(item => item.detection_method === "AI").length;
-    summary.textContent = report.files.length + " parsed file(s), " + report.findings.length
-        + " finding(s)" + (aiCount ? ", including " + aiCount + " unverified AI suggestion(s)." : ".");
-    results.appendChild(summary);
+    renderProjectSummary(report, results);
+    const blocks = document.createElement("details");
+    blocks.className = "review-block-details";
+    const heading = document.createElement("summary");
+    heading.textContent = "Parsed block details (" + report.files.length + ")";
+    blocks.appendChild(heading);
     for (const block of report.files) {
         const details = document.createElement("details");
         const title = document.createElement("summary");
         title.textContent = block.name + " · " + block.block_type + " · " + block.language;
         const body = document.createElement("pre");
-        body.textContent = JSON.stringify({declarations:block.declarations, dependencies:block.dependencies, networks:block.networks, warnings:block.parsing_warnings, verification:block.verification_status}, null, 2);
+        body.textContent = JSON.stringify({
+            declarations:block.declarations, dependencies:block.dependencies,
+            networks:block.networks, warnings:block.parsing_warnings,
+            verification:block.verification_status,
+        }, null, 2);
         details.append(title, body);
         renderNetworkTopology(block, details);
         renderBlockCalls(block, details);
         renderVariableUsage(block, details);
-        results.appendChild(details);
+        blocks.appendChild(details);
     }
-    for (const finding of report.findings) {
-        const item = document.createElement("p");
-        item.className = "status-box " + (finding.detection_method === "AI" ? "warning" : "error");
-        const confidence = finding.confidence == null ? "" : " (confidence " + finding.confidence + ")";
-        item.textContent = "[" + finding.detection_method + "/" + finding.severity + "] "
-            + (finding.block || finding.source_file) + " " + finding.location + ": "
-            + finding.category + " — " + finding.explanation + confidence;
-        results.appendChild(item);
-    }
+    results.appendChild(blocks);
+    const findingsSection = document.createElement("section");
+    findingsSection.className = "review-findings";
+    const title = document.createElement("h3");
+    title.textContent = "Findings by priority";
+    findingsSection.appendChild(title);
+    const filters = document.createElement("div");
+    filters.className = "review-filter-controls";
+    const selectors = {};
+    const field = (key, title, entries, input = false) => {
+        const label = document.createElement("label");
+        label.textContent = title;
+        const element = document.createElement(input ? "input" : "select");
+        element.id = "review-filter-" + key;
+        element.setAttribute("aria-label", title);
+        if (input) {
+            element.type = "search";
+            element.placeholder = "Search finding text";
+        } else {
+            for (const [value, name] of entries) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = name;
+                element.appendChild(option);
+            }
+        }
+        element.value = chosen[key] || "";
+        if (!input && element.value !== (chosen[key] || "")) element.value = "";
+        label.appendChild(element);
+        filters.appendChild(label);
+        selectors[key] = element;
+    };
+    field("priority", "Priority", [["", "All priorities"],
+        ...PRIORITY_ORDER.map(p => [p, p])]);
+    field("severity", "Severity", [["", "All severities"],
+        ...["critical", "error", "warning", "info"].map(v => [v, v])]);
+    field("method", "Detection", [["", "All methods"], ["rule", "Rule"], ["AI", "AI"]]);
+    field("file", "Source file", [["", "All files"],
+        ...[...new Set([
+            ...report.files.map(b => b.source_file),
+            ...report.findings.map(f => f.source_file),
+        ])].sort().map(name => [name, name])]);
+    field("query", "Search", [], true);
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "secondary-button";
+    reset.textContent = "Clear filters";
+    filters.appendChild(reset);
+    findingsSection.appendChild(filters);
+    const counts = document.createElement("p");
+    counts.className = "hint review-visible-count";
+    counts.setAttribute("aria-live", "polite");
+    findingsSection.appendChild(counts);
+    const list = document.createElement("div");
+    list.className = "review-findings-list";
+    findingsSection.appendChild(list);
+    const sorted = orderedFindings(report.findings);
+    const refresh = () => {
+        const matching = sorted.filter(finding => {
+            if (selectors.priority.value && findingPriority(finding) !== selectors.priority.value) return false;
+            if (selectors.severity.value && finding.severity !== selectors.severity.value) return false;
+            if (selectors.method.value && finding.detection_method !== selectors.method.value) return false;
+            if (selectors.file.value && finding.source_file !== selectors.file.value) return false;
+            const needle = selectors.query.value.trim().toLocaleLowerCase();
+            return !needle || [
+                finding.source_file, finding.block, finding.location,
+                finding.category, finding.explanation, finding.evidence,
+                finding.suggested_fix, finding.verification_status,
+            ].some(value => String(value || "").toLocaleLowerCase().includes(needle));
+        });
+        counts.textContent = "Showing " + matching.length + " of " + report.findings.length
+            + " findings. JSON/Markdown exports always contain the full report.";
+        const rows = matching.map(finding => {
+            const item = document.createElement("article");
+            const priority = findingPriority(finding);
+            item.className = "review-finding-row";
+            item.dataset.priority = priority;
+            item.dataset.method = finding.detection_method || "rule";
+            const heading = document.createElement("strong");
+            heading.textContent = "[" + priority + " · " + finding.severity + "] "
+                + finding.category;
+            item.appendChild(heading);
+            const context = document.createElement("p");
+            context.className = "hint";
+            context.textContent = finding.source_file + " · "
+                + (finding.block || "Unknown block")
+                + (finding.location ? " · " + finding.location : "")
+                + " · " + finding.detection_method
+                + " · " + finding.verification_status;
+            item.appendChild(context);
+            const description = document.createElement("p");
+            description.textContent = finding.explanation;
+            item.appendChild(description);
+            if (finding.suggested_fix) {
+                const fix = document.createElement("p");
+                fix.className = "hint";
+                fix.textContent = "Suggested check: " + finding.suggested_fix;
+                item.appendChild(fix);
+            }
+            return item;
+        });
+        if (!rows.length) {
+            const empty = document.createElement("p");
+            empty.className = "hint";
+            empty.textContent = report.findings.length
+                ? "No findings match these filters." : "No findings reported.";
+            rows.push(empty);
+        }
+        list.replaceChildren(...rows);
+    };
+    Object.values(selectors).forEach(select => select.addEventListener(
+        select.type === "search" ? "input" : "change", refresh,
+    ));
+    reset.addEventListener("click", () => {
+        Object.values(selectors).forEach(select => { select.value = ""; });
+        refresh();
+    });
+    refresh();
+    results.appendChild(findingsSection);
     if (report.file_warnings.length) {
-        const warning = document.createElement("p");
-        warning.className = "hint";
-        warning.textContent = report.file_warnings.join(" ");
-        results.appendChild(warning);
+        const warnings = document.createElement("details");
+        warnings.className = "review-file-warnings";
+        const heading = document.createElement("summary");
+        heading.textContent = "Review warnings (" + report.file_warnings.length + ")";
+        const list = document.createElement("ul");
+        for (const text of report.file_warnings) {
+            const item = document.createElement("li");
+            item.textContent = text;
+            list.appendChild(item);
+        }
+        warnings.append(heading, list);
+        results.appendChild(warnings);
     }
 }
 

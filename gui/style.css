@@ -3263,3 +3263,27 @@ details:not([open]) { border-color: var(--ui-border-soft); }
     margin: 4px 0 12px;
     color: var(--ui-text);
 }
+
+
+/* Read-only PLC Code Review: compact project scorecard and filterable findings. */
+.review-project-summary { margin: 16px 0; padding: 14px; border: 1px solid var(--ui-border-soft, #365268); border-radius: 6px; }
+.review-project-summary > h3, .review-findings > h3 { margin: 0 0 10px; }
+.review-summary-metrics { margin: 0 0 8px; font-weight: 600; }
+.review-priority-summary { margin: 0 0 8px; font-variant-numeric: tabular-nums; }
+.review-project-summary .table-wrapper { max-height: 330px; overflow: auto; }
+.review-block-details { margin: 14px 0; padding: 12px; border: 1px solid var(--ui-border-soft, #365268); border-radius: 6px; }
+.review-block-details > summary { cursor: pointer; font-weight: 600; }
+.review-block-details > details { margin: 10px 6px 0; }
+.review-findings { margin: 16px 0; }
+.review-filter-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 10px 0 12px; }
+.review-filter-controls > label { display: flex; flex-direction: column; gap: 5px; min-width: 125px; flex: 1 1 135px; font-size: 12px; }
+.review-filter-controls > label:last-of-type { flex: 2 1 200px; }
+.review-filter-controls select, .review-filter-controls input { width: 100%; min-width: 0; }
+.review-findings-list { display: grid; gap: 8px; }
+.review-finding-row { padding: 12px 14px; border: 1px solid var(--ui-border-soft, #365268); border-left-width: 3px; border-radius: 5px; }
+.review-finding-row[data-priority="P0"] { border-left-color: #d78484; }
+.review-finding-row[data-priority="P1"] { border-left-color: #d9a767; }
+.review-finding-row[data-priority="P2"] { border-left-color: #7aa8ca; }
+.review-finding-row[data-priority="P3"] { border-left-color: var(--ui-border-soft, #365268); }
+.review-finding-row p { margin: 5px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-file-warnings { margin-top: 12px; }

@@ -705,3 +705,19 @@
 
 - FB/FC cards now share the same standard engineering disclosure header/arrow through shared CSS classes. Custom chevron removed.
 - Local Ollama status now reports incomplete JSON output as partial/unavailable without losing deterministic results.
+
+## Point 5 completed: project overview, triage priorities and filters — 2026-10-16
+
+- Backend assigns certainty-aware priority P0–P3 and exposes project-wide
+  summary totals, severity/method/verification counts and per-source breakdown.
+  Unverified AI findings can never be P0; the report remains read-only.
+- GUI shows project scorecard, per-file priority matrix and sortable-by-priority
+  findings with filters for priority, severity, AI/rule detection, source and
+  free-text search. Clear filters and result counts are provided.
+- Parsed block details remain available behind a separate disclosure section.
+  Report warnings have a dedicated expandable list.
+- JSON and Markdown exports include the full report regardless of active
+  on-screen filters; Markdown has the project overview and priority-ranked
+  findings in a deterministic order.
+- Backend and Chromium regression cover counts, priority integrity, filtering,
+  Markdown export and AI enrichment. Actual TIA/Ollama integration is separate.
