@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 
 from engine.plc_db import DataBlockSpecification
 from engine.udt import UdtSpecification
+from engine.function_block import FunctionBlockSpecification
 
 
 class ProjectSpecification(BaseModel):
@@ -11,6 +12,7 @@ class ProjectSpecification(BaseModel):
 
     udts: list[UdtSpecification] = []
     dbs: list[DataBlockSpecification] = []
+    fbs: list[FunctionBlockSpecification] = []
 
 
 class GeneratedProjectSource(BaseModel):
