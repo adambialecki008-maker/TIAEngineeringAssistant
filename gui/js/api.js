@@ -44,26 +44,6 @@ export async function getJson(
 }
 
 
-// Bounded GET for expensive TIA project enumeration; the ordinary
-// getJson calls stay unchanged for other UI and HMI workflows.
-export async function getJsonWithTimeout(url, timeoutMs = 105000) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        return await requestJson(url, {signal: controller.signal});
-    } catch (error) {
-        if (error?.name === "AbortError") {
-            throw Error("TIA project discovery timed out after "
-                + Math.ceil(timeoutMs / 1000) + " seconds. "
-                + "Check for a busy or blocked TIA Portal session, then retry.");
-        }
-        throw error;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-
 export async function postJson(
     url,
     payload
