@@ -45,6 +45,13 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         assert.equal(await page.locator('#overview-tia-controls #tia-process').count(),1);
         assert.equal(await page.locator('[data-tab-panel="plc"] #tia-process').count(),0);
         assert.equal(await page.locator('[data-tab-panel="hmi"] #tia-hmi-process').count(),0);
+        // Both Overview control groups are collapsed on initial render.
+        // Test the actual visible interaction rather than bypassing it.
+        for (const section of ["Connection to TIA Portal", "Choose Active PLC"]) {
+            await page.locator("#overview-tia-controls > details")
+                .filter({has: page.locator("summary", {hasText: section})})
+                .locator(":scope > summary").click();
+        }
         await page.locator('#tia-process option[value="123"]').waitFor({state:"attached"});
         await page.locator("#tia-process").selectOption("123");
         await page.locator('#tia-existing-plcs-body').getByRole("button",{name:"Use"}).click();

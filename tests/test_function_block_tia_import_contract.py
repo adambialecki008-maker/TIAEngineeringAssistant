@@ -90,7 +90,11 @@ def test_fb_import_ui_is_wired_to_read_only_program_block_endpoints():
     assert 'function-block-specifications' in ui
     assert 'TIA Portal was NOT modified' in ui
     assert 'unsupported FB section' in converter
-    assert '"LAD", "KOP", "FBD"' in converter and 'source_xml' in converter
+    # The localized ladder alias remains accepted internally, but the app
+    # presents the standard LAD label and preserves the original XML.
+    assert 'rawLanguage === "KOP" ? "LAD" : rawLanguage' in converter
+    assert '["SCL", "LAD", "FBD"]' in converter and 'source_xml' in converter
+    assert "Only SCL, LAD and FBD" in converter
     assert 'source_mode: "tia_read_only"' in converter
     assert 'New Function Block' not in page
     assert 'id="tia-fc-scan"' in page and 'function-specifications' in fc_ui
