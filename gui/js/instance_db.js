@@ -20,8 +20,13 @@ export function renderInstanceDbSnapshots(host) {
         return;
     }
     for (const db of projectConfig.instance_dbs) {
-        const row = document.createElement("details");
-        const summary = document.createElement("summary");
+        const onlyInstance = projectConfig.instance_dbs.length === 1;
+        const row = document.createElement(onlyInstance ? "section" : "details");
+        const summary = document.createElement(onlyInstance ? "h4" : "summary");
+        if (onlyInstance) {
+            row.className = "single-engineering-item";
+            summary.className = "single-engineering-item-title";
+        }
         summary.textContent = db.name + (db.number == null ? "" : " — DB " + db.number)
             + " [" + (db.group_path || "root") + "]";
         const detail = document.createElement("p");
