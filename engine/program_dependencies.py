@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from engine.project import ProjectSpecification
 from engine.instance_db import InstanceDbSnapshot
+from engine.tia.type_registry import is_builtin_type
 
 
 def _declarations(members, prefix=""):
@@ -25,6 +26,14 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
     udts = {x.name.casefold(): x for x in project.udts}
     fbs = {x.name.casefold(): x for x in project.fbs}
     nodes, edges, unresolved = [], [], []
+    unresolved_keys = set()
+
+    def add_unresolved(object_name, reason):
+        """Keep the report readable when the same declaration is visited twice."""
+        key = (object_name.casefold(), reason)
+        if key not in unresolved_keys:
+            unresolved_keys.add(key)
+            unresolved.append({"object": object_name, "reason": reason})
     for kind, objects in (("UDT", project.udts), ("DB", project.dbs),
                           ("FB", project.fbs), ("FC", project.fcs),
                           ("Instance DB", project.instance_dbs)):
@@ -41,18 +50,28 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
                 "input", "output", "inout", "temp", "constant")
             sections = ((section, getattr(obj, section).members) for section in names)
         for section, members in sections:
+            section_label = section[:1].upper() + section[1:]
             for path, data_type in _declarations(members):
                 if not data_type:
                     continue
                 key = data_type.casefold()
                 if key in udts:
                     edges.append({"dependency": udts[key].name, "dependent": obj.name,
-                                  "dependent_kind": kind, "member": section + "." + path,
+                                  "dependent_kind": kind, "member": section_label + "." + path,
                                   "relation": "uses UDT", "status": "local declaration"})
                 elif key in fbs and kind == "FB" and section.casefold() == "static":
                     edges.append({"dependency": fbs[key].name, "dependent": obj.name,
-                                  "dependent_kind": kind, "member": section + "." + path,
+                                  "dependent_kind": kind, "member": section_label + "." + path,
                                   "relation": "multi-instance", "status": "local declaration"})
+                elif not is_builtin_type(data_type):
+                    # It may be a type that exists only in the remote TIA
+                    # project. Do not infer or create it; make the unknown
+                    # dependency visible for manual review instead.
+                    add_unresolved(
+                        obj.name,
+                        section_label + "." + path + ": " + data_type
+                        + " is neither a local UDT/FB nor a registered Siemens type.",
+                    )
 
     for kind, items in (("UDT", project.udts), ("DB", project.dbs),
                         ("FB", project.fbs), ("FC", project.fcs)):
@@ -60,11 +79,10 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
             add_edges(kind, obj)
             if kind in {"FB", "FC"}:
                 if obj.created_locally:
-                    unresolved.append({"object": obj.name,
-                                       "reason": "Locally created declarations only; no PLC program or verified TIA block."})
+                    add_unresolved(obj.name,
+                                   "Locally created declarations only; no PLC program or verified TIA block.")
                 elif obj.source_mode != "tia_read_only" or not obj.interface_verified:
-                    unresolved.append({"object": obj.name,
-                                       "reason": "Block interface is not a verified TIA snapshot."})
+                    add_unresolved(obj.name, "Block interface is not a verified TIA snapshot.")
     for obj in project.instance_dbs:
         if isinstance(obj, InstanceDbSnapshot):
             if obj.relationship_status == "reported_by_openness" and obj.function_block:
@@ -72,9 +90,19 @@ def report_program_dependencies(project: ProjectSpecification) -> dict:
                               "dependent_kind": "Instance DB", "member": "",
                               "relation": "instance of",
                               "status": "reported by Openness; V21 smoke not confirmed"})
+                owner = fbs.get(obj.function_block.casefold())
+                if not owner:
+                    add_unresolved(obj.name,
+                                   "Owning Function Block reported by Openness is not present in the local FB inventory: "
+                                   + obj.function_block + ".")
+                elif not owner.interface_verified:
+                    add_unresolved(obj.name,
+                                   "Owning Function Block interface is unverified: " + owner.name + ".")
+                elif owner.number is not None and obj.instance_of_number != owner.number:
+                    add_unresolved(obj.name,
+                                   "Openness owner number does not match the local FB snapshot: " + owner.name + ".")
             else:
-                unresolved.append({"object": obj.name,
-                                   "reason": "Owning Function Block not reported by TIA Openness."})
+                add_unresolved(obj.name, "Owning Function Block not reported by TIA Openness.")
         else:
             edges.append({"dependency": obj.function_block, "dependent": obj.name,
                           "dependent_kind": "Instance DB", "member": "",

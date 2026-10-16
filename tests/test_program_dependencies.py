@@ -53,3 +53,27 @@ def test_program_dependency_api_is_read_only(monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["edges"][0]["relation"] == "uses UDT"
     assert response.json()["tia_write_allowed"] is False
+
+
+def test_report_marks_unknown_types_and_incomplete_instance_db_owner_metadata():
+    project = ProjectSpecification.model_validate({
+        "fbs": [{"name": "FB_Existing", "number": 4,
+                 "source_mode": "tia_read_only", "source_xml": "<FB/>",
+                 "input": {"name": "Input", "members": [
+                     {"name": "RemoteOnly", "data_type": "UDT_RemoteOnly"}
+                 ]}}],
+        "instance_dbs": [{"name": "DB_RemoteOwner", "block_kind": "InstanceDB",
+                          "source_mode": "tia_read_only", "is_consistent": True,
+                          "function_block": "FB_NotImported", "instance_of_type": "FB",
+                          "instance_of_number": 9,
+                          "relationship_status": "reported_by_openness"}],
+    })
+
+    result = report_program_dependencies(project)
+
+    assert any(item["object"] == "FB_Existing" and "Input.RemoteOnly" in item["reason"]
+               and "UDT_RemoteOnly" in item["reason"] for item in result["unresolved"])
+    assert any(item["object"] == "DB_RemoteOwner" and "FB_NotImported" in item["reason"]
+               for item in result["unresolved"])
+    assert any(edge["dependent"] == "DB_RemoteOwner" and edge["relation"] == "instance of"
+               for edge in result["edges"])
