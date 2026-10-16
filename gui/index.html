@@ -415,7 +415,7 @@
 
                     <p class="panel-description">
                         Inspect the Active PLC hardware, tags,
-                        program blocks and DB/UDT structures.
+                        program blocks and DB/UDT structures, or create a PLC.
                     </p>
                 </div>
             </div>
@@ -983,6 +983,156 @@
                         </table>
 
                     </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <div>
+                        <h3>
+                            Create PLC
+                        </h3>
+
+                        <p class="hint">
+                            Select the PLC family and load matching models directly
+                            from the local TIA Portal V21 Hardware Catalog.
+                        </p>
+                    </div>
+
+                    <button
+                        id="tia-load-models-button"
+                        type="button"
+                    >
+                        Load PLC models
+                    </button>
+                </div>
+
+
+                <div class="form-grid">
+
+                    <div class="field-group">
+                        <label for="plc-family">
+                            PLC family:
+                        </label>
+
+                        <select id="plc-family">
+
+                            <option value="">
+                                Select PLC
+                            </option>
+
+                            <option value="S7-1200">
+                                S7-1200
+                            </option>
+
+                            <option value="S7-1200-G2">
+                                S7-1200 G2
+                            </option>
+
+                            <option value="S7-1500">
+                                S7-1500
+                            </option>
+
+                            <option value="ET-200">
+                                ET 200 CPU (SP / pro)
+                            </option>
+
+                        </select>
+                    </div>
+
+
+                    <div class="field-group">
+
+                        <label for="tia-plc-model">
+                            PLC model:
+                        </label>
+
+                        <select
+                            id="tia-plc-model"
+                            disabled
+                        >
+                            <option value="">
+                                Load models first
+                            </option>
+                        </select>
+
+                    </div>
+
+
+                    <div class="field-group">
+
+                        <label for="tia-device-name">
+                            Device name:
+                        </label>
+
+                        <input
+                            id="tia-device-name"
+                            type="text"
+                            placeholder="S7-1500 Station_2"
+                        >
+
+                    </div>
+
+
+                    <div class="field-group">
+
+                        <label for="tia-plc-name">
+                            PLC name:
+                        </label>
+
+                        <input
+                            id="tia-plc-name"
+                            type="text"
+                            placeholder="PLC_2"
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="tia-manual-container"
+                    class="manual-selection hidden"
+                >
+
+                    <div class="field-group">
+
+                        <label for="tia-manual-code">
+                            Catalog order number:
+                        </label>
+
+                        <input
+                            id="tia-manual-code"
+                            type="text"
+                            placeholder="6ES7511-1AL03-0AB0"
+                        >
+
+                    </div>
+
+                    <p class="hint">
+                        Accepted examples:
+                        6ES7511-1AL03-0AB0,
+                        6ES7 511-1AL03-0AB0,
+                        or OrderNumber:6ES7 511-1AL03-0AB0/V4.1.
+                    </p>
+
+                </div>
+
+
+                <div class="action-row create-plc-actions">
+
+                    <button
+                        id="tia-create-plc-button"
+                        type="button"
+                        class="primary-button"
+                    >
+                        Create PLC in TIA
+                    </button>
 
                 </div>
 
@@ -2264,49 +2414,34 @@
         </section>
 
         <section class="tab-panel" data-tab-panel="review">
-            <div class="panel-header"><h2>PLC Code Review</h2><p>Read-only local analysis of SCL and exported XML. TIA project binaries are not accepted.</p></div>
+            <div class="panel-header">
+                <h2>PLC Code Review</h2>
+                <p>Read-only analysis from loaded TIA blocks and full-project export for ChatGPT.</p>
+            </div>
             <div class="card">
-                <h3>Analyze Files</h3>
-                <p class="hint">Select `.scl` and XML/SimaticML exports. Files stay in this browser session and are sent only to the local application.</p>
-                <div class="action-row"><input id="review-files" type="file" accept=".scl,.xml" multiple><input id="review-folder" type="file" accept=".scl,.xml" webkitdirectory multiple><button id="review-analyze" type="button">Analyze</button><button id="review-download" type="button" class="secondary-button" disabled>Download JSON</button><button id="review-download-markdown" type="button" class="secondary-button" disabled>Download Markdown</button></div>
-                <p class="hint">Deterministic local review, without built-in AI. Export file for LLM review reads the <strong>entire open TIA Portal project</strong> through Siemens Openness, not just the loaded profile.</p>
-                <p id="review-status" class="status-box" aria-live="polite">Select PLC source files or a folder.</p>
-                <ul id="review-files-list" class="hint"></ul>
-                <div id="review-results"></div>
-                <div class="action-row"><button id="review-export-llm" type="button" class="secondary-button">Export file for LLM review — entire TIA project</button></div>
-                <p id="review-export-llm-status" class="hint" aria-live="polite">Requires a running TIA Portal V21 process with one open project. Exports all detected PLCs, their blocks, UDTs, tags, hardware inventory and supported HMI objects to a read-only ZIP. Unsupported or protected objects are recorded in TIA_MISSING.tsv; this is not a native .zap21 backup.</p>
-                <details id="review-proposal-panel" class="ui-disclosure review-proposal-panel" hidden>
-                    <summary class="ui-disclosure-heading">SCL change proposal — preview and export copy</summary>
-                    <div class="review-proposal-content">
-                        <p class="hint">No automatic code changes. Choose existing SCL lines, enter the intended replacement, review the exact diff, and explicitly approve a separately downloaded copy. AI findings are advice, not patch code. No TIA write or compile.</p>
-                        <p id="review-proposal-guidance" class="hint"></p>
-                        <div class="review-proposal-controls">
-                            <label>Source SCL file <select id="review-proposal-file" aria-label="SCL source for change proposal" disabled></select></label>
-                            <label>First line <input id="review-proposal-start" type="number" min="1" value="1"></label>
-                            <label>Last line <input id="review-proposal-end" type="number" min="1" value="1"></label>
-                        </div>
-                        <label for="review-proposal-original">Original selected lines (read-only)</label>
-                        <pre id="review-proposal-original" class="review-proposal-code"></pre>
-                        <label for="review-proposal-replacement">Proposed replacement SCL</label>
-                        <textarea id="review-proposal-replacement" rows="5" spellcheck="false" aria-label="Proposed SCL replacement"></textarea>
-                        <div class="action-row"><button id="review-proposal-preview" type="button" disabled>Preview unified diff</button></div>
-                        <pre id="review-proposal-diff" class="review-proposal-code review-proposal-diff" aria-label="Proposed source diff"></pre>
-                        <label class="review-proposal-approval">
-                            <input id="review-proposal-approve" type="checkbox" disabled>
-                            I have reviewed the exact diff and want a separate uncompiled SCL copy.
-                        </label>
-                        <div class="action-row">
-                            <button id="review-proposal-download" type="button" class="secondary-button" disabled>Download approved .reviewed.scl copy</button>
-                        </div>
-                        <p id="review-proposal-status" class="hint" aria-live="polite"></p>
-                    </div>
-                </details>
+                <h3>Export entire TIA Portal project</h3>
+                <p class="hint">
+                    Read the selected open TIA Portal V21 project through Siemens Openness.
+                    Export available PLC blocks, DB/UDT, device inventory and supported HMI
+                    objects as a ZIP for ChatGPT. Missing or unsupported items are listed
+                    in TIA_MISSING.tsv. No project write or LLM request.
+                </p>
+                <div class="action-row">
+                    <button id="review-export-llm" type="button" class="secondary-button">Export file for LLM review</button>
+                </div>
+                <p id="review-export-llm-status" class="hint" aria-live="polite">
+                    Select a TIA Portal process in the TIA connection panel before exporting.
+                    The ZIP is not a native .zap21 project backup.
+                </p>
             </div>
             <div class="card">
                 <h3>Analyze from TIA</h3>
-                <p class="hint">Analyze original XML retained in locally loaded, read-only FB and FC snapshots. This reads no new data and never writes to TIA Portal.</p>
-                <div class="action-row"><button id="review-tia-analyze" type="button">Analyze loaded TIA blocks</button></div>
+                <p class="hint">Analyze original XML from locally loaded read-only FB/FC snapshots. No project changes.</p>
+                <div class="action-row">
+                    <button id="review-tia-analyze" type="button">Analyze loaded TIA blocks</button>
+                </div>
                 <p id="review-tia-status" class="hint" aria-live="polite">Load FB or FC snapshots from TIA first.</p>
+                <div id="review-results"></div>
             </div>
         </section>
 

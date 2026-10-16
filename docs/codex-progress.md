@@ -773,3 +773,16 @@
 
 - Retained ET 200 Openness catalog support while removing its former UI selector; regression tests updated to match the narrower screen scope.
 - Existing PLC rename/delete APIs continue to use /api/v1/tia/plcs and are intentionally untouched.
+
+## Correct Analyze Files removal / restore Create PLC — 2026-10-16
+
+- Corrected earlier mistaken removal of the Create PLC hardware creation UI:
+  restored original HTML, JavaScript handlers and tests from the preceding commit.
+- Removed the **Analyze Files** card (manual SCL/XML uploads, folder selection,
+  Analyze and associated JSON/Markdown download buttons) from PLC Code Review.
+- Retained the **Export file for LLM review** action targeting the whole open
+  TIA Portal project through Siemens Openness, and **Analyze from TIA**.
+- Removed GUI-only, now-orphaned manual SCL patch panel while leaving the
+  backend preview endpoint unchanged for compatibility.
+- Updated Chromium regression to verify removed UI, restored Create PLC,
+  TIA snapshot analysis and the whole-project ZIP download.

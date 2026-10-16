@@ -421,163 +421,7 @@ function renderVariableUsage(block, parent) {
     parent.appendChild(section);
 }
 
-async function textSha256(text) {
-    const bytes = new TextEncoder().encode(text);
-    const hash = await crypto.subtle.digest("SHA-256", bytes);
-    return Array.from(new Uint8Array(hash), value => value.toString(16).padStart(2, "0")).join("");
-}
-
-function splitSclSourceLines(source) {
-    // Preserve exact original CRLF/LF for the stale-source comparison.
-    return source.match(/[^\n]*\n|[^\n]+$/g) || [];
-}
-
-function setupSclProposalUi() {
-    const panel = document.getElementById("review-proposal-panel");
-    const select = document.getElementById("review-proposal-file");
-    const start = document.getElementById("review-proposal-start");
-    const end = document.getElementById("review-proposal-end");
-    const before = document.getElementById("review-proposal-original");
-    const replacement = document.getElementById("review-proposal-replacement");
-    const guidance = document.getElementById("review-proposal-guidance");
-    const previewButton = document.getElementById("review-proposal-preview");
-    const diff = document.getElementById("review-proposal-diff");
-    const approve = document.getElementById("review-proposal-approve");
-    const download = document.getElementById("review-proposal-download");
-    const status = document.getElementById("review-proposal-status");
-    if (![panel, select, start, end, before, replacement, guidance,
-        previewButton, diff, approve, download, status].every(Boolean)) return null;
-    let sources = [];
-    let preview = null;
-    const activeFile = () => sources.find(file => file.name === select.value);
-    const selectedRange = () => {
-        const file = activeFile();
-        if (!file) return null;
-        const lines = splitSclSourceLines(file.content);
-        const first = Number(start.value), last = Number(end.value);
-        if (!Number.isInteger(first) || !Number.isInteger(last)
-            || first < 1 || last < first || last > lines.length || last - first >= 20) {
-            return null;
-        }
-        return {file, original:lines.slice(first - 1, last).join(""), first, last};
-    };
-    const invalidate = () => {
-        preview = null;
-        diff.textContent = "";
-        approve.checked = false;
-        approve.disabled = true;
-        download.disabled = true;
-    };
-    const updateSource = (resetReplacement = false) => {
-        invalidate();
-        const range = selectedRange();
-        before.textContent = range ? range.original : "Select 1–20 valid existing SCL lines.";
-        previewButton.disabled = !range;
-        if (resetReplacement) {
-            replacement.value = range ? range.original.replace(/\r?\n$/, "") : "";
-        }
-        status.textContent = range
-            ? "Draft only — preview the diff, then explicitly approve a new file copy."
-            : "Choose a valid SCL file and line range.";
-    };
-    const configure = (report, payload) => {
-        sources = (payload || []).filter(file =>
-            /\.scl$/i.test(file.name)
-            && (report?.files || []).some(block =>
-                block.source_file === file.name && block.language === "SCL"
-                && block.verification_status !== "failed")
-            && !file.name.replaceAll("\\", "/").split("/").includes("..")
-        );
-        select.replaceChildren(...sources.map(file => {
-            const option = document.createElement("option");
-            option.value = file.name;
-            option.textContent = file.name;
-            return option;
-        }));
-        select.disabled = !sources.length;
-        panel.hidden = !sources.length;
-        panel.open = false;
-        start.value = "1";
-        end.value = "1";
-        guidance.textContent = "Proposed replacement is edited by you. AI suggestions are guidance only, never executable patches.";
-        updateSource(true);
-    };
-    const prepare = finding => {
-        const file = sources.find(source => source.name === finding.source_file);
-        if (!file) return;
-        select.value = file.name;
-        const number = /^line ([1-9]\d*)$/i.exec(finding.location || "");
-        const lines = splitSclSourceLines(file.content);
-        const target = number ? Math.min(Number(number[1]), lines.length) : 1;
-        start.value = String(target);
-        end.value = String(target);
-        guidance.textContent = "Finding: " + finding.category + ". "
-            + (finding.suggested_fix || finding.explanation)
-            + " (Guidance only — supply the replacement code yourself.)";
-        updateSource(true);
-        panel.hidden = false;
-        panel.open = true;
-        panel.scrollIntoView({block:"nearest", behavior:"instant"});
-    };
-    select.addEventListener("change", () => {
-        start.value = "1";
-        end.value = "1";
-        updateSource(true);
-    });
-    start.addEventListener("input", () => updateSource(true));
-    end.addEventListener("input", () => updateSource(true));
-    replacement.addEventListener("input", invalidate);
-    approve.addEventListener("change", () => {
-        download.disabled = !preview || !approve.checked;
-    });
-    previewButton.addEventListener("click", async () => {
-        const range = selectedRange();
-        if (!range) return;
-        invalidate();
-        previewButton.disabled = true;
-        status.textContent = "Checking original source and preparing an in-memory diff…";
-        status.classList.remove("error");
-        try {
-            const expected_sha256 = await textSha256(range.file.content);
-            const candidate = await postJson("/api/v1/code-review/preview-scl-change", {
-                file:range.file,
-                expected_sha256,
-                start_line:range.first,
-                end_line:range.last,
-                expected_original:range.original,
-                replacement_text:replacement.value,
-            });
-            if (candidate.preview_only !== true || candidate.requires_explicit_approval !== true
-                || candidate.original_sha256 !== expected_sha256) {
-                throw new Error("Untrusted patch preview response.");
-            }
-            preview = candidate;
-            diff.textContent = candidate.unified_diff;
-            approve.disabled = false;
-            status.textContent = "Preview ready — uncompiled. "
-                + (candidate.validation_warnings || []).join(" ")
-                + " Approve only after inspecting every changed line.";
-        } catch (error) {
-            status.textContent = "Preview rejected: " + error.message;
-            status.classList.add("error");
-        } finally {
-            previewButton.disabled = !selectedRange();
-        }
-    });
-    download.addEventListener("click", () => {
-        if (!preview || !approve.checked || download.disabled) return;
-        downloadReport(preview.proposed_content, preview.output_filename,
-            "text/plain;charset=utf-8");
-        status.textContent = "Downloaded a reviewed SCL copy only. "
-            + "The original source and TIA project were not modified.";
-        approve.checked = false;
-        download.disabled = true;
-    });
-    configure(null, []);
-    return {configure, prepare};
-}
-
-function renderReport(report, results, prepareProposal = null) {
+function renderReport(report, results) {
     // Preserve selected filters on refresh after a local AI enrichment run.
     const chosen = Object.fromEntries(["priority", "severity", "method", "file", "query"].map(key => [
         key, results.querySelector("#review-filter-" + key)?.value || "",
@@ -698,15 +542,6 @@ function renderReport(report, results, prepareProposal = null) {
             const description = document.createElement("p");
             description.textContent = finding.explanation;
             item.appendChild(description);
-            if (prepareProposal && /\.scl$/i.test(finding.source_file)
-                && /^line [1-9]\d*$/i.test(finding.location || "")) {
-                const prepare = document.createElement("button");
-                prepare.type = "button";
-                prepare.className = "secondary-button review-prepare-change";
-                prepare.textContent = "Prepare SCL change";
-                prepare.addEventListener("click", () => prepareProposal(finding));
-                item.appendChild(prepare);
-            }
             if (finding.suggested_fix) {
                 const fix = document.createElement("p");
                 fix.className = "hint";
@@ -750,59 +585,17 @@ function renderReport(report, results, prepareProposal = null) {
 }
 
 export function initCodeReviewUi() {
-    const files = document.getElementById("review-files"), folder = document.getElementById("review-folder");
-    const run = document.getElementById("review-analyze"), status = document.getElementById("review-status");
-    const list = document.getElementById("review-files-list"), results = document.getElementById("review-results");
-    const download = document.getElementById("review-download"), markdown = document.getElementById("review-download-markdown");
+    const results = document.getElementById("review-results");
     const exportLlm = document.getElementById("review-export-llm");
-    const exportLlmStatus = document.getElementById("review-export-llm-status");
-    const tiaRun = document.getElementById("review-tia-analyze"), tiaStatus = document.getElementById("review-tia-status");
-    if (!files || !folder || !run || !status || !list || !results || !download || !markdown || !exportLlm || !exportLlmStatus || !tiaRun || !tiaStatus) return;
-    let selected = [], report = null, payload = [];
-    const proposals = setupSclProposalUi();
-    const refresh = () => {
-        selected = [...files.files, ...folder.files].filter(file => /\.(scl|xml)$/i.test(file.name));
-        list.replaceChildren(...selected.map(file => {
-            const item = document.createElement("li");
-            item.textContent = file.webkitRelativePath || file.name;
-            return item;
-        }));
-        status.textContent = selected.length ? selected.length + " supported file(s) selected." : "Select PLC source files or a folder.";
-        report = null;
-        payload = [];
-        results.replaceChildren();
-        download.disabled = true;
-        markdown.disabled = true;
-        proposals?.configure(null, []);
-    };
-    const readPayload = () => Promise.all(selected.map(async file => ({
-        name:file.webkitRelativePath || file.name, content:await file.text(),
-    })));
-    files.addEventListener("change", refresh);
-    folder.addEventListener("change", refresh);
-    run.addEventListener("click", async () => {
-        if (!selected.length) return;
-        run.disabled = true;
-        status.classList.remove("error");
-        status.textContent = "Reading and analyzing files locally…";
-        try {
-            payload = await readPayload();
-            report = await postJson("/api/v1/code-review/analyze-files", payload);
-            renderReport(report, results, finding => proposals?.prepare(finding));
-            status.textContent = "Read-only deterministic analysis complete. You can export the loaded sources for ChatGPT review.";
-            download.disabled = false;
-            markdown.disabled = false;
-            proposals?.configure(report, payload);
-        } catch (error) {
-            status.textContent = "Analysis failed: " + error.message;
-            status.classList.add("error");
-        } finally {
-            run.disabled = false;
-        }
-    });
+    const exportStatus = document.getElementById("review-export-llm-status");
+    const tiaRun = document.getElementById("review-tia-analyze");
+    const tiaStatus = document.getElementById("review-tia-status");
+    if (![results, exportLlm, exportStatus, tiaRun, tiaStatus].every(Boolean)) return;
+
     tiaRun.addEventListener("click", async () => {
         const snapshots = [...projectConfig.fbs, ...projectConfig.fcs].filter(block =>
-            block?.source_mode === "tia_read_only" && typeof block.source_xml === "string" && block.source_xml.trim());
+            block?.source_mode === "tia_read_only"
+            && typeof block.source_xml === "string" && block.source_xml.trim());
         if (!snapshots.length) {
             tiaStatus.textContent = "No read-only FB/FC snapshots with original TIA XML are loaded.";
             tiaStatus.classList.add("error");
@@ -812,16 +605,13 @@ export function initCodeReviewUi() {
         tiaStatus.classList.remove("error");
         tiaStatus.textContent = "Analyzing " + snapshots.length + " locally loaded TIA block snapshot(s)…";
         try {
-            payload = snapshots.map(block => ({
-                name:"TIA snapshot/" + block.name + ".xml", content:block.source_xml,
+            const files = snapshots.map(block => ({
+                name: "TIA snapshot/" + block.name + ".xml",
+                content: block.source_xml,
             }));
-            report = await postJson("/api/v1/code-review/analyze-files", payload);
-            renderReport(report, results, finding => proposals?.prepare(finding));
-            status.textContent = "Read-only deterministic analysis of loaded TIA snapshots complete.";
+            const report = await postJson("/api/v1/code-review/analyze-files", files);
+            renderReport(report, results);
             tiaStatus.textContent = snapshots.length + " loaded TIA snapshot(s) analyzed. TIA Portal was not contacted.";
-            download.disabled = false;
-            markdown.disabled = false;
-            proposals?.configure(report, payload);
         } catch (error) {
             tiaStatus.textContent = "TIA snapshot analysis failed: " + error.message;
             tiaStatus.classList.add("error");
@@ -829,37 +619,27 @@ export function initCodeReviewUi() {
             tiaRun.disabled = false;
         }
     });
-    download.addEventListener("click", () => {
-        if (!report) return;
-        downloadReport(JSON.stringify(report, null, 2), "plc-code-review.json", "application/json");
-    });
-    markdown.addEventListener("click", () => {
-        if (report) downloadReport(reportMarkdown(report), "plc-code-review.md", "text/markdown;charset=utf-8");
-    });
+
     exportLlm.addEventListener("click", async () => {
         const processId = Number(document.getElementById("tia-process")?.value);
         if (!Number.isInteger(processId) || processId < 1) {
-            exportLlmStatus.classList.add("error");
-            exportLlmStatus.textContent =
-                "Select a running TIA Portal process under TIA connection "
-                + "(Refresh TIA) to export the entire OPEN TIA project.";
+            exportStatus.classList.add("error");
+            exportStatus.textContent = "Select a running TIA Portal process in the TIA connection panel (Refresh TIA).";
             return;
         }
         exportLlm.disabled = true;
-        exportLlmStatus.classList.remove("error");
-        exportLlmStatus.textContent =
-            "Reading the entire open TIA project with Openness: all PLCs, "
-            + "devices, hardware and supported HMI objects. Large projects may take time.";
+        exportStatus.classList.remove("error");
+        exportStatus.textContent = "Exporting the open TIA Portal project via Openness…";
         try {
             const response = await fetch(
                 "/api/v1/code-review/export-tia-project-for-llm?process_id="
-                + encodeURIComponent(processId), {method:"POST"},
+                + encodeURIComponent(processId), {method: "POST"},
             );
             if (!response.ok) {
                 const body = await response.text();
-                let message = body;
-                try { message = JSON.parse(body).detail || body; } catch {}
-                throw Error(String(message).slice(0, 320));
+                let detail = body;
+                try { detail = JSON.parse(body).detail || body; } catch {}
+                throw Error(String(detail).slice(0, 320));
             }
             const file = await response.blob();
             if (!file.size) throw Error("Empty whole-project ZIP.");
@@ -869,15 +649,13 @@ export function initCodeReviewUi() {
             link.download = "TIA_Portal_Entire_Project_LLM_Review.zip";
             link.click();
             URL.revokeObjectURL(url);
-            exportLlmStatus.textContent =
-                "Exported open TIA Portal project. Read TIA_OBJECTS.tsv and "
-                + "TIA_MISSING.tsv for supported and missing objects. "
-                + "Review confidential source contents before uploading to ChatGPT.";
+            exportStatus.textContent = "Exported open TIA Portal project. Inspect TIA_OBJECTS.tsv, "
+                + "TIA_MISSING.tsv and confidential data before uploading the ZIP to ChatGPT.";
         } catch (error) {
-            exportLlmStatus.classList.add("error");
-            exportLlmStatus.textContent = "TIA project export failed: " + error.message;
+            exportStatus.classList.add("error");
+            exportStatus.textContent = "TIA project export failed: " + error.message;
         } finally {
             exportLlm.disabled = false;
         }
-    });;
+    });
 }

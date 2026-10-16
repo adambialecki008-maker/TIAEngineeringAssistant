@@ -38,7 +38,7 @@ def test_overview_owns_single_connection_and_project_context():
                      "tia-hmi-connection-status", "tia-hmi-project-name"):
         assert f'id="{obsolete}"' not in HTML
     for name in ("tia-plc-tags-body", "tia-plc-program-blocks-body",
-                 "tia-plc-dbs-body"):
+                 "tia-plc-dbs-body", "tia-create-plc-button"):
         assert f'id="{name}"' in plc
         assert f'id="{name}"' not in hmi
     counts = Counter(re.findall(r'id="([^"]+)"', HTML))
@@ -83,17 +83,3 @@ def test_single_overview_tia_process_is_shared_by_workflows():
     assert "function syncHmiConnectionControls()" in TIA_JS
     assert "processSelect.addEventListener(" in TIA_JS
     assert "refreshProjectPlcs" in TIA_JS
-
-
-def test_create_plc_interface_removed_without_hiding_read_only_plc_inventory():
-    plc = _tab("plc")
-    assert "Create PLC" not in plc
-    for element in ("tia-create-plc-button", "tia-load-models-button", "tia-plc-model",
-                    "tia-device-name", "tia-plc-name", "plc-family"):
-        assert f'id="{element}"' not in HTML
-    for element in ("tia-plc-tags-body", "tia-plc-program-blocks-body", "tia-plc-dbs-body"):
-        assert f'id="{element}"' in plc
-    assert 'async function createPlc(' not in TIA_JS
-    assert 'id="tia-create-plc-button"' not in HTML
-    # /api/v1/tia/plcs remains used by rename/delete existing PLC workflows.
-    assert 'postJson(\n                    "/api/v1/tia/plcs"' not in TIA_JS
