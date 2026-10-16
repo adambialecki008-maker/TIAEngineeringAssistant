@@ -6,7 +6,16 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     const browser = await chromium.launch({headless:true, executablePath:process.env.CHROME_PATH});
     try {
         const page = await browser.newPage();
-        await page.route("**/api/v1/code-review/analyze-files", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[{source_file:"FB.scl",name:"FB_Test",block_type:"FUNCTION_BLOCK",language:"SCL",declarations:[],networks:["network 1"],network_details:[{number:1,language:"LAD",nodes:[{uid:"23",kind:"Part",name:"Contact",symbol:"",scope:"",template_values:{SrcType:"Bool"},connections:[{port:"out",wire_uid:"27",peers:["OpenCon"]}]}],schema_version:"v4",coverage:"supported structure",wires:[{uid:"27",endpoints:[{kind:"NameCon",uid:"23",port:"out"},{kind:"OpenCon",uid:"",port:""}]}],warnings:[],verification_status:"topology only — not logic-verified"}],calls:[{target:"FC_Calc",location:"line 10",language:"SCL",source:"SCL",instance:"",nesting_depth:1,parent_target:"FC_Parent",arguments:[{name:"Start",operator:":="}],arguments_complete:true,resolution:"loaded block"}],variable_analysis_status:"complete",variable_usage:[{name:"TempReady",section:"Temp",reads:1,writes:1,assigned_on_exit:true,analysis_status:"complete"}],dependencies:[],parsing_warnings:[],verification_status:"parsed"}],findings:[],file_warnings:[],read_only:true})}));
+        await page.route("**/api/v1/code-review/analyze-files", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[{source_file:"FB.scl",name:"FB_Test",block_type:"FUNCTION_BLOCK",language:"SCL",declarations:[],networks:["network 1"],network_details:[{number:1,language:"LAD",nodes:[{uid:"23",kind:"Part",name:"Contact",symbol:"",scope:"",template_values:{SrcType:"Bool"},connections:[{port:"out",wire_uid:"27",peers:["OpenCon"]}]}],schema_version:"v4",coverage:"supported structure",wires:[{uid:"27",endpoints:[{kind:"NameCon",uid:"23",port:"out"},{kind:"OpenCon",uid:"",port:""}]}],warnings:[],verification_status:"topology only — not logic-verified"}],calls:[{target:"FC_Calc",location:"line 10",language:"SCL",source:"SCL",instance:"",nesting_depth:1,parent_target:"FC_Parent",arguments:[{name:"Start",operator:":="}],arguments_complete:true,resolution:"loaded block"}],variable_analysis_status:"complete",variable_usage:[{name:"TempReady",section:"Temp",reads:1,writes:1,assigned_on_exit:true,analysis_status:"complete"}],dependencies:[],parsing_warnings:[],verification_status:"parsed"}],findings:[
+            {source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",
+             severity:"error",priority:"P0",category:"Duplicate declaration",
+             explanation:"Duplicate named member.",detection_method:"rule",
+             verification_status:"verified",suggested_fix:"Rename one member."},
+            {source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"network 1",
+             severity:"warning",priority:"P2",category:"Partial topology",
+             explanation:"Check network graph in TIA.",detection_method:"rule",
+             verification_status:"requires TIA verification",suggested_fix:"Review export."}
+        ],file_warnings:[],read_only:true})}));
         await page.route("**/api/v1/code-review/ollama", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[],findings:[{source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",severity:"warning",category:"Style",explanation:"Review suggestion.",suggested_fix:"",evidence:"",detection_method:"AI",verification_status:"AI suggestion — unverified",confidence:0.4}],file_warnings:[],read_only:true})}));
         await page.addInitScript(() => localStorage.setItem("tiaEngineeringAssistant.projectConfig", JSON.stringify({
             plc_family:"", udts:[], dbs:[], fcs:[], instance_dbs:[], device_config:{templates:[],groups:[],mappings:[],mapping_mode:"device"}, tia_target:null,
@@ -20,7 +29,24 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         await page.locator("#review-analyze").click();
         await page.waitForSelector("text=Read-only deterministic analysis complete");
         assert.equal(await page.locator("#review-ai").isDisabled(), false);
-        await page.locator("#review-results details").first().click();
+        assert.match(await page.locator("#review-results .review-project-summary").innerText(), /Project overview/);
+        assert.match(await page.locator("#review-results .review-project-summary").innerText(), /P0: 1/);
+        assert.match(await page.locator("#review-results .review-project-summary").innerText(), /P2: 1/);
+        assert.equal(await page.locator("#review-results .review-findings-list .review-finding-row").count(), 2);
+        assert.equal(await page.locator("#review-results .review-finding-row").first().getAttribute("data-priority"), "P0");
+        await page.locator("#review-filter-priority").selectOption("P2");
+        assert.equal(await page.locator("#review-results .review-finding-row").count(), 1);
+        assert.match(await page.locator("#review-results .review-visible-count").innerText(), /Showing 1 of 2/);
+        await page.locator("#review-filter-query").fill("graph");
+        assert.equal(await page.locator("#review-results .review-finding-row").count(), 1);
+        await page.locator("#review-filter-query").fill("this-term-is-absent");
+        assert.equal(await page.locator("#review-results .review-finding-row").count(), 0);
+        assert.match(await page.locator("#review-results .review-findings-list").innerText(), /No findings match/);
+        await page.locator(".review-filter-controls button").click();
+        assert.equal(await page.locator("#review-results .review-finding-row").count(), 2);
+        await page.locator("#review-results .review-block-details > summary").click();
+        await page.locator("#review-results .review-block-details > details").first()
+            .locator(":scope > summary").click();
         const topology = page.locator("#review-results .review-network-topology");
         assert.equal(await topology.count(), 1);
         assert.match(await topology.innerText(), /Network 1/);
@@ -39,6 +65,9 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         const topologyDownload = await markdownTopology;
         const topologyText = require("node:fs").readFileSync(await topologyDownload.path(), "utf-8");
         assert.match(topologyText, /LAD\/FBD network topology/);
+        assert.match(topologyText, /Project overview/);
+        assert.match(topologyText, /\[P0\] Duplicate declaration/);
+        assert.match(topologyText, /\[P2\] Partial topology/);
         assert.match(topologyText, /Observed FB\/FC calls/);
         assert.match(topologyText, /FC_Calc/);
         assert.match(topologyText, /under FC_Parent/);
@@ -48,6 +77,12 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         assert.match(topologyText, /TempReady/);
         assert.match(topologyText, /Wire 27: NameCon 23\.out ; OpenCon/);
         assert.match(topologyText, /Templates: SrcType=Bool/);
+        await page.locator("#review-filter-priority").selectOption("P2");
+        const completeExport = page.waitForEvent("download");
+        await page.locator("#review-download").click();
+        const jsonText = require("node:fs").readFileSync(await (await completeExport).path(), "utf-8");
+        assert.equal(JSON.parse(jsonText).findings.length, 2, "Export is never filtered");
+        await page.locator(".review-filter-controls button").click();
         await page.locator("#review-ai").click();
         await page.waitForSelector("text=AI review complete");
         assert.equal((await page.locator("#review-results").innerText()).includes("Review suggestion."), true);
