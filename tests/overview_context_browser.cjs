@@ -92,6 +92,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
             .textContent.trim() === "PLC_1");
         assert.equal(await page.locator("#tia-status").isVisible(),false,
             "Selecting a PLC must not leave the redundant green success banner visible");
+        await page.waitForFunction(() => document.getElementById("overview-project-name")
+            ?.textContent.includes("TIA_Demo_Copy"));
         assert.match(await page.locator("#overview-project-name").innerText(),/TIA_Demo_Copy/);
         assert.equal(await page.locator("#active-plc-summary")
             .evaluate(el => el.classList.contains("connection-online")),true);
