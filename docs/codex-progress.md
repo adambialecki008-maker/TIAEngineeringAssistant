@@ -842,3 +842,14 @@
   project name and PLC targets from the same Openness attachment.
 - The Overview now updates its `TIA PROJECT` card as soon as the first live
   inventory returns; it no longer waits for resource metrics and HMI details.
+
+## Verified TIA process and PLC status - 2026-10-16
+
+- A detected TIA PID is now red until the fast read-only Openness inventory
+  confirms that the selected process has an open project. The PID turns green
+  only after that confirmation; a running process alone is not treated as a
+  project connection.
+- A locally saved PLC target remains available as a candidate for the next
+  inventory read, but its device and PLC name are hidden from the shared
+  header and Overview until the current project verifies it. This prevents a
+  removed PLC or a target from another project from appearing active.

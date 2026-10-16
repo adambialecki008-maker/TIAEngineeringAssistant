@@ -515,6 +515,11 @@ export function initTiaUi(
             "active-plc-summary"
         );
 
+    const headerTiaLiveElement =
+        document.getElementById(
+            "header-tia-live-status"
+        );
+
     const previewTargetPlcElement =
         document.getElementById(
             "preview-target-plc"
@@ -528,6 +533,11 @@ export function initTiaUi(
     // A saved target is only local configuration until the currently selected
     // TIA process confirms the same device and PLC name through Openness.
     let activeTargetVerified = false;
+
+    // A process PID only confirms that TIA Portal is running. The shared
+    // header turns green only after this process has returned a real project
+    // inventory through Openness.
+    let projectConnectionVerified = false;
 
     // Do not start another Openness read while the optional detailed inventory
     // still owns the session. The basic PLC table remains usable for selection.
@@ -808,33 +818,32 @@ export function initTiaUi(
             "Target PLC: not selected";
 
 
-        if (target) {
+        if (target && activeTargetVerified) {
             text =
-                (
-                    activeTargetVerified
-                        ? `Active PLC: ${target.plc_name} `
-                        : `Saved PLC target: ${target.plc_name} `
-                )
+                `Active PLC: ${target.plc_name} `
                 +
                 `(${target.device_name})`
-                +
-                (
-                    activeTargetVerified
-                        ? ""
-                        : " — awaiting TIA verification"
-                );
+                ;
 
             overviewPlcText =
-                activeTargetVerified
-                    ? target.plc_name
-                    : target.plc_name + " (awaiting verification)";
+                target.plc_name;
 
             overviewDeviceText =
                 target.device_name;
 
-            previewText = activeTargetVerified
-                ? `Target PLC: ${target.plc_name} (${target.device_name})`
-                : "Target PLC: awaiting TIA verification";
+            previewText =
+                `Target PLC: ${target.plc_name} (${target.device_name})`;
+        } else if (target) {
+            // Keep the locally saved target only as a candidate for the next
+            // TIA inventory read. Do not expose its name in shared status or
+            // Overview until that read proves the device and PLC still exist.
+            // This prevents a removed or different-project PLC from looking
+            // like the current engineering target.
+            text =
+                "Active PLC: not confirmed in the open TIA project";
+
+            previewText =
+                "Target PLC: awaiting TIA verification";
         }
 
 
@@ -924,6 +933,30 @@ export function initTiaUi(
                 {
                     detail: {
                         verified: activeTargetVerified,
+                    },
+                }
+            )
+        );
+    }
+
+    function setProjectConnectionVerification(
+        verified
+    ) {
+        projectConnectionVerified = Boolean(verified);
+
+        if (headerTiaLiveElement) {
+            headerTiaLiveElement.dataset.tiaProjectConnected =
+                projectConnectionVerified
+                    ? "true"
+                    : "false";
+        }
+
+        window.dispatchEvent(
+            new CustomEvent(
+                "tia-project-connection-validation",
+                {
+                    detail: {
+                        verified: projectConnectionVerified,
                     },
                 }
             )
@@ -8823,6 +8856,8 @@ export function initTiaUi(
         const processId =
             selectedProcessId();
 
+        setProjectConnectionVerification(false);
+
 
         if (!processId) {
             detailedContextLoading = false;
@@ -8893,6 +8928,13 @@ export function initTiaUi(
                 fastInventory.project_name
                 ||
                 "";
+
+            // A successful fast inventory contains a non-empty project name
+            // (the API rejects missing names). It is the first trustworthy
+            // proof that this PID is attached to an open TIA project.
+            if (selectedProcessId() === processId) {
+                setProjectConnectionVerification(true);
+            }
 
             existingPlcs =
                 fastInventory.plcs
@@ -8988,6 +9030,7 @@ export function initTiaUi(
 
         } catch (error) {
             detailedContextLoading = false;
+            setProjectConnectionVerification(false);
             setActiveTargetVerification(false);
             clearTarget();
             existingPlcs = [];

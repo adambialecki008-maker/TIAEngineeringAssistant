@@ -23,11 +23,15 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
             requests.push({method:route.request().method(),action});
             if (action === "/api/v1/tia/processes")
                 return route.fulfill({json:[{process_id:123}]});
-            if (action === "/api/v1/tia/project-inventory")
+            if (action === "/api/v1/tia/project-inventory") {
+                // The process is visible before Openness has confirmed the
+                // project. Keep that interval observable for the header test.
+                await new Promise(resolve => setTimeout(resolve, 200));
                 return route.fulfill({json:{project_name:"TIA_Demo_Copy",plcs:[{
                     device_name:"Station_1",plc_name:"PLC_1",
                     plc_type_identifier:"S7-1500",
                 }]}});
+            }
             if (action === "/api/v1/tia/project-context") {
                 // Resource/HMI discovery is deliberately slower than the
                 // lightweight PLC inventory. The PLC Use control must appear
@@ -60,10 +64,13 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         assert.match(initialTiaLabel, /^(TIA: not connected|TIA Portal PID 123)$/);
         const initialTiaOnline = await page.locator("#header-tia-live-status")
             .evaluate(el => el.classList.contains("connection-online"));
-        if (initialTiaLabel === "TIA Portal PID 123") assert.equal(initialTiaOnline,true);
+        if (initialTiaLabel === "TIA Portal PID 123") assert.equal(initialTiaOnline,false,
+            "a PID alone must stay red until Openness confirms an open project");
         else assert.equal(initialTiaOnline,false);
         assert.equal(await page.locator("#active-plc-summary")
             .evaluate(el => el.classList.contains("connection-offline")),true);
+        assert.equal(await page.locator("#active-plc-summary").innerText(),
+            "Active PLC: not selected");
         assert.equal(await page.locator("#header-profile-summary")
             .evaluate(el => el.classList.contains("connection-online")),true);
         assert.equal(await page.locator('#overview-profile-management #project-profile-selector').count(),1);
@@ -83,6 +90,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
             .waitFor({state:"visible",timeout:700});
         assert.match(await page.locator("#overview-project-name").innerText(),/TIA_Demo_Copy/,
             "the fast inventory must synchronize the actual TIA project name");
+        await page.waitForFunction(() => document.getElementById("header-tia-live-status")
+            ?.classList.contains("connection-online"));
         await page.waitForFunction(() => document.getElementById("header-tia-live-status")
             ?.textContent.includes("TIA Portal PID 123"));
         assert.equal(await page.locator("#header-tia-live-status").innerText(),
@@ -121,6 +130,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         assert.equal(await page.locator("#project-active-plc").innerText(),"Not selected");
         assert.equal(await page.locator("#active-plc-summary")
             .evaluate(el => el.classList.contains("connection-offline")),true);
+        assert.equal(await page.locator("#active-plc-summary").innerText(),
+            "Active PLC: not selected");
         assert.equal(await page.locator("#overview-profile-name").innerText(),"Station B");
         assert.equal(await page.evaluate(async () => {
             const {projectConfig} = await import("/gui/js/state.js");

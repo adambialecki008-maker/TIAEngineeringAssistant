@@ -30,9 +30,17 @@ def test_overview_renders_fast_plc_inventory_before_detailed_context():
 
 
 def test_saved_active_target_stays_unverified_until_fast_inventory_confirms_it():
-    assert "awaiting TIA verification" in TIA_JS
+    assert "Active PLC: not confirmed in the open TIA project" in TIA_JS
+    assert "target && activeTargetVerified" in TIA_JS
     assert '"tia-active-plc-validation"' in TIA_JS
     assert "activeTargetVerified = false" in TIA_JS
     assert "detailedContextLoading" in TIA_JS
     assert "dataset.tiaTargetVerified === \"true\"" in CONNECTION_MONITOR
     assert "dataset.tiaTargetVerified" in TIA_JS
+
+
+def test_tia_pid_is_not_live_until_fast_inventory_confirms_open_project():
+    assert "setProjectConnectionVerification(false)" in TIA_JS
+    assert '"tia-project-connection-validation"' in TIA_JS
+    assert "dataset.tiaProjectConnected" in TIA_JS
+    assert 'dataset.tiaProjectConnected === "true"' in CONNECTION_MONITOR

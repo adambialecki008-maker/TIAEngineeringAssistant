@@ -23,13 +23,25 @@ export function initTiaConnectionMonitor() {
 
     function render() {
         const current = pid();
-        const active = !!current && checkResult?.pid === current
+        const processRunning = !!current && checkResult?.pid === current
             && checkResult.running === true;
-        // One compact label. Color alone communicates live availability.
-        // A PID can remain selected after TIA closes; such a badge stays red.
+        // A PID only proves the process exists. Green additionally requires
+        // the fast, read-only Openness inventory to confirm its open project.
+        const projectConnected =
+            headerTia.dataset.tiaProjectConnected === "true";
+        const active = processRunning && projectConnected;
+        // A PID can remain selected after TIA closes or before its project is
+        // readable; either state remains red.
         const text = current ? "TIA Portal PID " + current : "TIA: not connected";
         headerTia.textContent = text;
         mark(headerTia, active);
+        headerTia.title = !current
+            ? "No TIA Portal process selected."
+            : !processRunning
+                ? "The selected TIA Portal process is no longer running."
+                : projectConnected
+                    ? "Connected to the selected TIA Portal project."
+                    : "TIA Portal is running, but its selected project is not connected.";
         if (exportIndicator) {
             exportIndicator.textContent = text;
             mark(exportIndicator, active);
@@ -110,6 +122,9 @@ export function initTiaConnectionMonitor() {
         void check();
     });
     window.addEventListener("tia-active-plc-validation", () => {
+        render();
+    });
+    window.addEventListener("tia-project-connection-validation", () => {
         render();
     });
     // Re-style on PLC selection or project profile switches without modifying
