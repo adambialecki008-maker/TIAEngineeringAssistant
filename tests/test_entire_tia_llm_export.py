@@ -79,6 +79,27 @@ def fake_adapter(command, process_id, directory):
     return ["LLM_PROJECT_EXPORTED|Plant_Main|3|1"]
 
 
+def test_openness_session_failure_reports_last_export_operation(monkeypatch):
+    from pathlib import Path
+    from fastapi import HTTPException
+
+    def aborted_export(command, process_id, directory):
+        assert command == "export-entire-project-llm"
+        (Path(directory) / "TIA_EXPORT_PROGRESS.log").write_text(
+            "2026-10-16T17:00:00Z\\tDEVICE_ITEM\\tPLC_1/rack_0\\n",
+            encoding="utf-8",
+        )
+        raise HTTPException(502, "EngineeringObjectDisposedException")
+
+    monkeypatch.setattr("engine.llm_project_export._run_adapter", aborted_export)
+    response = client.post(URL)
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert "EngineeringObjectDisposedException" in detail
+    assert "last export operation" in detail
+    assert "PLC_1/rack_0" in detail
+
+
 def test_entire_open_tia_export_is_project_scoped_not_loaded_profile(monkeypatch):
     monkeypatch.setattr("engine.llm_project_export._run_adapter", fake_adapter)
     response = client.post(URL)
