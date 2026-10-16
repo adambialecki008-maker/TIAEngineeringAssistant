@@ -4,12 +4,43 @@ import io
 import json
 import zipfile
 
+import pytest
+
 from fastapi.testclient import TestClient
 from engine.main import app
 from engine.tia.adapter import adapter_timeout_seconds
 
 client = TestClient(app)
 URL = "/api/v1/code-review/export-tia-project-for-llm?process_id=321"
+
+
+@pytest.fixture(autouse=True)
+def enable_only_for_simulated_export_tests(monkeypatch):
+    monkeypatch.setenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", "1")
+
+
+def test_real_project_export_is_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", raising=False)
+    status = client.get("/api/v1/code-review/tia-export-status")
+    assert status.status_code == 200
+    assert status.json()["enabled"] is False
+
+    def no_adapter_calls(*args):
+        raise AssertionError("Unsafe Openness adapter must not be invoked")
+
+    monkeypatch.setattr("engine.llm_project_export._run_adapter", no_adapter_calls)
+    response = client.post(URL)
+    assert response.status_code == 503
+    assert "disabled" in response.json()["detail"].lower()
+
+
+def test_export_requires_exact_explicit_opt_in(monkeypatch):
+    for value in ("true", "yes", "0", ""):
+        monkeypatch.setenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", value)
+        assert client.get("/api/v1/code-review/tia-export-status").json()["enabled"] is False
+    monkeypatch.setenv("TIA_ENABLE_EXPERIMENTAL_LLM_EXPORT", "1")
+    assert client.get("/api/v1/code-review/tia-export-status").json()["enabled"] is True
+
 
 
 def fake_adapter(command, process_id, directory):
@@ -109,5 +140,9 @@ def test_tia_adapter_bulk_export_command_exists_without_project_write():
     assert "ExportTagGroup(" in service
     assert "ExportHmiSoftware(" in service
     assert "TIA_MISSING.tsv" in service
+    assert "TIA_EXPORT_PROGRESS.log" in service
+    assert "string deviceName = " in service
+    assert 'report.Failure("DEVICE_TRAVERSAL", deviceName, rootError.Message)' in service
+    assert "rootError is EngineeringObjectDisposedException" in service
     assert "project.Save(" not in service
     assert "project.Import" not in service
