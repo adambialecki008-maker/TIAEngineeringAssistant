@@ -41,6 +41,19 @@
 - Remaining: obtain an evidenced Openness/XML owner relation before rendering
   a verified FB-to-Instance-DB link or enabling structural previews from it.
 
+## FB/FC declaration dependency checks
+
+- Added project validation for nested declaration references: an FB can refer
+  to another FB only through `Static` multi-instance members; an FC cannot
+  contain FB multi-instances at all. Name collisions between FC and FB are
+  also rejected.
+- FB and FC views now summarize UDT dependencies and surface an FC reference
+  to an FB as a problem before any future export/import path could use it.
+- Validation: dependency tests — 17 passed; full `pytest -q` — 500 passed.
+- Commit: `e8c1081` (`feat(program): validate FB and FC declaration dependencies`).
+- Remaining: use verified TIA relation metadata for Instance DB ownership and
+  extend preflight reports with this same dependency graph.
+
 ## Read-only LAD/KOP Function Block snapshots
 
 - Extended the TIA FB inventory/import flow to include consistent `LAD` and
