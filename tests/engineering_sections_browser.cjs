@@ -105,7 +105,7 @@ const {openSection} = require("./ui_disclosures.cjs");
         for (const id of ["plc-tags", "plc-program"]) {
             const node = page.locator('[data-ui-section="' + id + '"]');
             assert.equal(await node.locator(".ui-disclosure-body > details.tia-inventory-details").count(),0);
-            assert.equal(await node.locator(".ui-disclosure-body > .single-engineering-item > h4").count(),1);
+            assert.equal(await node.locator(".ui-disclosure-body > .tia-inventory-content > h4").count(),1);
         }
         // Geometric heights can only be compared while their tab is visible.
         await page.locator('[data-tab="udt"]').click();
