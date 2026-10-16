@@ -99,8 +99,31 @@ function enhanceCard(card, spec, state) {
     card.replaceWith(details);
 }
 
+// PLC tag and program inventory each have one inner disclosure below a
+// collapsible parent. Keep the main panel as the only fold in those cases.
+function flattenSingleInventory(id) {
+    const section = document.querySelector('[data-ui-section="' + id + '"]');
+    const body = section?.querySelector(":scope > .ui-disclosure-body");
+    if (!body) return;
+    const branches = [...body.children].filter(el => el.matches("details.tia-inventory-details"));
+    if (branches.length !== 1) return;
+    const nested = branches[0];
+    const original = nested.querySelector(":scope > summary");
+    const contents = nested.querySelector(":scope > .details-content");
+    if (!original || !contents) return;
+    const group = document.createElement("section");
+    group.className = "single-engineering-item";
+    const heading = document.createElement("h4");
+    heading.className = "single-engineering-item-title";
+    heading.id = original.id; // read-only PLC inventory updates this element
+    heading.textContent = original.textContent.trim();
+    group.append(heading, contents);
+    nested.replaceWith(group);
+}
+
 export function initEngineeringDisclosures() {
     const state = readStoredState();
+    delete state["overview-help"]; // ignore stale saved closed preference
     const cardsByTab = {};
     for (const spec of SECTIONS) {
         // Snapshot BEFORE modification: converting a div to details must
@@ -112,4 +135,6 @@ export function initEngineeringDisclosures() {
             : cardsByTab[spec.tab][spec.index];
         enhanceCard(card, spec, state);
     }
+    flattenSingleInventory("plc-tags");
+    flattenSingleInventory("plc-program");
 }
