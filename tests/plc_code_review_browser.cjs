@@ -16,6 +16,22 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
              explanation:"Check network graph in TIA.",detection_method:"rule",
              verification_status:"requires TIA verification",suggested_fix:"Review export."}
         ],file_warnings:[],read_only:true})}));
+        // The second analyze-files action receives LAD XML snapshots rather
+        // than SCL files; simulate its actual parser result in the browser.
+        await page.route("**/api/v1/code-review/analyze-files", route => {
+            const selected = route.request().postDataJSON();
+            if (!Array.isArray(selected) || !selected.some(item =>
+                String(item.name || "").startsWith("TIA snapshot/"))) {
+                return route.fallback();
+            }
+            return route.fulfill({contentType:"application/json", body:JSON.stringify({
+                files:[{source_file:"TIA snapshot/FB_FromTia.xml", name:"FB_FromTia",
+                    block_type:"FB", language:"LAD", declarations:[],
+                    networks:[], network_details:[], calls:[], variable_usage:[],
+                    dependencies:[], parsing_warnings:[], verification_status:"parsed"}],
+                findings:[], file_warnings:[], read_only:true,
+            })});
+        });
         await page.route("**/api/v1/code-review/ollama", route => route.fulfill({contentType:"application/json", body:JSON.stringify({files:[],findings:[{source_file:"FB.scl",block:"FB_Test",language:"SCL",location:"line 1",severity:"warning",category:"Style",explanation:"Review suggestion.",suggested_fix:"",evidence:"",detection_method:"AI",verification_status:"AI suggestion — unverified",confidence:0.4}],file_warnings:[],read_only:true})}));
         await page.addInitScript(() => localStorage.setItem("tiaEngineeringAssistant.projectConfig", JSON.stringify({
             plc_family:"", udts:[], dbs:[], fcs:[], instance_dbs:[], device_config:{templates:[],groups:[],mappings:[],mapping_mode:"device"}, tia_target:null,
