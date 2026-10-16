@@ -20,7 +20,9 @@
 - Validation: targeted FB/FC tests — 21 passed; full `pytest -q` — 497
   passed; all non-Playwright Node scenarios passed (including 41 HMI state
   machine scenarios). Browser-specific Node tests could not start because the
-  local checkout has no `playwright` package installed.
+  local checkout has no `playwright` package installed. The repository CI
+  installs it transiently, but this workstation has no `npm` or `npx` binary
+  available to reproduce that install locally.
 - Commit: `ca07e88` (`feat(program): add local FB and FC declaration drafts`).
 - Remaining: parse actual Instance DB-to-FB links from verified TIA exports,
   add richer dependency/preflight reporting for FB/FC declaration drafts, and
