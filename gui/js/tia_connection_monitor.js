@@ -34,9 +34,17 @@ export function initTiaConnectionMonitor() {
             exportIndicator.textContent = text;
             mark(exportIndicator, active);
         }
+        // "Active PLC" denotes the engineering target selected in this app.
+        // It does not represent a physically connected / online CPU and is
+        // independent of the TIA process-presence badge.
         const plcSelected = !!headerPlc?.textContent?.trim()
             && !/not selected/i.test(headerPlc.textContent);
-        mark(headerPlc, active && plcSelected);
+        mark(headerPlc, plcSelected);
+        if (headerPlc) {
+            headerPlc.title = plcSelected
+                ? "Selected PLC target in TIAEngineeringAssistant. This is not a PLC online/physical connection indicator."
+                : "No PLC selected as the active engineering target.";
+        }
         const profileSelected = !!headerProfile?.textContent?.trim()
             && !/not selected/i.test(headerProfile.textContent);
         mark(headerProfile, profileSelected);
