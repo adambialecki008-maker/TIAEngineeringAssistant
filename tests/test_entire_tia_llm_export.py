@@ -103,6 +103,10 @@ def test_entire_open_tia_export_is_project_scoped_not_loaded_profile(monkeypatch
     assert "tia-project/plc/PLC_1/types/000002_UDT_1.xml" in names
     assert "tia-project/hmi/HMI_1/screens/000003_Main.xml" in names
     assert "review/DETERMINISTIC_ANALYSIS.json" in names
+    static_review = json.loads(archive.read("review/DETERMINISTIC_ANALYSIS.json"))
+    assert static_review["coverage"]["by_scope"]["plc"]["analyzed"] == 2
+    assert static_review["coverage"]["by_scope"]["hmi"]["analyzed"] == 1
+    assert "analyzed subset" in static_review["notice"]
     manifest = json.loads(archive.read("MANIFEST.json"))
     assert manifest["project_name"] == "Plant_Main"
     assert manifest["source_scope"] == "entire_open_tia_project"
@@ -111,12 +115,37 @@ def test_entire_open_tia_export_is_project_scoped_not_loaded_profile(monkeypatch
     assert manifest["missing_object_rows"] == 1
     assert manifest["read_only"] is True
     assert manifest["ollama_used"] is False
+    assert manifest["static_review_coverage"]["plc"]["analyzed"] == 2
     assert "TIA_MISSING.tsv" in archive.read("README_FOR_CHATGPT.md").decode("utf-8")
     assert len(names) == len(manifest["files"]) + 1
     for entry in manifest["files"]:
         raw = archive.read(entry["name"])
         assert hashlib.sha256(raw).hexdigest() == entry["sha256"]
     assert adapter_timeout_seconds("export-entire-project-llm") >= 900
+
+
+def test_static_review_selects_plc_before_hmi_and_marks_unreviewed_sources():
+    from engine.llm_project_export import _select_static_review_sources
+
+    hmi_xml = b'<Document><Hmi.Screen Name="Main"/></Document>'
+    files = {
+        f"tia-project/hmi/HMI_1/screens/{index:04d}.xml": hmi_xml
+        for index in range(80)
+    }
+    files["tia-project/plc/PLC_1/blocks/000001_FB_Main.xml"] = (
+        b"<Document><SW.Blocks.FB><AttributeList><Name>FB_Main</Name>"
+        b"</AttributeList></SW.Blocks.FB></Document>"
+    )
+
+    selected, coverage = _select_static_review_sources(files)
+
+    selected_names = {source.name for source in selected}
+    assert "tia-project/plc/PLC_1/blocks/000001_FB_Main.xml" in selected_names
+    assert coverage["by_scope"]["plc"]["analyzed"] == 1
+    assert coverage["by_scope"]["hmi"]["analyzed"] == 50
+    assert coverage["by_scope"]["hmi"]["skipped_limit"] == 30
+    skipped = [item for item in coverage["sources"] if item["status"] == "skipped"]
+    assert all(item["reason"] for item in skipped)
 
 
 def test_entire_tia_export_rejects_missing_process_and_invalid_results(monkeypatch):

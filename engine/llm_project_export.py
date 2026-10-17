@@ -216,6 +216,111 @@ from engine.tia.adapter import run_adapter as _run_adapter
 _MAX_TIA_FILES = 30000
 _MAX_TIA_ARCHIVE_BYTES = 180 * 1024 * 1024
 _MAX_TIA_ONE_FILE = 25 * 1024 * 1024
+_STATIC_REVIEW_QUOTAS = {
+    # PLC logic is the primary purpose of this archive. Keep its selection
+    # independent from the usually much larger HMI export tree.
+    "plc": 250,
+    "hmi": 50,
+    "other": 25,
+}
+
+
+def _static_review_scope(path: str) -> str:
+    lowered = path.casefold()
+    if lowered.startswith("tia-project/plc/"):
+        return "plc"
+    if lowered.startswith("tia-project/hmi/"):
+        return "hmi"
+    return "other"
+
+
+def _select_static_review_sources(
+    files: dict[str, bytes],
+) -> tuple[list[ReviewInputFile], dict[str, Any]]:
+    """Select bounded XML review input without letting HMI hide PLC logic.
+
+    This remains a conservative static sampling layer. It reports every XML
+    source's review state so an empty finding list cannot be mistaken for a
+    complete project audit.
+    """
+    xml_sources = sorted(
+        (path, content)
+        for path, content in files.items()
+        if path.casefold().endswith(".xml")
+    )
+    review_input: list[ReviewInputFile] = []
+    records: list[dict[str, str]] = []
+    by_scope: dict[str, dict[str, int]] = {
+        scope: {
+            "in_archive": 0,
+            "analyzed": 0,
+            "skipped_limit": 0,
+            "skipped_oversized": 0,
+            "skipped_unreadable": 0,
+        }
+        for scope in _STATIC_REVIEW_QUOTAS
+    }
+    sources_by_scope: dict[str, list[tuple[str, bytes]]] = {
+        scope: [] for scope in _STATIC_REVIEW_QUOTAS
+    }
+    for path, content in xml_sources:
+        scope = _static_review_scope(path)
+        by_scope[scope]["in_archive"] += 1
+        sources_by_scope[scope].append((path, content))
+
+    for scope, sources in sources_by_scope.items():
+        quota = _STATIC_REVIEW_QUOTAS[scope]
+        selected = 0
+        for path, content in sources:
+            if len(content) > MAX_FILE_BYTES:
+                by_scope[scope]["skipped_oversized"] += 1
+                records.append({
+                    "path": path,
+                    "scope": scope,
+                    "status": "skipped",
+                    "reason": "exceeds static-review single-file limit",
+                })
+                continue
+            if selected >= quota:
+                by_scope[scope]["skipped_limit"] += 1
+                records.append({
+                    "path": path,
+                    "scope": scope,
+                    "status": "skipped",
+                    "reason": "static-review scope quota reached",
+                })
+                continue
+            try:
+                text = content.decode("utf-8-sig")
+            except UnicodeError:
+                by_scope[scope]["skipped_unreadable"] += 1
+                records.append({
+                    "path": path,
+                    "scope": scope,
+                    "status": "skipped",
+                    "reason": "not valid UTF-8 text",
+                })
+                continue
+            review_input.append(ReviewInputFile(name=path, content=text))
+            selected += 1
+            by_scope[scope]["analyzed"] += 1
+            records.append({
+                "path": path,
+                "scope": scope,
+                "status": "analyzed",
+                "reason": "selected within scope quota",
+            })
+
+    coverage = {
+        "notice": (
+            "Static findings apply only to sources marked analyzed. "
+            "Skipped sources are unreviewed, not error-free."
+        ),
+        "quotas": _STATIC_REVIEW_QUOTAS,
+        "by_scope": by_scope,
+        "sources": records,
+    }
+    return review_input, coverage
 
 
 @router.get("/tia-export-status")
@@ -289,35 +394,42 @@ def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
         object_rows = files["tia-project/TIA_OBJECTS.tsv"].decode("utf-8-sig", "replace").splitlines()
         missing_rows = files["tia-project/TIA_MISSING.tsv"].decode("utf-8-sig", "replace").splitlines()
         missing_count = max(0, len(missing_rows) - 1) + len(skipped)
+        review_input, static_coverage = _select_static_review_sources(files)
         source_files = [
-            (path, content) for path, content in files.items()
-            if path.casefold().endswith(".xml") and len(content) <= MAX_FILE_BYTES
+            path for path in files
+            if path.casefold().endswith(".xml")
         ]
-        review_input = []
-        for path, content in source_files[:250]:
-            try:
-                review_input.append(ReviewInputFile(
-                    name=path, content=content.decode("utf-8-sig"),
-                ))
-            except (UnicodeError, ValueError):
-                skipped.append(path + ": source not parsed as UTF-8 text")
-        missing_count += len(skipped) - (missing_count - max(0, len(missing_rows) - 1))
         if review_input:
             analysis = analyze_files(review_input)
-            compact = {
-                "notice": "Static review only; no TIA compile or network verification",
-                "sources_reviewed": len(review_input),
-                "sources_in_zip": len(source_files),
-                "summary": analysis.summary.model_dump(),
-                "findings": [x.model_dump() for x in analysis.findings],
-                "dependencies": [
-                    {"source":x.source_file, "block":x.name,
-                     "dependencies":x.dependencies,
-                     "calls":[c.model_dump() for c in x.calls]}
-                    for x in analysis.files
-                ],
-            }
-            files["review/DETERMINISTIC_ANALYSIS.json"] = _json(compact)
+            summary = analysis.summary.model_dump()
+            findings = [x.model_dump() for x in analysis.findings]
+            dependencies = [
+                {"source": x.source_file, "block": x.name,
+                 "dependencies": x.dependencies,
+                 "calls": [c.model_dump() for c in x.calls]}
+                for x in analysis.files
+            ]
+            warnings = analysis.file_warnings
+        else:
+            summary = None
+            findings = []
+            dependencies = []
+            warnings = ["No XML source could be selected for static review."]
+        compact = {
+            "notice": (
+                "Static review only; no TIA compile or network verification. "
+                "Zero findings describe only the analyzed subset and never "
+                "mean every project source is error-free."
+            ),
+            "sources_reviewed": len(review_input),
+            "sources_in_zip": len(source_files),
+            "coverage": static_coverage,
+            "summary": summary,
+            "findings": findings,
+            "dependencies": dependencies,
+            "warnings": warnings,
+        }
+        files["review/DETERMINISTIC_ANALYSIS.json"] = _json(compact)
         missing_lines = [
             "# Missing or unsupported objects",
             "",
@@ -354,6 +466,8 @@ def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
             "inaccessible. Their absence is reported; a .ap21/.zap21 backup is",
             "NOT generated and must not be inferred from this ZIP.",
             "Large XML files may be present but omitted from static analysis.",
+            "The static report lists analyzed and skipped sources by scope;",
+            "zero findings only describes the analyzed subset.",
             "",
             "## Confidentiality",
             "This project may contain proprietary PLC logic, network addresses,",
@@ -373,6 +487,7 @@ def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
             "skipped_oversized_or_unreadable":skipped,
             "sources_in_archive":len(source_files),
             "source_files_statically_reviewed":len(review_input),
+            "static_review_coverage": static_coverage["by_scope"],
             "read_only":True,
             "ollama_used":False,
             "files":[{

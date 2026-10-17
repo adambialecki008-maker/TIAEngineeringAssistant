@@ -853,3 +853,14 @@
   inventory read, but its device and PLC name are hidden from the shared
   header and Overview until the current project verifies it. This prevents a
   removed PLC or a target from another project from appearing active.
+
+## Whole-project LLM export: truthful static-review coverage - 2026-10-17
+
+- Static review now selects PLC XML independently before HMI XML: up to 250
+  PLC sources, 50 HMI sources and 25 other XML sources. A large HMI project
+  can no longer consume the entire PLC analysis budget merely through path
+  sort order.
+- `review/DETERMINISTIC_ANALYSIS.json` and `MANIFEST.json` now expose
+  per-scope analyzed/skipped counts, quotas and every XML source's review
+  status with a reason. `0 findings` explicitly describes only the analyzed
+  subset, never the complete project.
