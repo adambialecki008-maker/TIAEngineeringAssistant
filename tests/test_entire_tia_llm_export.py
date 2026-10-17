@@ -224,15 +224,15 @@ def test_review_companion_uses_real_inventory_and_does_not_invent_sources():
     from engine.llm_review_companion import build_review_companion
     exported = {
         "tia-project/TIA_OBJECTS.tsv": (
-            "Kind\\tObject\\tPath\\tMetadata\\tFile\\n"
-            "PLC_BLOCK\\tS7/PLC/FB_Missing\\t\\tFB\\t\\n"
-            "PLC_BLOCK\\tS7/PLC/FB_Valid\\t\\tFB\\tplc/P1/blocks/1_FB_Valid.xml\\n"
-            "HMI_OBJECT\\tScreen1\\t\\tScreen\\thmi/HMI1/ScreenFolder/Screens/1.xml\\n"
-            "HMI_OBJECT\\tTag1\\t\\tTag\\thmi/HMI1/tags/2.xml\\n"
+            "Kind\tObject\tPath\tMetadata\tFile\n"
+            "PLC_BLOCK\tS7/PLC/FB_Missing\t\tFB\t\n"
+            "PLC_BLOCK\tS7/PLC/FB_Valid\t\tFB\tplc/P1/blocks/1_FB_Valid.xml\n"
+            "HMI_OBJECT\tScreen1\t\tScreen\thmi/HMI1/ScreenFolder/Screens/1.xml\n"
+            "HMI_OBJECT\tTag1\t\tTag\thmi/HMI1/tags/2.xml\n"
         ).encode("utf-8"),
         "tia-project/TIA_MISSING.tsv": (
-            "Kind\\tObject\\tReason\\n"
-            "PLC_BLOCK\\tS7/PLC/FB_Missing\\tNot permitted\\n"
+            "Kind\tObject\tReason\n"
+            "PLC_BLOCK\tS7/PLC/FB_Missing\tNot permitted\n"
         ).encode("utf-8"),
         "tia-project/plc/P1/blocks/1_FB_Valid.xml": b"<Document/>",
         "tia-project/hmi/HMI1/ScreenFolder/Screens/1.xml": b"<Document/>",
