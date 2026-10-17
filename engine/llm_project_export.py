@@ -5,7 +5,9 @@ import io
 import json
 import re
 import zipfile
+from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -32,6 +34,14 @@ def _json(value):
 
 def _label(value):
     return (re.sub(r"[^A-Za-z0-9_.-]", "_", str(value)).strip("._") or "unnamed")[:70]
+
+
+def _tia_export_filename(project_name: str, active_plc: str, today: date | None = None) -> str:
+    export_date = today or datetime.now(ZoneInfo("Europe/Warsaw")).date()
+    return "Export_LLM_{}_{}_{}.zip".format(
+        _label(project_name), _label(active_plc or "NoActivePLC"),
+        export_date.strftime("%Y_%m_%d"),
+    )
 
 
 @router.post("/export-for-llm-review")
@@ -371,7 +381,10 @@ def tia_export_status() -> dict[str, str | bool]:
 
 
 @router.post("/export-tia-project-for-llm")
-def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
+def export_open_tia_project_for_llm(
+    process_id: int = _Query(ge=1),
+    active_plc: str = _Query(default="", max_length=128),
+) -> Response:
     """Export read-only Open TIA project objects, NOT just app profile.
 
     TIA XML/TSV exports are written to a server-owned temporary folder.
@@ -553,7 +566,9 @@ def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
             raise HTTPException(413, "TIA project archive exceeds 180 MB compressed.")
         return Response(content=archive, media_type="application/zip", headers={
             "Content-Disposition":
-                'attachment; filename="TIA_Portal_Entire_Project_LLM_Review.zip"',
+                'attachment; filename="' + _tia_export_filename(
+                    project_name, active_plc,
+                ) + '"',
             "Cache-Control":"no-store",
             "X-Content-Type-Options":"nosniff",
         })

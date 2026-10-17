@@ -2,7 +2,9 @@
 import hashlib
 import io
 import json
+import re
 import zipfile
+from datetime import date
 
 import pytest
 
@@ -12,6 +14,14 @@ from engine.tia.adapter import adapter_timeout_seconds
 
 client = TestClient(app)
 URL = "/api/v1/code-review/export-tia-project-for-llm?process_id=321"
+
+
+def test_tia_export_filename_uses_project_active_plc_and_warsaw_date():
+    from engine.llm_project_export import _tia_export_filename
+
+    assert _tia_export_filename("TiaOpennessTest", "PPFKA2", date(2026, 10, 17)) == (
+        "Export_LLM_TiaOpennessTest_PPFKA2_2026_10_17.zip"
+    )
 
 
 def test_real_project_export_is_enabled_after_session_lifetime_fix(monkeypatch):
@@ -93,7 +103,10 @@ def test_entire_open_tia_export_is_project_scoped_not_loaded_profile(monkeypatch
     assert response.status_code == 200, response.text
     assert response.headers["content-type"] == "application/zip"
     assert response.headers["cache-control"] == "no-store"
-    assert "TIA_Portal_Entire_Project_LLM_Review.zip" in response.headers["content-disposition"]
+    assert re.search(
+        r'filename="Export_LLM_Plant_Main_NoActivePLC_\d{4}_\d{2}_\d{2}\.zip"',
+        response.headers["content-disposition"],
+    )
     archive = zipfile.ZipFile(io.BytesIO(response.content))
     names = set(archive.namelist())
     assert "TIA_OBJECTS.tsv" not in names

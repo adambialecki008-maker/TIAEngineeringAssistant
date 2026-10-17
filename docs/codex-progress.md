@@ -875,3 +875,10 @@
   Referenced-but-absent definitions are appended to `TIA_MISSING.tsv` as
   `HMI_CONNECTION_REFERENCED_NOT_EXPORTED`; this is export incompleteness,
   not a claim that the connection is broken in TIA.
+
+## Whole-project LLM export: descriptive download names - 2026-10-17
+
+- The whole-project ZIP now downloads as
+  `Export_LLM_<TIA-project>_<active-PLC>_YYYY_MM_DD.zip`. The project name
+  comes from the read-only export confirmation; the PLC name is included only
+  after the current TIA project verifies the selected target.

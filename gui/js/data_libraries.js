@@ -1535,9 +1535,14 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
                 return;
             }
             tiaExportStatus.textContent = "Exporting the entire OPEN TIA project via Openness…";
+            const query = new URLSearchParams({process_id: String(pid)});
+            const target = projectConfig.tia_target;
+            const targetVerified = document.getElementById("active-plc-summary")
+                ?.dataset.tiaTargetVerified === "true";
+            if (targetVerified && target?.plc_name) query.set("active_plc", target.plc_name);
             const response = await fetch(
-                "/api/v1/code-review/export-tia-project-for-llm?process_id="
-                + encodeURIComponent(pid), {method: "POST"}
+                "/api/v1/code-review/export-tia-project-for-llm?" + query,
+                {method: "POST"}
             );
             if (!response.ok) {
                 const body = await response.text();
@@ -1550,7 +1555,9 @@ export function initDataLibrariesUi(refreshProject = () => {}) {
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = "TIA_Portal_Entire_Project_LLM_Review.zip";
+            const disposition = response.headers.get("content-disposition") || "";
+            const match = /filename="([^"\\]+)"/i.exec(disposition);
+            link.download = match?.[1] || "Export_LLM_TIA_Project.zip";
             link.click();
             setTimeout(() => URL.revokeObjectURL(url), 60000);
             tiaExportStatus.textContent = "Exported the open TIA project. Inspect MANIFEST.json, "
