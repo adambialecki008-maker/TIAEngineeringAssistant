@@ -116,6 +116,23 @@ def test_entire_open_tia_export_is_project_scoped_not_loaded_profile(monkeypatch
     assert "tia-project/plc/PLC_1/types/000002_UDT_1.xml" in names
     assert "tia-project/hmi/HMI_1/screens/000003_Main.xml" in names
     assert "review/DETERMINISTIC_ANALYSIS.json" in names
+    assert "START_HERE.md" in names
+    assert "REVIEW_PROMPT_PL.md" in names
+    assert "review/SOURCE_INDEX.json" in names
+    prompt = archive.read("REVIEW_PROMPT_PL.md").decode("utf-8")
+    assert "Parts/Wires" in prompt
+    assert "fałszywy alarm" in prompt
+    assert "weryfikacja" in prompt.lower()
+    guide = archive.read("START_HERE.md").decode("utf-8")
+    assert "REVIEW_PROMPT_PL.md" in guide
+    assert "Nie" not in guide or len(guide) > 400
+    source_index = json.loads(archive.read("review/SOURCE_INDEX.json"))
+    assert source_index["project_name"] == "Plant_Main"
+    assert source_index["object_counts"]["PLC_BLOCK"] == 1
+    assert source_index["object_counts"]["PLC_TYPE"] == 1
+    assert source_index["static_review_coverage"]["plc"]["analyzed"] == 2
+    assert any(x["source_path"].endswith("FB_1.xml") for x in source_index["plc_sources"])
+
     static_review = json.loads(archive.read("review/DETERMINISTIC_ANALYSIS.json"))
     assert static_review["coverage"]["by_scope"]["plc"]["analyzed"] == 2
     assert static_review["coverage"]["by_scope"]["hmi"]["analyzed"] == 1
@@ -128,6 +145,9 @@ def test_entire_open_tia_export_is_project_scoped_not_loaded_profile(monkeypatch
     assert manifest["missing_object_rows"] == 1
     assert manifest["read_only"] is True
     assert manifest["ollama_used"] is False
+    assert manifest["review_companion"] == [
+        "START_HERE.md", "REVIEW_PROMPT_PL.md", "review/SOURCE_INDEX.json",
+    ]
     assert manifest["static_review_coverage"]["plc"]["analyzed"] == 2
     assert "TIA_MISSING.tsv" in archive.read("README_FOR_CHATGPT.md").decode("utf-8")
     assert len(names) == len(manifest["files"]) + 1
@@ -198,6 +218,42 @@ def test_missing_tia_project_inventory_is_rejected_not_exposed_as_complete(monke
         return ["LLM_PROJECT_EXPORTED|Empty|0|0"]
     monkeypatch.setattr("engine.llm_project_export._run_adapter", no_inventory)
     assert client.post(URL).status_code == 502
+
+
+def test_review_companion_uses_real_inventory_and_does_not_invent_sources():
+    from engine.llm_review_companion import build_review_companion
+    exported = {
+        "tia-project/TIA_OBJECTS.tsv": (
+            "Kind\\tObject\\tPath\\tMetadata\\tFile\\n"
+            "PLC_BLOCK\\tS7/PLC/FB_Missing\\t\\tFB\\t\\n"
+            "PLC_BLOCK\\tS7/PLC/FB_Valid\\t\\tFB\\tplc/P1/blocks/1_FB_Valid.xml\\n"
+            "HMI_OBJECT\\tScreen1\\t\\tScreen\\thmi/HMI1/ScreenFolder/Screens/1.xml\\n"
+            "HMI_OBJECT\\tTag1\\t\\tTag\\thmi/HMI1/tags/2.xml\\n"
+        ).encode("utf-8"),
+        "tia-project/TIA_MISSING.tsv": (
+            "Kind\\tObject\\tReason\\n"
+            "PLC_BLOCK\\tS7/PLC/FB_Missing\\tNot permitted\\n"
+        ).encode("utf-8"),
+        "tia-project/plc/P1/blocks/1_FB_Valid.xml": b"<Document/>",
+        "tia-project/hmi/HMI1/ScreenFolder/Screens/1.xml": b"<Document/>",
+        "tia-project/hmi/HMI1/tags/2.xml": b"<Document/>",
+    }
+    companion = build_review_companion(
+        exported, "Example", 123, {"by_scope": {"plc": {"analyzed": 0}}},
+    )
+    assert set(companion) == {
+        "START_HERE.md", "REVIEW_PROMPT_PL.md", "review/SOURCE_INDEX.json",
+    }
+    index = json.loads(companion["review/SOURCE_INDEX.json"])
+    assert index["object_counts"]["HMI_OBJECT"] == 2
+    assert index["hmi_objects_by_owner"] == {"HMI1": 2}
+    assert len(index["hmi_screen_sources"]) == 1
+    assert len(index["plc_sources"]) == 2
+    assert index["plc_sources"][0]["exported"] is False
+    assert index["plc_sources"][0]["source_path"] is None
+    assert index["plc_sources"][1]["exported"] is True
+    assert len(index["missing_report"]) == 1
+    assert "0" in companion["START_HERE.md"].decode("utf-8")
 
 
 def test_tia_adapter_bulk_export_command_exists_without_project_write():
