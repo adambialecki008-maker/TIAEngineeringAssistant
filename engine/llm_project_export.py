@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from engine.plc_code_review import ReviewInputFile, analyze_files, MAX_FILE_BYTES
+from engine.llm_review_companion import build_review_companion
 from engine.udt import UdtSpecification
 from engine.plc_db import DataBlockSpecification
 from functions.tia_source_generator import generate_udt_source, generate_db_source
@@ -511,9 +512,13 @@ def export_open_tia_project_for_llm(
             "All successfully exported native XML and TSV files are included.",
             "",
             "## Read before reviewing",
-            "1. Start with MANIFEST.json and tia-project/TIA_OBJECTS.tsv.",
+            "0. OPEN START_HERE.md. Its REVIEW_PROMPT_PL.md contains a thorough",
+            "   Polish engineering review instruction for external LLMs.",
+            "1. Start with review/SOURCE_INDEX.json, MANIFEST.json and",
+            "   tia-project/TIA_OBJECTS.tsv.",
             "2. Inspect tia-project/TIA_MISSING.tsv before judging completeness.",
             "3. Read source XML in tia-project/plc/ and tia-project/hmi/.",
+            "   The index lists ALL PLC source files, not just the static sample.",
             "4. Review PLC logic, dependencies and interfaces; distinguish",
             "   verified source evidence from any speculative analysis.",
             "5. No project edit/save/compile/import or external LLM call occurred.",
@@ -533,6 +538,11 @@ def export_open_tia_project_for_llm(
             "customer names and process data. Inspect the ZIP before uploading.",
         ]
         files["README_FOR_CHATGPT.md"] = ("\n".join(docs) + "\n").encode("utf-8")
+        # Pure ZIP postprocessing: no new TIA attachments, project writes or
+        # extra full-source static analysis. Preserve every original XML.
+        files.update(build_review_companion(
+            files, project_name, process_id, static_coverage,
+        ))
         inventory = {
             "format":"TIAEngineeringAssistant_open_TIA_project_review",
             "schema_version":2,
@@ -547,6 +557,9 @@ def export_open_tia_project_for_llm(
             "sources_in_archive":len(source_files),
             "source_files_statically_reviewed":len(review_input),
             "static_review_coverage": static_coverage["by_scope"],
+            "review_companion": [
+                "START_HERE.md", "REVIEW_PROMPT_PL.md", "review/SOURCE_INDEX.json",
+            ],
             "read_only":True,
             "ollama_used":False,
             "files":[{
