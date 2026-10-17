@@ -864,3 +864,14 @@
   per-scope analyzed/skipped counts, quotas and every XML source's review
   status with a reason. `0 findings` explicitly describes only the analyzed
   subset, never the complete project.
+
+## Whole-project LLM export: HMI Connection coverage - 2026-10-17
+
+- The Openness adapter records when neither supported HMI Connections
+  collection is accessible. It remains read-only and does not retry an
+  invalidated TIA session.
+- ZIP packaging compares documented `HMI_Connection_*` references found in
+  exported HMI XML against exported XML from each HMI Connections folder.
+  Referenced-but-absent definitions are appended to `TIA_MISSING.tsv` as
+  `HMI_CONNECTION_REFERENCED_NOT_EXPORTED`; this is export incompleteness,
+  not a claim that the connection is broken in TIA.

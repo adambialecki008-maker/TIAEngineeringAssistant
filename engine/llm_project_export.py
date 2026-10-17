@@ -223,6 +223,7 @@ _STATIC_REVIEW_QUOTAS = {
     "hmi": 50,
     "other": 25,
 }
+_HMI_CONNECTION_REFERENCE = re.compile(r"\bHMI_Connection_[A-Za-z0-9_.-]+\b")
 
 
 def _static_review_scope(path: str) -> str:
@@ -323,6 +324,44 @@ def _select_static_review_sources(
     return review_input, coverage
 
 
+def _missing_hmi_connection_lines(files: dict[str, bytes]) -> list[str]:
+    """Report exported HMI tag references whose connection XML is absent.
+
+    The raw XML remains authoritative. This intentionally recognizes only the
+    documented Classic naming form rather than guessing arbitrary XML schemas.
+    """
+    references: dict[str, set[str]] = {}
+    exported: dict[str, set[str]] = {}
+    for path, content in files.items():
+        lowered = path.casefold()
+        if not (lowered.startswith("tia-project/hmi/") and lowered.endswith(".xml")):
+            continue
+        parts = path.split("/")
+        if len(parts) < 4:
+            continue
+        owner = parts[2]
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeError:
+            continue
+        found = set(_HMI_CONNECTION_REFERENCE.findall(text))
+        if not found:
+            continue
+        references.setdefault(owner, set()).update(found)
+        if "/connections/" in lowered or "/connectionfolder/" in lowered:
+            exported.setdefault(owner, set()).update(found)
+    lines = []
+    for owner, names in sorted(references.items()):
+        for name in sorted(names - exported.get(owner, set())):
+            lines.append(
+                "HMI_CONNECTION_REFERENCED_NOT_EXPORTED\t"
+                + owner + "/" + name + "\t"
+                + "Referenced by exported HMI XML, but no exported connection XML "
+                + "for that HMI contains the same HMI_Connection identifier"
+            )
+    return lines
+
+
 @router.get("/tia-export-status")
 def tia_export_status() -> dict[str, str | bool]:
     return {
@@ -391,6 +430,13 @@ def export_open_tia_project_for_llm(process_id: int = _Query(ge=1)) -> Response:
             raise HTTPException(502, "TIA export has no project inventory.")
         if "tia-project/TIA_MISSING.tsv" not in files:
             raise HTTPException(502, "TIA export has no missing-object report.")
+        connection_missing = _missing_hmi_connection_lines(files)
+        if connection_missing:
+            missing_path = "tia-project/TIA_MISSING.tsv"
+            current_missing = files[missing_path].decode("utf-8-sig", "replace").rstrip("\r\n")
+            files[missing_path] = (
+                current_missing + "\n" + "\n".join(connection_missing) + "\n"
+            ).encode("utf-8")
         object_rows = files["tia-project/TIA_OBJECTS.tsv"].decode("utf-8-sig", "replace").splitlines()
         missing_rows = files["tia-project/TIA_MISSING.tsv"].decode("utf-8-sig", "replace").splitlines()
         missing_count = max(0, len(missing_rows) - 1) + len(skipped)

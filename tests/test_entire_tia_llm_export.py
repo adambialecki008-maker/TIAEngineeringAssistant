@@ -148,6 +148,29 @@ def test_static_review_selects_plc_before_hmi_and_marks_unreviewed_sources():
     assert all(item["reason"] for item in skipped)
 
 
+def test_export_reports_hmi_connection_references_without_connection_xml():
+    from engine.llm_project_export import _missing_hmi_connection_lines
+
+    files = {
+        "tia-project/hmi/HMI_Main/tags/Tags.xml": (
+            b'<Document Connection="HMI_Connection_1"/>'
+        ),
+        "tia-project/hmi/HMI_Main/Connections/Connection.xml": (
+            b'<Document Name="HMI_Connection_1"/>'
+        ),
+        "tia-project/hmi/HMI_Bridge/tags/Tags.xml": (
+            b'<Document Connection="HMI_Connection_3"/>'
+        ),
+    }
+
+    lines = _missing_hmi_connection_lines(files)
+
+    assert len(lines) == 1
+    assert lines[0].startswith(
+        "HMI_CONNECTION_REFERENCED_NOT_EXPORTED\tHMI_Bridge/HMI_Connection_3\t"
+    )
+
+
 def test_entire_tia_export_rejects_missing_process_and_invalid_results(monkeypatch):
     assert client.post("/api/v1/code-review/export-tia-project-for-llm").status_code == 422
     assert client.post("/api/v1/code-review/export-tia-project-for-llm?process_id=0").status_code == 422
@@ -189,6 +212,7 @@ def test_tia_adapter_bulk_export_command_exists_without_project_write():
     roots = service[service.index("string[] roots"):service.index("var seen")]
     assert '"GraphicLists",' not in roots
     assert "HMI_GRAPHIC_LIST_EXCLUDED" in service
+    assert "HMI_CONNECTION_COLLECTION_UNAVAILABLE" in service
     assert "IsExcludedGraphicList(value)" in service
     assert "Siemens.Engineering.Hmi.TextGraphicList.GraphicList" in service
     assert "project.Save(" not in service

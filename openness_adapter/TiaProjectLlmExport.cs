@@ -274,14 +274,21 @@ namespace TiaOpennessAdapter
                 "Graphic lists are excluded from LLM export for Openness safety");
             var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
             bool foundRoot = false;
+            bool foundConnectionRoot = false;
             foreach (string root in roots)
             {
                 object value = ProjectLlmExport.ReadProperty(software, root);
                 if (value == null) continue;
                 foundRoot = true;
+                if (root == "Connections" || root == "ConnectionFolder")
+                    foundConnectionRoot = true;
                 ExportReflectiveTree(report, value, folder + "/" +
                     ProjectLlmExport.SafeName(root), owner + "/" + root, seen, 0);
             }
+            if (!foundConnectionRoot)
+                report.Unsupported("HMI_CONNECTION_COLLECTION_UNAVAILABLE",
+                    owner + "/Connections",
+                    "No supported HMI connection collection was accessible");
             if (!foundRoot)
                 report.Failure("HMI_EXPORT", owner,
                     "No supported Classic/Unified export collection was accessible");
