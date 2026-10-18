@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from engine.plc_code_review import ReviewInputFile, analyze_files, MAX_FILE_BYTES
 from engine.llm_review_companion import build_review_companion
+from engine.tia_offline_audit import analyze_exported_plc, audit_artifacts
 from engine.udt import UdtSpecification
 from engine.plc_db import DataBlockSpecification
 from functions.tia_source_generator import generate_udt_source, generate_db_source
@@ -490,6 +491,10 @@ def export_open_tia_project_for_llm(
             "warnings": warnings,
         }
         files["review/DETERMINISTIC_ANALYSIS.json"] = _json(compact)
+        # Full offline PLC XML pass. Pure analysis of already exported bytes:
+        # no second TIA attach, no LLM API, no PLC import/write.
+        engineering_audit = analyze_exported_plc(files)
+        files.update(audit_artifacts(engineering_audit, static_coverage))
         missing_lines = [
             "# Missing or unsupported objects",
             "",
@@ -517,6 +522,10 @@ def export_open_tia_project_for_llm(
             "1. Start with review/SOURCE_INDEX.json, MANIFEST.json and",
             "   tia-project/TIA_OBJECTS.tsv.",
             "2. Inspect tia-project/TIA_MISSING.tsv before judging completeness.",
+            "   For token-efficient analysis, START with review/LLM_BRIEF_PL.md",
+            "   and review/ENGINEERING_SUMMARY.md.",
+            "   review/ENGINEERING_AUDIT.json indexes every available PLC XML",
+            "   and machine-level source relationships; check claims in XML.",
             "3. Read source XML in tia-project/plc/ and tia-project/hmi/.",
             "   The index lists ALL PLC source files, not just the static sample.",
             "4. Review PLC logic, dependencies and interfaces; distinguish",
@@ -557,6 +566,12 @@ def export_open_tia_project_for_llm(
             "sources_in_archive":len(source_files),
             "source_files_statically_reviewed":len(review_input),
             "static_review_coverage": static_coverage["by_scope"],
+            "offline_plc_analysis_coverage": engineering_audit["coverage"],
+            "offline_plc_analysis_files": [
+                "review/ENGINEERING_AUDIT.json",
+                "review/ENGINEERING_SUMMARY.md",
+                "review/LLM_BRIEF_PL.md",
+            ],
             "review_companion": [
                 "START_HERE.md", "REVIEW_PROMPT_PL.md", "review/SOURCE_INDEX.json",
             ],
