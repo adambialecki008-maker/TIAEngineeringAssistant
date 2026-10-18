@@ -20,13 +20,18 @@ układów napędowych, HMI i bezpieczeństwa maszyn. Przeanalizuj ZAŁĄCZONY ZI
 odczytu XML z kompilacją ani uruchomieniem programu.
 
 ## Jak rozpocząć
-1. Odczytaj START_HERE.md, MANIFEST.json oraz review/SOURCE_INDEX.json.
+1. Odczytaj START_HERE.md, review/LLM_BRIEF_PL.md,
+   review/ENGINEERING_SUMMARY.md, MANIFEST.json i review/SOURCE_INDEX.json.
+   review/ENGINEERING_AUDIT.json zawiera pełny lokalny indeks PLC, wywołania,
+   kandydatów na wielokrotne zapisy oraz przybliżone przejścia CASE.
 2. Sprawdź tia-project/TIA_OBJECTS.tsv, tia-project/TIA_MISSING.tsv i
    MISSING_SOURCES.md. Oddziel pliki istniejące od niewyeksportowanych obiektów.
 3. review/DETERMINISTIC_ANALYSIS.json traktuj jako listę HIPOTEZ tylko dla
    plików ze statusem analyzed. Sprawdź każde podejrzenie w oryginalnym XML.
-4. Używaj źródeł tia-project/plc/ i tia-project/hmi/. Zbadaj komplet bloków
-   PLC/UDT dostępnych w ZIP, a nie jedynie limit 250 plików analizy statycznej.
+4. Ogranicz zużycie tokenów: NAJPIERW przeszukaj strukturalny indeks wszystkich
+   PLC w review/ENGINEERING_AUDIT.json i ustal priorytetowe moduły. Otwieraj
+   tylko XML niezbędne do sprawdzenia konkretnego ustalenia. Nie wklejaj ani
+   nie czytaj naraz całego ZIP (tysięcy XML).
 5. Jeżeli zakres przekracza możliwości jednorazowej analizy, zaplanuj kolejne
    partie po funkcjach i WYRAŹNIE opisz, co sprawdzono i czego nie sprawdzono.
    Nie zgłaszaj 100% pokrycia bez rzeczywistego przeczytania źródeł.
@@ -178,9 +183,12 @@ def build_review_companion(
         "## Recommended use\n"
         "1. Attach this ZIP to ChatGPT or another LLM capable of reading archives.\n"
         "2. Ask it to follow **REVIEW_PROMPT_PL.md**; the full prompt is included.\n"
-        "3. Start with **review/SOURCE_INDEX.json**, **MANIFEST.json**, "
+        "3. Start with review/LLM_BRIEF_PL.md and "
+        "review/ENGINEERING_SUMMARY.md, then **review/SOURCE_INDEX.json**, "
+        "**MANIFEST.json**, "
         "**tia-project/TIA_MISSING.tsv** and **tia-project/TIA_OBJECTS.tsv**.\n"
-        "4. Then inspect the actual PLC/HMI XML files IN BATCHES by machine module.\n"
+        "4. The offline Python pass indexes ALL available PLC XMLs with no "
+        "LLM tokens; open the exact PLC/HMI XML needed to verify a finding.\n"
         "5. Require every claimed defect to cite a real block, XML path and "
         "network/state or instruction. Do not repeat heuristic P0s as facts.\n\n"
         "## Observed coverage (not a completion claim)\n"
