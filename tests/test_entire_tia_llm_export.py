@@ -116,6 +116,14 @@ def test_entire_open_tia_export_is_project_scoped_not_loaded_profile(monkeypatch
     assert "tia-project/plc/PLC_1/types/000002_UDT_1.xml" in names
     assert "tia-project/hmi/HMI_1/screens/000003_Main.xml" in names
     assert "review/DETERMINISTIC_ANALYSIS.json" in names
+    assert "review/ENGINEERING_AUDIT.json" in names
+    assert "review/ENGINEERING_SUMMARY.md" in names
+    assert "review/LLM_BRIEF_PL.md" in names
+    full_review = json.loads(archive.read("review/ENGINEERING_AUDIT.json"))
+    assert full_review["scope"] == "all_available_plc_xml"
+    assert full_review["coverage"]["plc_xml_in_archive"] == 2
+    assert full_review["coverage"]["plc_xml_parsed"] == 2
+
     assert "START_HERE.md" in names
     assert "REVIEW_PROMPT_PL.md" in names
     assert "review/SOURCE_INDEX.json" in names
