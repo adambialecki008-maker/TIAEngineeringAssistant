@@ -208,9 +208,9 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
                     # A syntactic map of candidate state changes only. Nested
                     # CASE and branch conditions require source verification.
                     assignments = re.compile(
-                        r"(?<![\\w.])" + re.escape(state)
-                        + r"\\s*:=\\s*(\\d+)\\b", re.IGNORECASE,
-                    ) if state and re.fullmatch(r"[#\\w.]+", state) else None
+                        r"(?<![\w.])" + re.escape(state)
+                        + r"\s*:=\s*(\d+)\b", re.IGNORECASE,
+                    ) if state and re.fullmatch(r"[#\w.]+", state) else None
                     transitions = []
                     if assignments:
                         for branch_index, label in enumerate(labels[:300]):
