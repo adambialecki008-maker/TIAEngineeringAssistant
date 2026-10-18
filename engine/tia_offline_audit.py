@@ -140,7 +140,6 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
     groups = Counter()
     total_networks = 0
     networks_with_lad_wires = 0
-    truncated_sources = 0
     for path in paths:
         try:
             root = ET.fromstring(files[path])
@@ -205,11 +204,34 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
                     scope = fragment[match.end():]
                     end_match = re.search(r"\bEND_CASE\b", scope, re.IGNORECASE)
                     segment = scope[:end_match.start()] if end_match else scope
-                    labels = _CASE_LABEL.findall(segment)
+                    labels = list(_CASE_LABEL.finditer(segment))
+                    # A syntactic map of candidate state changes only. Nested
+                    # CASE and branch conditions require source verification.
+                    assignments = re.compile(
+                        r"(?<![\\w.])" + re.escape(state)
+                        + r"\\s*:=\\s*(\\d+)\\b", re.IGNORECASE,
+                    ) if state and re.fullmatch(r"[#\\w.]+", state) else None
+                    transitions = []
+                    if assignments:
+                        for branch_index, label in enumerate(labels[:300]):
+                            finish = (labels[branch_index + 1].start()
+                                      if branch_index + 1 < len(labels)
+                                      else len(segment))
+                            candidate_targets = sorted(set(
+                                assignments.findall(segment[label.end():finish])
+                            ))
+                            if candidate_targets:
+                                transitions.append({
+                                    "state_label": label.group().strip().rstrip(":"),
+                                    "target_candidates": candidate_targets[:40],
+                                })
                     active["case_statements"].append({
                         "network": idx, "state_expression": state,
                         "label_count_estimate": len(labels),
                         "has_end_case": bool(end_match),
+                        "transition_candidates": transitions[:150],
+                        "evidence_limitations": "Textual assignments only; "
+                            "conditions, nested CASE and runtime sequence not proven.",
                     })
             coils = _lad_writes(network) if lang in {"LAD", "F_LAD", "FBD", "F_FBD"} else set()
             if lang in {"LAD", "F_LAD", "FBD", "F_FBD"}:
