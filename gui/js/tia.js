@@ -12,6 +12,7 @@ import {
 
 import { createPlcMemberTree } from "./plc_member_tree.js";
 import { createHmiSkippedManager } from "./hmi_skipped_manager.js";
+import { initTiaProjectLoadProgress } from "./tia_project_load_progress.js";
 
 
 const MANUAL_SELECTION =
@@ -24,6 +25,7 @@ const HMI_PROJECT_BATCH_MAX = 50;
 export function initTiaUi(
     getPlcFamily
 ) {
+    const tiaProjectLoad = initTiaProjectLoadProgress();
     const refreshButton =
         document.getElementById(
             "tia-refresh-button"
@@ -8656,6 +8658,7 @@ export function initTiaUi(
 
 
     async function refreshProcesses() {
+        const processScan = tiaProjectLoad.start("Checking running TIA Portal processes…");
         refreshButton.disabled = true;
 
         processSelect.disabled = true;
@@ -8784,6 +8787,7 @@ export function initTiaUi(
             if (
                 processes.length === 0
             ) {
+                tiaProjectLoad.finish(processScan, "No running TIA Portal processes found.");
                 setStatus(
                     "No running TIA Portal process found.",
                     "error"
@@ -8792,6 +8796,8 @@ export function initTiaUi(
             } else if (
                 processes.length > 1
             ) {
+                tiaProjectLoad.finish(processScan,
+                    `${processes.length} TIA processes detected. Select a PID to load its project.`);
                 setStatus(
                     `${processes.length} TIA processes found. `
                     +
@@ -8800,6 +8806,8 @@ export function initTiaUi(
             }
 
         } catch (error) {
+            tiaProjectLoad.finish(processScan,
+                "TIA process discovery failed: " + error.message.slice(0, 140), true);
             processSelect.replaceChildren();
 
 
@@ -8855,11 +8863,15 @@ export function initTiaUi(
     async function refreshProjectPlcs() {
         const processId =
             selectedProcessId();
+        const projectScan = tiaProjectLoad.start(
+            "Reading open project and PLC device list through Openness…"
+        );
 
         setProjectConnectionVerification(false);
 
 
         if (!processId) {
+            tiaProjectLoad.finish(projectScan, "Select a TIA Portal PID to load a project.");
             detailedContextLoading = false;
             setActiveTargetVerification(false);
             clearTarget();
@@ -8965,6 +8977,8 @@ export function initTiaUi(
             updateTargetSummary();
             renderExistingPlcs();
 
+            tiaProjectLoad.update(projectScan,
+                `PLC list available (${existingPlcs.length}). Reading detailed PLC resources and HMI objects through Openness…`);
 
             detailedContextLoading = true;
             updateTargetSummary();
@@ -9000,11 +9014,15 @@ export function initTiaUi(
 
                 renderExistingHmis();
 
+                tiaProjectLoad.update(projectScan,
+                    `PLC/HMI details read (${existingPlcs.length} PLC, ${existingHmis.length} HMI). Reading project languages…`);
                 await refreshProjectLanguages();
 
                 suggestCreateNames();
 
 
+                tiaProjectLoad.finish(projectScan,
+                    `Project loaded: ${existingPlcs.length} PLC(s), ${existingHmis.length} HMI(s).`);
                 // The PLC and HMI lists already expose this result. Do not leave
                 // a redundant success banner below the overview controls.
                 setStatus("");
@@ -9018,6 +9036,9 @@ export function initTiaUi(
                 renderEmptyHmis(
                     "HMI and PLC details could not be loaded."
                 );
+                tiaProjectLoad.finish(projectScan,
+                    "PLC list loaded; detailed read failed: " + error.message.slice(0, 140),
+                    true);
                 setStatus(
                     "PLC list loaded, but detailed project data failed: "
                     + error.message,
@@ -9050,6 +9071,8 @@ export function initTiaUi(
             );
 
 
+            tiaProjectLoad.finish(projectScan,
+                "TIA project read failed: " + error.message.slice(0, 140), true);
             setStatus(
                 error.message,
                 "error"
