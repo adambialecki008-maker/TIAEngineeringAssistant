@@ -13,6 +13,7 @@ from typing import Mapping
 from xml.etree import ElementTree as ET
 
 from engine.tia_logic_rules import inspect_scl_boolean_logic
+from engine.tia_lad_fbd_wiring import inspect_lad_fbd_network
 
 
 def _local(tag: str) -> str:
@@ -144,6 +145,7 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
     networks_with_lad_wires = 0
     logic_findings = []
     logic_stats = Counter()
+    lad_fbd_wiring = []
     for path in paths:
         try:
             root = ET.fromstring(files[path])
@@ -244,6 +246,16 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
                         "evidence_limitations": "Textual assignments only; "
                             "conditions, nested CASE and runtime sequence not proven.",
                     })
+            if lang in {"LAD", "F_LAD", "FBD", "F_FBD"}:
+                wiring, observations = inspect_lad_fbd_network(
+                    network, path=path, block=block_name,
+                    plc=parts[3] if len(parts) > 3 else "",
+                    ordinal=idx, language=lang,
+                )
+                wiring.update({"source_path": path, "block": block_name,
+                               "plc": parts[3] if len(parts) > 3 else ""})
+                lad_fbd_wiring.append(wiring)
+                logic_findings.extend(observations)
             coils = _lad_writes(network) if lang in {"LAD", "F_LAD", "FBD", "F_FBD"} else set()
             if lang in {"LAD", "F_LAD", "FBD", "F_FBD"}:
                 if any(_local(n.tag) == "Wires" for n in network.iter()):
@@ -307,6 +319,10 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
                                       for x in logic_findings),
             "opposing_status_overlaps": sum(x["rule"] == "SCL_OPPOSING_STATUS_OVERLAP"
                                              for x in logic_findings),
+            "lad_fbd_duplicate_gate_inputs": sum(
+                x["rule"] == "LAD_FBD_DUPLICATE_DIRECT_GATE_INPUT"
+                for x in logic_findings),
+            "lad_fbd_networks_indexed": len(lad_fbd_wiring),
         },
         "note": "All available PLC XMLs were parsed if no errors; this does NOT "
                 "mean all LAD/FBD signal-flow or runtime paths were proven.",
@@ -322,6 +338,7 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
         "call_edges": call_edges,
         "signals": cross_refs,
         "review_candidates": {"multiple_writing_blocks": multiple_writers},
+        "lad_fbd_wiring": lad_fbd_wiring,
         "logic_findings": sorted(logic_findings, key=lambda x: (
             x["source_path"], x["network"], x["rule"], x.get("if_ordinal", 0),
         )),
@@ -361,9 +378,11 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
         f"Potential shared-writer signals: **{len(relevant)}** (unverified review candidates).",
         f"SCL Boolean conditions parsed: **{logic_coverage.get('simple_boolean_conditions', 0)}**; "
         f"unsupported: **{logic_coverage.get('unsupported_boolean_conditions', 0)}**.",
-        f"Evidence-based Boolean findings: **{len(findings)}** "
+        f"Source-grounded SCL and LAD/FBD findings: **{len(findings)}** "
         "(not proof of machine failure).",
-        "", "## Evidence-based SCL logic review",
+        f"LAD/FBD networks indexed with direct FlgNet connectivity: "
+        f"**{logic_coverage.get('lad_fbd_networks_indexed', 0)}**.",
+        "", "## Evidence-based SCL and LAD/FBD logic review",
         *[
             f"- **{x['priority']}** {x['rule']} — "
             f"{x['block']} (network {x['network']}) — "
@@ -404,7 +423,9 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
         f"Parsed: {parsed}/{total} PLC XML, {coverage['network_count']} networks; "
         f"{len(audit['call_edges'])} call references; "
         f"{len(relevant)} shared-writer review candidates.", "",
-        f"Source-grounded SCL Boolean findings: {len(findings)}.",
+        f"Source-grounded SCL and LAD/FBD findings: {len(findings)}.",
+        "Use review/LAD_FBD_WIRING.json for FlgNet Parts and Wire endpoints, "
+        "not a simulated RLO.",
         "Read review/LOGIC_FINDINGS.json for condition evidence, counterexamples "
         "and precise XML paths; verify each against original Siemens sources.",
         "", "## Priority entry points by network count",
@@ -419,13 +440,20 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
     ]
     logic_document = {
         "schema_version": 1,
-        "scope": "all_available_scl_networks_in_exported_plc_xml",
+        "scope": "all_available_scl_lad_fbd_networks_in_exported_plc_xml",
         "coverage": logic_coverage,
         "disclaimer": "Satisfiable source expressions, not proven runtime or Safety defects. "
                       "Only simple supported IF Boolean expressions are evaluated.",
         "findings": findings,
     }
     return {
+        "review/LAD_FBD_WIRING.json": (
+            json.dumps({
+                "schema_version": 1,
+                "description": "Exact exported Siemens FlgNet Access, Part and Wire endpoints. No simulated RLO.",
+                "networks": audit.get("lad_fbd_wiring", []),
+            }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            + "\n").encode("utf-8"),
         "review/LOGIC_FINDINGS.json": (
             json.dumps(logic_document, ensure_ascii=False, sort_keys=True,
                        indent=2) + "\n").encode("utf-8"),
