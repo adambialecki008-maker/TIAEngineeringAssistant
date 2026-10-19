@@ -12,6 +12,8 @@ import re
 from typing import Mapping
 from xml.etree import ElementTree as ET
 
+from engine.tia_logic_rules import inspect_scl_boolean_logic
+
 
 def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
@@ -140,6 +142,8 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
     groups = Counter()
     total_networks = 0
     networks_with_lad_wires = 0
+    logic_findings = []
+    logic_stats = Counter()
     for path in paths:
         try:
             root = ET.fromstring(files[path])
@@ -192,6 +196,13 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
                 if _local(st.tag) == "StructuredText":
                     text_fragments.append(_scl(st))
             for fragment in text_fragments:
+                if lang == "SCL":
+                    found, inspected = inspect_scl_boolean_logic(
+                        fragment, path=path, block=block_name,
+                        plc=parts[3] if len(parts) > 3 else "", network=idx,
+                    )
+                    logic_findings.extend(found)
+                    logic_stats.update(inspected)
                 for signal in _ASSIGNMENT.findall(fragment):
                     scl_written.add(signal)
                     writers[signal].add(source_id)
@@ -289,6 +300,14 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
         "block_types": dict(sorted(kinds.items())),
         "network_languages": dict(sorted(languages.items())),
         "groups": dict(sorted(groups.items())),
+        "boolean_logic": {
+            **dict(sorted(logic_stats.items())),
+            "findings": len(logic_findings),
+            "duplicate_operands": sum(x["rule"] == "SCL_DUPLICATE_AND_OPERAND"
+                                      for x in logic_findings),
+            "opposing_status_overlaps": sum(x["rule"] == "SCL_OPPOSING_STATUS_OVERLAP"
+                                             for x in logic_findings),
+        },
         "note": "All available PLC XMLs were parsed if no errors; this does NOT "
                 "mean all LAD/FBD signal-flow or runtime paths were proven.",
     }
@@ -303,7 +322,14 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
         "call_edges": call_edges,
         "signals": cross_refs,
         "review_candidates": {"multiple_writing_blocks": multiple_writers},
+        "logic_findings": sorted(logic_findings, key=lambda x: (
+            x["source_path"], x["network"], x["rule"], x.get("if_ordinal", 0),
+        )),
         "limitations": [
+            "Boolean overlap findings prove expression satisfiability only. "
+            "They do not prove reachable machine states, Safety defects or runtime behavior.",
+            "Complex Siemens expressions and nested IFs are counted but not inferred; "
+            "unsupported syntax is never treated as an error.",
             "SCL extraction may not preserve all expression/index constructs; "
             "write recognition is best-effort and must be checked against source XML.",
             "LAD/FBD Wires are inspected and coil operands resolved; complete "
@@ -323,6 +349,8 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
     ranked = sorted(blocks, key=lambda b: (-b["network_count"], b["path"]))
     calls = Counter(edge["to_name"] for edge in audit["call_edges"])
     relevant = audit["review_candidates"]["multiple_writing_blocks"]
+    findings = audit.get("logic_findings", [])
+    logic_coverage = coverage.get("boolean_logic", {})
     summary = [
         "# TIA Engineering Assistant — offline PLC engineering inventory", "",
         "**This is a structural analysis, NOT a confirmed defect list or Safety validation.**",
@@ -331,6 +359,18 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
         f"LAD/FBD networks containing Wires: **{coverage['lad_fbd_networks_with_wires']}**.",
         f"Call edges: **{len(audit['call_edges'])}**; indexed signals: **{len(audit['signals'])}**.",
         f"Potential shared-writer signals: **{len(relevant)}** (unverified review candidates).",
+        f"SCL Boolean conditions parsed: **{logic_coverage.get('simple_boolean_conditions', 0)}**; "
+        f"unsupported: **{logic_coverage.get('unsupported_boolean_conditions', 0)}**.",
+        f"Evidence-based Boolean findings: **{len(findings)}** "
+        "(not proof of machine failure).",
+        "", "## Evidence-based SCL logic review",
+        *[
+            f"- **{x['priority']}** {x['rule']} — "
+            f"{x['block']} (network {x['network']}) — "
+            f"`{x['source_path']}`"
+            for x in findings[:70]
+        ],
+        *(["- Further details in review/LOGIC_FINDINGS.json."] if len(findings) > 70 else []),
         "", "## Languages",
         *[f"- {name}: {count} networks" for name, count in coverage["network_languages"].items()],
         "", "## Source groups",
@@ -364,7 +404,10 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
         f"Parsed: {parsed}/{total} PLC XML, {coverage['network_count']} networks; "
         f"{len(audit['call_edges'])} call references; "
         f"{len(relevant)} shared-writer review candidates.", "",
-        "## Priority entry points by network count",
+        f"Source-grounded SCL Boolean findings: {len(findings)}.",
+        "Read review/LOGIC_FINDINGS.json for condition evidence, counterexamples "
+        "and precise XML paths; verify each against original Siemens sources.",
+        "", "## Priority entry points by network count",
         *[f"- {b['name']}: {b['path']}" for b in ranked[:12]],
         "", "## Rules for the LLM",
         "Choose a subsystem; look up blocks and edges in ENGINEERING_AUDIT.json; "
@@ -374,7 +417,18 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
         "Do not claim full Safety assessment, SIL/PL, or functional correctness.",
         "See REVIEW_PROMPT_PL.md for the full audit structure.",
     ]
+    logic_document = {
+        "schema_version": 1,
+        "scope": "all_available_scl_networks_in_exported_plc_xml",
+        "coverage": logic_coverage,
+        "disclaimer": "Satisfiable source expressions, not proven runtime or Safety defects. "
+                      "Only simple supported IF Boolean expressions are evaluated.",
+        "findings": findings,
+    }
     return {
+        "review/LOGIC_FINDINGS.json": (
+            json.dumps(logic_document, ensure_ascii=False, sort_keys=True,
+                       indent=2) + "\n").encode("utf-8"),
         "review/ENGINEERING_AUDIT.json": (
             json.dumps(audit, ensure_ascii=False, sort_keys=True,
                        separators=(",", ":")) + "\n").encode("utf-8"),
