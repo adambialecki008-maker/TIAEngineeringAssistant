@@ -17,12 +17,19 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         page = await context.newPage();
         page.on("dialog", d => d.accept());
         const requests = [];
+        let failNextPresencePoll = false;
+        let processAbsent = false;
         await page.route("**/api/v1/tia/**", async route => {
             const parsed = new URL(route.request().url());
             const action = parsed.pathname;
             requests.push({method:route.request().method(),action});
-            if (action === "/api/v1/tia/processes")
-                return route.fulfill({json:[{process_id:123}]});
+            if (action === "/api/v1/tia/processes") {
+                if (failNextPresencePoll) {
+                    failNextPresencePoll = false;
+                    return route.fulfill({status:503,json:{detail:"Openness busy"}});
+                }
+                return route.fulfill({json:processAbsent ? [] : [{process_id:123}]});
+            }
             if (action === "/api/v1/tia/project-inventory") {
                 // The process is visible before Openness has confirmed the
                 // project. Keep that interval observable for the header test.
@@ -108,6 +115,31 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         assert.match(await page.locator("#overview-project-name").innerText(),/TIA_Demo_Copy/);
         assert.equal(await page.locator("#active-plc-summary")
             .evaluate(el => el.classList.contains("connection-online")),true);
+
+        // A temporary adapter failure is NOT evidence that the open TIA
+        // project disappeared. The PID indicator must remain green.
+        failNextPresencePoll = true;
+        const failedPoll = page.waitForResponse(res =>
+            new URL(res.url()).pathname === "/api/v1/tia/processes"
+            && res.status() === 503);
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await failedPoll;
+        assert.equal(await page.locator("#header-tia-live-status")
+            .evaluate(el => el.classList.contains("connection-online")),true,
+            "Openness busy/timeout must not make a verified PID red");
+        assert.match(await page.locator("#header-tia-live-status")
+            .getAttribute("title"), /latest process status check failed/i);
+
+        // Conversely a *successful* list that excludes the PID is explicit
+        // evidence of disconnection, and must still show red.
+        processAbsent = true;
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await page.waitForFunction(() => document.getElementById("header-tia-live-status")
+            ?.classList.contains("connection-offline"));
+        processAbsent = false;
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await page.waitForFunction(() => document.getElementById("header-tia-live-status")
+            ?.classList.contains("connection-online"));
 
         const profiles = page.locator("#project-profile-selector");
         const initial = await profiles.inputValue();
