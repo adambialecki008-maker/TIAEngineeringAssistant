@@ -526,6 +526,9 @@ def export_open_tia_project_for_llm(
             "   and review/ENGINEERING_SUMMARY.md.",
             "   review/ENGINEERING_AUDIT.json indexes every available PLC XML",
             "   and machine-level source relationships; check claims in XML.",
+            "   review/LOGIC_FINDINGS.json includes source-cited simple Boolean",
+            "   condition checks and reproducible counterexamples; these are",
+            "   engineering review priorities, NOT runtime or Safety diagnoses.",
             "3. Read source XML in tia-project/plc/ and tia-project/hmi/.",
             "   The index lists ALL PLC source files, not just the static sample.",
             "4. Review PLC logic, dependencies and interfaces; distinguish",
@@ -571,6 +574,7 @@ def export_open_tia_project_for_llm(
                 "review/ENGINEERING_AUDIT.json",
                 "review/ENGINEERING_SUMMARY.md",
                 "review/LLM_BRIEF_PL.md",
+                "review/LOGIC_FINDINGS.json",
             ],
             "review_companion": [
                 "START_HERE.md", "REVIEW_PROMPT_PL.md", "review/SOURCE_INDEX.json",
