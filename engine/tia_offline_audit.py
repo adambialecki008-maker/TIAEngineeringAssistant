@@ -340,6 +340,7 @@ def analyze_exported_plc(files: Mapping[str, bytes]) -> dict:
         "review_candidates": {"multiple_writing_blocks": multiple_writers},
         "lad_fbd_wiring": lad_fbd_wiring,
         "logic_findings": sorted(logic_findings, key=lambda x: (
+            {"P0": 0, "P1": 1, "P2": 2, "P3": 3}.get(x["priority"], 9),
             x["source_path"], x["network"], x["rule"], x.get("if_ordinal", 0),
         )),
         "limitations": [
@@ -428,6 +429,10 @@ def audit_artifacts(audit: dict, static_coverage: Mapping) -> dict[str, bytes]:
         "not a simulated RLO.",
         "Read review/LOGIC_FINDINGS.json for condition evidence, counterexamples "
         "and precise XML paths; verify each against original Siemens sources.",
+        "", "## Priority source-cited logic findings",
+        *[f"- [{item['priority']}] {item['rule']}: {item['block']} "
+          f"(network {item['network']}); {item['source_path']}"
+          for item in findings[:12]],
         "", "## Priority entry points by network count",
         *[f"- {b['name']}: {b['path']}" for b in ranked[:12]],
         "", "## Rules for the LLM",
