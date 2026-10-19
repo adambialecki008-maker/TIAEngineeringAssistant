@@ -3318,3 +3318,56 @@ details:not([open]) { border-color: var(--ui-border-soft); }
 .review-proposal-diff:empty { display: none; }
 .review-proposal-approval { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .review-proposal-panel textarea { font-family: monospace; white-space: pre; min-width: 0; width: 100%; }
+
+
+/* Transparent status, shown only while TIA project inventory is loading or
+   briefly after it finishes. No made-up percent completion. */
+.tia-project-loading[hidden] { display: none !important; }
+.tia-project-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #aabdd0;
+}
+.tia-project-loading [data-load-phase] {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.tia-project-loading-elapsed {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    color: #d4e2ee;
+}
+.tia-project-loading-dot {
+    flex: 0 0 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #79b8ec;
+    animation: tia-project-loading-pulse 1.25s ease-in-out infinite;
+}
+.tia-project-loading[data-state="done"] { color: #8cdfa9; }
+.tia-project-loading[data-state="done"] .tia-project-loading-dot {
+    background: #8cdfa9;
+    animation: none;
+}
+.tia-project-loading[data-state="error"] { color: #ef9da2; }
+.tia-project-loading[data-state="error"] .tia-project-loading-dot {
+    background: #ef9da2;
+    animation: none;
+}
+#tia-project-load-header {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    text-align: right;
+}
+#tia-project-load-overview { margin: 0 0 12px; }
+@keyframes tia-project-loading-pulse {
+    0%, 100% { opacity: .5; transform: scale(.85); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tia-project-loading-dot { animation: none; }
+}
