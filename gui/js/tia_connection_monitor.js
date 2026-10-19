@@ -9,6 +9,10 @@ export function initTiaConnectionMonitor() {
     if (!select || !headerTia) return;
 
     let checkResult = null;
+    let presenceProbeError = false;
+    // Ignore a stale /processes result if an Openness project read confirmed
+    // this PID after that presence check was started.
+    let validationRevision = 0;
     let pending = false;
     let queued = false;
     let readingProject = false;
@@ -23,25 +27,26 @@ export function initTiaConnectionMonitor() {
 
     function render() {
         const current = pid();
-        const processRunning = !!current && checkResult?.pid === current
-            && checkResult.running === true;
-        // A PID only proves the process exists. Green additionally requires
-        // the fast, read-only Openness inventory to confirm its open project.
         const projectConnected =
             headerTia.dataset.tiaProjectConnected === "true";
-        const active = processRunning && projectConnected;
-        // A PID can remain selected after TIA closes or before its project is
-        // readable; either state remains red.
+        // A successful project inventory already proves that this process was
+        // running. Only a successful, newer *negative* process listing can
+        // disprove it. A failed/timed-out status poll is not disconnection.
+        const processMissing = !!current && checkResult?.pid === current
+            && checkResult.running === false;
+        const active = !!current && projectConnected && !processMissing;
         const text = current ? "TIA Portal PID " + current : "TIA: not connected";
         headerTia.textContent = text;
         mark(headerTia, active);
         headerTia.title = !current
             ? "No TIA Portal process selected."
-            : !processRunning
-                ? "The selected TIA Portal process is no longer running."
-                : projectConnected
-                    ? "Connected to the selected TIA Portal project."
-                    : "TIA Portal is running, but its selected project is not connected.";
+            : processMissing
+                ? "The selected TIA Portal PID is absent from the last successful process list."
+                : !projectConnected
+                    ? "Open TIA project has not yet been verified through Openness."
+                    : presenceProbeError
+                        ? "Project verified via Openness; the latest process status check failed. This does not prove disconnection."
+                        : "Open TIA project verified through Openness.";
         if (exportIndicator) {
             exportIndicator.textContent = text;
             mark(exportIndicator, active);
@@ -70,6 +75,7 @@ export function initTiaConnectionMonitor() {
         const current = pid();
         if (!current) {
             checkResult = null;
+            presenceProbeError = false;
             render();
             return;
         }
@@ -77,6 +83,7 @@ export function initTiaConnectionMonitor() {
         if (pending) { queued = true; return; }
         pending = true;
         queued = false;
+        const startedAtRevision = validationRevision;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         try {
@@ -87,13 +94,20 @@ export function initTiaConnectionMonitor() {
             const processes = await response.json();
             if (!Array.isArray(processes)) throw Error("Invalid process list");
             if (pid() === current) {
-                checkResult = {
-                    pid: current,
-                    running: processes.some(item => Number(item.process_id) === current),
-                };
+                const running = processes.some(
+                    item => Number(item.process_id) === current
+                );
+                // A negative result begun BEFORE a successful Openness
+                // project read must not override that fresher confirmation.
+                if (running || startedAtRevision === validationRevision) {
+                    checkResult = {pid: current, running};
+                }
+                presenceProbeError = false;
             }
         } catch {
-            if (pid() === current) checkResult = {pid: current, running: false};
+            // A busy Openness session, timeout, or backend error is UNKNOWN,
+            // never a confirmed missing process. Preserve verified state.
+            if (pid() === current) presenceProbeError = true;
         } finally {
             clearTimeout(timeout);
             pending = false;
@@ -107,6 +121,8 @@ export function initTiaConnectionMonitor() {
 
     select.addEventListener("change", () => {
         checkResult = null;
+        presenceProbeError = false;
+        validationRevision++;
         render();
         void check();
     });
@@ -124,7 +140,14 @@ export function initTiaConnectionMonitor() {
     window.addEventListener("tia-active-plc-validation", () => {
         render();
     });
-    window.addEventListener("tia-project-connection-validation", () => {
+    window.addEventListener("tia-project-connection-validation", event => {
+        if (event.detail?.verified === true && pid()) {
+            validationRevision++;
+            // The attached Openness project was actually read, so this is a
+            // fresher proof of process liveness than a separate status poll.
+            checkResult = {pid: pid(), running: true};
+            presenceProbeError = false;
+        }
         render();
     });
     // Re-style on PLC selection or project profile switches without modifying
