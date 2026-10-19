@@ -43,7 +43,7 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
                 // Resource/HMI discovery is deliberately slower than the
                 // lightweight PLC inventory. The PLC Use control must appear
                 // before the detailed request completes.
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 1700));
                 return route.fulfill({json:{project_name:"TIA_Demo_Copy", plcs:[{
                     device_name:"Station_1",plc_name:"PLC_1",
                     plc_type_identifier:"S7-1500",online_state:"Offline",
@@ -95,6 +95,20 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         await page.locator("#tia-process").selectOption("123");
         await page.locator('#tia-existing-plcs-body').getByRole("button",{name:"Use"})
             .waitFor({state:"visible",timeout:700});
+        // The fast list is ready but the optional detailed read is still
+        // running. Surface a truthful phase plus live elapsed time in BOTH
+        // header and Overview rather than a silent, locked Refresh button.
+        const progress = page.locator("#tia-project-load-overview");
+        assert.equal(await progress.isVisible(),true);
+        assert.equal(await progress.getAttribute("data-state"),"running");
+        assert.match(await progress.locator("[data-load-phase]").innerText(),
+            /PLC list available.*Reading detailed PLC resources and HMI/i);
+        assert.equal(await page.locator("#tia-project-load-header").isVisible(),true);
+        assert.match(await progress.locator("[data-load-elapsed]").innerText(),
+            /^\\d{2}:\\d{2}$/);
+        await page.waitForFunction(() => document.querySelector(
+            "#tia-project-load-overview [data-load-elapsed]"
+        )?.textContent !== "00:00");
         assert.match(await page.locator("#overview-project-name").innerText(),/TIA_Demo_Copy/,
             "the fast inventory must synchronize the actual TIA project name");
         await page.waitForFunction(() => document.getElementById("header-tia-live-status")
@@ -108,6 +122,10 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         await page.locator('#tia-existing-plcs-body').getByRole("button",{name:"Use"}).click();
         await page.waitForFunction(() => document.getElementById("project-active-plc")
             .textContent.trim() === "PLC_1");
+        await page.waitForFunction(() =>
+            document.getElementById("tia-project-load-overview")?.dataset.state === "done");
+        assert.match(await progress.locator("[data-load-phase]").innerText(),
+            /Project loaded: 1 PLC\\(s\\), 0 HMI\\(s\\)/);
         assert.equal(await page.locator("#tia-status").isVisible(),false,
             "Selecting a PLC must not leave the redundant green success banner visible");
         await page.waitForFunction(() => document.getElementById("overview-project-name")
