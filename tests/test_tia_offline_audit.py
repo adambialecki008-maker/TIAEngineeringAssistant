@@ -64,6 +64,7 @@ def test_scl_case_lad_coil_and_call_graph_are_separately_indexed():
     assert set(artifacts) == {
         "review/ENGINEERING_AUDIT.json", "review/ENGINEERING_SUMMARY.md",
         "review/LLM_BRIEF_PL.md", "review/LOGIC_FINDINGS.json",
+        "review/LAD_FBD_WIRING.json",
     }
     assert "2/3" in artifacts["review/ENGINEERING_SUMMARY.md"].decode()
     assert json.loads(artifacts["review/ENGINEERING_AUDIT.json"])["coverage"] == cov
