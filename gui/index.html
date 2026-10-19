@@ -40,6 +40,11 @@
                  role="status" aria-live="polite">Active PLC: not selected</div>
             <div id="header-profile-summary" class="active-plc-summary connection-online"
                  role="status" aria-live="polite">Profile: Default project</div>
+            <div id="tia-project-load-header" class="tia-project-loading" data-state="idle" hidden>
+                <span class="tia-project-loading-dot" aria-hidden="true"></span>
+                <span data-load-phase role="status" aria-live="polite"></span>
+                <span data-load-elapsed class="tia-project-loading-elapsed" aria-hidden="true"></span>
+            </div>
         </div>
 
     </header>
@@ -266,6 +271,12 @@
 
                 </div>
 
+
+                <div id="tia-project-load-overview" class="tia-project-loading" data-state="idle" hidden>
+                    <span class="tia-project-loading-dot" aria-hidden="true"></span>
+                    <span data-load-phase role="status" aria-live="polite"></span>
+                    <span data-load-elapsed class="tia-project-loading-elapsed" aria-hidden="true"></span>
+                </div>
 
                 <div class="table-wrapper">
 
