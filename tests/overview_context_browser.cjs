@@ -64,7 +64,8 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         assert.equal(await page.locator('[data-tab-panel="project"]').isVisible(),true);
         assert.deepEqual(await page.locator(".header-context > div").evaluateAll(
             els => els.map(el => el.id)
-        ), ["header-tia-live-status","active-plc-summary","header-profile-summary"]);
+        ), ["header-tia-live-status","active-plc-summary","header-profile-summary",
+            "tia-project-load-header"]);
         // The one detected TIA PID may already be auto-selected while the
         // page loads. Verify either valid initial state, not a race-dependent label.
         const initialTiaLabel = await page.locator("#header-tia-live-status").innerText();
