@@ -105,7 +105,7 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
             /PLC list available.*Reading detailed PLC resources and HMI/i);
         assert.equal(await page.locator("#tia-project-load-header").isVisible(),true);
         assert.match(await progress.locator("[data-load-elapsed]").innerText(),
-            /^\\d{2}:\\d{2}$/);
+            /^\d{2}:\d{2}$/);
         await page.waitForFunction(() => document.querySelector(
             "#tia-project-load-overview [data-load-elapsed]"
         )?.textContent !== "00:00");
@@ -125,7 +125,7 @@ const artifactsDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || "test-results/playw
         await page.waitForFunction(() =>
             document.getElementById("tia-project-load-overview")?.dataset.state === "done");
         assert.match(await progress.locator("[data-load-phase]").innerText(),
-            /Project loaded: 1 PLC\\(s\\), 0 HMI\\(s\\)/);
+            /Project loaded: 1 PLC\(s\), 0 HMI\(s\)/);
         assert.equal(await page.locator("#tia-status").isVisible(),false,
             "Selecting a PLC must not leave the redundant green success banner visible");
         await page.waitForFunction(() => document.getElementById("overview-project-name")
