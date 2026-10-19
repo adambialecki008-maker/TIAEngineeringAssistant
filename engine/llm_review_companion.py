@@ -24,6 +24,10 @@ odczytu XML z kompilacją ani uruchomieniem programu.
    review/ENGINEERING_SUMMARY.md, MANIFEST.json i review/SOURCE_INDEX.json.
    review/ENGINEERING_AUDIT.json zawiera pełny lokalny indeks PLC, wywołania,
    kandydatów na wielokrotne zapisy oraz przybliżone przejścia CASE.
+   review/LOGIC_FINDINGS.json zawiera wykryte sprzeczności warunków, powtórzone
+   operandy oraz jawne konfiguracje sygnałów wyprowadzane z prostych reguł.
+   review/LAD_FBD_WIRING.json indeksuje wejścia, wyjścia, piny i połączenia
+   FlgNet (nie jest symulatorem LAD/FBD ani Safety).
 2. Sprawdź tia-project/TIA_OBJECTS.tsv, tia-project/TIA_MISSING.tsv i
    MISSING_SOURCES.md. Oddziel pliki istniejące od niewyeksportowanych obiektów.
 3. review/DETERMINISTIC_ANALYSIS.json traktuj jako listę HIPOTEZ tylko dla
